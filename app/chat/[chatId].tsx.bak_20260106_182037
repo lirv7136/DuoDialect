@@ -35,8 +35,6 @@ type ChatMeta = {
   readAt?: Record<string, any>;
   lastAt?: any;
   lastText?: string;
-  lastFrom?: string;
-  updatedAt?: any;
 };
 
 function toMs(ts: any) {
@@ -67,7 +65,6 @@ export default function ChatScreen() {
   const me = auth.currentUser?.uid;
 
   const typingTimer = useRef<any>(null);
-  const myTyping = useRef<boolean>(false);
   const lastReadMsgId = useRef<string | null>(null);
 
   const chatRef = useMemo(() => (chatId ? doc(db, "chats", String(chatId)) : null), [chatId]);
@@ -131,43 +128,6 @@ export default function ChatScreen() {
     }
   }
 
-  async function setTyping(flag: boolean) {
-    if (!me || !chatRef) return;
-
-    // IMPORTANT: avoid writing on every keystroke
-    if (myTyping.current === flag) return;
-    myTyping.current = flag;
-
-    try {
-      await updateDoc(chatRef, { [`typing.${me}`]: flag });
-    } catch (e) {
-      // typing should never break chat
-      console.log("typing update failed (ignored):", e);
-    }
-  }
-
-  function onChangeText(v: string) {
-    setText(v);
-
-    const shouldType = v.trim().length > 0;
-
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    void setTyping(shouldType);
-
-    typingTimer.current = setTimeout(() => {
-      void setTyping(false);
-    }, 1200);
-  }
-
-  // Clear typing when leaving screen
-  useEffect(() => {
-    return () => {
-      if (typingTimer.current) clearTimeout(typingTimer.current);
-      void setTyping(false);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatRef, me]);
-
   // Listen to messages
   useEffect(() => {
     if (!chatId) return;
@@ -194,6 +154,38 @@ export default function ChatScreen() {
     return () => unsub();
   }, [chatId, me]);
 
+  async function setTyping(flag: boolean) {
+    if (!me || !chatRef) return;
+    try {
+      await updateDoc(chatRef, { [`typing.${me}`]: flag });
+    } catch (e) {
+      // typing should never break chat
+      console.log("typing update failed (ignored):", e);
+    }
+  }
+
+  function onChangeText(v: string) {
+    setText(v);
+
+    // typing indicator: set true, then auto-clear after pause
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+
+    void setTyping(v.trim().length > 0);
+
+    typingTimer.current = setTimeout(() => {
+      void setTyping(false);
+    }, 1200);
+  }
+
+  // Clear typing when leaving screen
+  useEffect(() => {
+    return () => {
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      void setTyping(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatRef, me]);
+
   async function send() {
     if (!chatId || !me || !chatRef) return;
     if (sending) return;
@@ -205,8 +197,7 @@ export default function ChatScreen() {
     setText("");
 
     try {
-      // stop typing immediately (best effort)
-      if (typingTimer.current) clearTimeout(typingTimer.current);
+      // 0) stop typing
       void setTyping(false);
 
       // 1) write message
@@ -232,7 +223,7 @@ export default function ChatScreen() {
         { merge: true }
       );
 
-      // 4) their unread bump (best effort)
+      // 4) their unread bump (best effort: message still exists even if this fails)
       try {
         await runTransaction(db, async (tx) => {
           const ref = doc(db, "matches", String(otherUid), "with", me);
@@ -345,14 +336,8 @@ export default function ChatScreen() {
         renderItem={({ item }) => {
           const mine = item.from === me;
           const time = fmtTime(item.createdAt);
-
           const mineMsgMs = toMs(item.createdAt);
-          const seen =
-            mine &&
-            item.id === lastMineId &&
-            otherReadMs > 0 &&
-            mineMsgMs > 0 &&
-            otherReadMs >= mineMsgMs;
+          const seen = mine && item.id === lastMineId && otherReadMs > 0 && mineMsgMs > 0 && otherReadMs >= mineMsgMs;
 
           return (
             <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "82%" }}>
