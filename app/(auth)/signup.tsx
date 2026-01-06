@@ -1,0 +1,58 @@
+import { useState } from "react";
+import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { router } from "expo-router";
+import { signUp } from "../../src/lib/auth";
+
+export default function Signup() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function onSignup() {
+    try {
+      setBusy(true);
+      await signUp(email, password);
+      router.replace("/(tabs)");
+    } catch (e: any) {
+      Alert.alert("Signup failed", e?.message ?? "Unknown error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 12 }}>
+      <Text style={{ fontSize: 28, fontWeight: "700" }}>Create account</Text>
+
+      <TextInput
+        autoCapitalize="none"
+        keyboardType="email-address"
+        placeholder="Email"
+        value={email}
+        onChangeText={setEmail}
+        style={{ borderWidth: 1, borderColor: "#ddd", padding: 12, borderRadius: 12 }}
+      />
+      <TextInput
+        placeholder="Password (6+ chars)"
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+        style={{ borderWidth: 1, borderColor: "#ddd", padding: 12, borderRadius: 12 }}
+      />
+
+      <Pressable
+        disabled={busy}
+        onPress={onSignup}
+        style={{ backgroundColor: "#111", padding: 14, borderRadius: 12, opacity: busy ? 0.6 : 1 }}
+      >
+        <Text style={{ color: "white", textAlign: "center", fontWeight: "600" }}>
+          {busy ? "Creating..." : "Sign up"}
+        </Text>
+      </Pressable>
+
+      <Pressable onPress={() => router.back()}>
+        <Text style={{ textAlign: "center", opacity: 0.7 }}>Back to login</Text>
+      </Pressable>
+    </View>
+  );
+}

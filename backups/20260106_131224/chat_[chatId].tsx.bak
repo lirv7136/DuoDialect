@@ -1,0 +1,129 @@
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, TextInput, Pressable, FlatList, KeyboardAvoidingView, Platform } from "react-native";
+import { useLocalSearchParams, router } from "expo-router";
+import { addDoc, collection, doc, getDoc, onSnapshot, orderBy, query, serverTimestamp, setDoc } from "firebase/firestore";
+import { auth, db } from "../../src/lib/firebase";
+
+type Msg = { id: string; from: string; text: string; createdAt?: any };
+type UserProfile = { uid: string; name?: string };
+
+export default function ChatScreen() {
+  const { chatId, otherUid } = useLocalSearchParams<{ chatId: string; otherUid?: string }>();
+  const [text, setText] = useState("");
+  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [otherName, setOtherName] = useState<string>("");
+
+  const me = auth.currentUser?.uid;
+
+  useEffect(() => {
+    async function loadOther() {
+      if (!otherUid) return;
+      const snap = await getDoc(doc(db, "users", String(otherUid)));
+      if (snap.exists()) {
+        const p = snap.data() as UserProfile;
+        setOtherName(p?.name?.trim() || "");
+      }
+    }
+    loadOther();
+  }, [otherUid]);
+
+  useEffect(() => {
+    if (!chatId) return;
+
+    const q = query(
+      collection(db, "chats", String(chatId), "messages"),
+      orderBy("createdAt", "asc")
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const list: Msg[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      setMsgs(list);
+    });
+
+    return () => unsub();
+  }, [chatId]);
+
+  async function send() {
+    if (!chatId || !me) return;
+    const clean = text.trim();
+    if (!clean) return;
+
+    setText("");
+
+    await addDoc(collection(db, "chats", String(chatId), "messages"), {
+      from: me,
+      text: clean,
+      createdAt: serverTimestamp(),
+    });
+
+    await setDoc(
+      doc(db, "chats", String(chatId)),
+      {
+        updatedAt: serverTimestamp(),
+        lastText: clean,
+        lastFrom: me,
+        lastAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
+  const title = useMemo(() => {
+    return otherName ? `Chat with ${otherName}` : "Chat";
+  }, [otherName]);
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={80}
+    >
+      <View style={{ padding: 16, borderBottomWidth: 1, borderColor: "#eee", flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Pressable onPress={() => router.back()} style={{ paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: "#ddd", borderRadius: 10 }}>
+          <Text style={{ fontWeight: "900" }}>Back</Text>
+        </Pressable>
+        <View>
+          <Text style={{ fontSize: 18, fontWeight: "900" }}>{title}</Text>
+          {otherUid ? <Text style={{ opacity: 0.6, fontSize: 12 }}>{otherUid}</Text> : null}
+        </View>
+      </View>
+
+      <FlatList
+        contentContainerStyle={{ padding: 16, gap: 10 }}
+        data={msgs}
+        keyExtractor={(m) => m.id}
+        renderItem={({ item }) => {
+          const mine = item.from === me;
+          return (
+            <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "80%" }}>
+              <View style={{
+                padding: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: "#eee",
+                backgroundColor: mine ? "#111" : "#fff"
+              }}>
+                <Text style={{ color: mine ? "white" : "black" }}>{item.text}</Text>
+              </View>
+            </View>
+          );
+        }}
+      />
+
+      <View style={{ padding: 12, borderTopWidth: 1, borderColor: "#eee", flexDirection: "row", gap: 10 }}>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          placeholder="Message…"
+          style={{ flex: 1, borderWidth: 1, borderColor: "#ddd", borderRadius: 12, padding: 12 }}
+        />
+        <Pressable
+          onPress={send}
+          style={{ backgroundColor: "#111", paddingHorizontal: 16, borderRadius: 12, justifyContent: "center" }}
+        >
+          <Text style={{ color: "white", fontWeight: "900" }}>Send</Text>
+        </Pressable>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
