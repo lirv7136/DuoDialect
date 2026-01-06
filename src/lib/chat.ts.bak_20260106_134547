@@ -1,0 +1,27 @@
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { db } from "./firebase";
+
+export function chatIdFor(a: string, b: string) {
+  return [a, b].sort().join("__");
+}
+
+// Create chat doc if missing (NO read required, avoids permissions trap)
+export async function ensureChat(a: string, b: string) {
+  const chatId = chatIdFor(a, b);
+  const ref = doc(db, "chats", chatId);
+
+  await setDoc(
+    ref,
+    {
+      members: [a, b],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      lastText: "",
+      lastFrom: "",
+      lastAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return chatId;
+}
