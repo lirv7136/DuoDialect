@@ -14,3 +14,5 @@ yarn.lock
 
 expo-env.d.ts
 # @end expo-cli
+# local backup files
+*.bak_*
