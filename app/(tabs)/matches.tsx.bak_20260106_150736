@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, ScrollView, Pressable } from "react-native";
 import { router } from "expo-router";
 import { auth, db } from "../../src/lib/firebase";
@@ -21,38 +21,25 @@ type MatchDoc = {
   at?: any;
   lastText?: string;
   lastAt?: any;
-  lastReadAt?: any;
   unread?: number;
 };
 
-type BaseRow = {
+type Row = {
   otherUid: string;
   chatId: string;
   lastText: string;
   lastAt?: any;
-  lastReadAt?: any;
   unread: number;
   profile?: UserProfile;
 };
 
-type ChatMeta = {
-  lastText?: string;
-  lastAt?: any;
-  lastFrom?: string;
-  updatedAt?: any;
-};
-
-function toMs(ts: any) {
-  if (!ts) return 0;
-  if (ts?.toMillis) return ts.toMillis();
-  if (ts?.toDate) return ts.toDate().getTime();
-  const ms = new Date(ts).getTime();
-  return Number.isFinite(ms) ? ms : 0;
-}
-
 function relTime(ts: any) {
-  const ms = toMs(ts);
-  if (!ms) return "";
+  if (!ts) return "";
+  const ms =
+    ts?.toMillis ? ts.toMillis()
+    : ts?.toDate ? ts.toDate().getTime()
+    : new Date(ts).getTime();
+
   const diff = Date.now() - ms;
 
   if (diff < 15_000) return "now";
@@ -72,24 +59,21 @@ function relTime(ts: any) {
 
 export default function Matches() {
   const [loading, setLoading] = useState(true);
-  const [baseRows, setBaseRows] = useState<BaseRow[]>([]);
-  const [chatMeta, setChatMeta] = useState<Record<string, ChatMeta>>({});
+  const [rows, setRows] = useState<Row[]>([]);
 
-  const chatUnsubs = useRef<Record<string, () => void>>({});
-
-  // Listen to matches/{me}/with/*
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
 
+    // IMPORTANT: no orderBy() here, so docs missing lastAt still appear.
     const unsub = onSnapshot(collection(db, "matches", user.uid, "with"), async (snap) => {
       try {
         const meUid = user.uid;
 
-        // Backfill missing fields for older match docs
+        // Backfill missing fields for older match docs (one-time per doc)
         const patchPromises: Promise<any>[] = [];
 
-        const base: BaseRow[] = snap.docs.map((d) => {
+        const base: Row[] = snap.docs.map((d) => {
           const data = d.data() as MatchDoc;
 
           const otherUid = data.with || d.id;
@@ -99,6 +83,7 @@ export default function Matches() {
           const lastText = (data.lastText || "").trim();
           const unread = Number(data.unread || 0);
 
+          // Prepare patch if needed
           const patch: any = {};
           if (!data.with) patch.with = otherUid;
           if (!data.chatId) patch.chatId = computedChatId;
@@ -115,23 +100,30 @@ export default function Matches() {
             chatId: computedChatId,
             lastText: lastText || "Tap to chat",
             lastAt,
-            lastReadAt: data.lastReadAt || null,
             unread,
           };
         });
 
+        // run patches in background (still awaited so state stays consistent)
         if (patchPromises.length) {
           await Promise.allSettled(patchPromises);
         }
 
-        // pull profiles
-        const profSnaps = await Promise.all(base.map((r) => getDoc(doc(db, "users", r.otherUid))));
+        // pull profiles (MVP-friendly; later we’ll denormalize)
+        const profSnaps = await Promise.all(base.map(r => getDoc(doc(db, "users", r.otherUid))));
         const merged = base.map((r, i) => ({
           ...r,
           profile: profSnaps[i].exists() ? (profSnaps[i].data() as UserProfile) : undefined,
         }));
 
-        setBaseRows(merged);
+        // sort client-side by lastAt (fallback 0)
+        merged.sort((a, b) => {
+          const atA = a.lastAt?.toMillis?.() ?? 0;
+          const atB = b.lastAt?.toMillis?.() ?? 0;
+          return atB - atA;
+        });
+
+        setRows(merged);
         setLoading(false);
       } catch (e) {
         console.error(e);
@@ -142,87 +134,20 @@ export default function Matches() {
     return () => unsub();
   }, []);
 
-  // For every match row, also listen to chats/{chatId} so lastText/lastAt update instantly
-  useEffect(() => {
-    const active = new Set(baseRows.map((r) => r.chatId));
-
-    // remove listeners we no longer need
-    for (const chatId of Object.keys(chatUnsubs.current)) {
-      if (!active.has(chatId)) {
-        chatUnsubs.current[chatId]?.();
-        delete chatUnsubs.current[chatId];
-      }
-    }
-
-    // add listeners for new chatIds
-    for (const chatId of active) {
-      if (chatUnsubs.current[chatId]) continue;
-
-      const unsub = onSnapshot(
-        doc(db, "chats", chatId),
-        (snap) => {
-          if (!snap.exists()) return;
-          const meta = snap.data() as ChatMeta;
-          setChatMeta((prev) => ({ ...prev, [chatId]: meta }));
-        },
-        (err) => console.log("chat meta listen failed:", err)
-      );
-
-      chatUnsubs.current[chatId] = unsub;
-    }
-
-    // cleanup all on unmount
-    return () => {
-      for (const k of Object.keys(chatUnsubs.current)) {
-        chatUnsubs.current[k]?.();
-        delete chatUnsubs.current[k];
-      }
-    };
-  }, [baseRows]);
-
-  const rows = useMemo(() => {
-    const merged = baseRows.map((r) => {
-      const meta = chatMeta[r.chatId];
-
-      const effectiveLastText = (meta?.lastText || r.lastText || "Tap to chat").trim() || "Tap to chat";
-      const effectiveLastAt = meta?.lastAt || r.lastAt || null;
-
-      // Unread indicator based on timestamps (works even if unread count isn't updated)
-      const chatAt = toMs(effectiveLastAt);
-      const readAt = toMs(r.lastReadAt);
-      const isUnread = chatAt > 0 && chatAt > readAt;
-
-      const storedUnread = Number(r.unread || 0);
-      const displayUnread = storedUnread > 0 ? storedUnread : (isUnread ? 1 : 0);
-      const badgeText = storedUnread > 0 ? String(storedUnread) : "•";
-
-      return {
-        ...r,
-        lastText: effectiveLastText,
-        lastAt: effectiveLastAt,
-        _displayUnread: displayUnread,
-        _badgeText: badgeText,
-      };
-    });
-
-    merged.sort((a, b) => toMs(b.lastAt) - toMs(a.lastAt));
-    return merged;
-  }, [baseRows, chatMeta]);
-
   async function openChat(chatId: string, otherUid: string) {
     const me = auth.currentUser?.uid;
     if (!me) return;
 
-    const realChatId = await ensureChat(me, otherUid);
+    await ensureChat(me, otherUid);
 
-    // reset unread + mark as read
+    // reset unread immediately
     await setDoc(
       doc(db, "matches", me, "with", otherUid),
       { unread: 0, lastReadAt: serverTimestamp() },
       { merge: true }
     );
 
-    router.push(`/chat/${realChatId}?otherUid=${otherUid}`);
+    router.push(`/chat/${chatId}?otherUid=${otherUid}`);
   }
 
   if (loading) {
@@ -240,7 +165,7 @@ export default function Matches() {
       {rows.length === 0 ? (
         <Text style={{ opacity: 0.7 }}>No matches yet. Go create grammatical tension in Swipe.</Text>
       ) : (
-        rows.map((r: any) => {
+        rows.map((r) => {
           const name = r.profile?.name?.trim() ? r.profile!.name! : "Anonymous";
           const when = relTime(r.lastAt);
 
@@ -253,14 +178,12 @@ export default function Matches() {
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <Text style={{ fontWeight: "900", fontSize: 16 }}>{name}</Text>
-
-                  {r._displayUnread > 0 ? (
+                  {r.unread > 0 ? (
                     <View style={{ backgroundColor: "#111", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 }}>
-                      <Text style={{ color: "white", fontWeight: "900", fontSize: 12 }}>{r._badgeText}</Text>
+                      <Text style={{ color: "white", fontWeight: "900", fontSize: 12 }}>{r.unread}</Text>
                     </View>
                   ) : null}
                 </View>
-
                 <Text style={{ opacity: 0.6, fontSize: 12 }}>{when}</Text>
               </View>
 

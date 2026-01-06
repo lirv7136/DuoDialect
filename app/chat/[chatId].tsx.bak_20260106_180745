@@ -1,14 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-} from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, TextInput, Pressable, FlatList, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import {
   addDoc,
@@ -21,7 +12,6 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
-  updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "../../src/lib/firebase";
 import { blockUser, reportUser } from "../../src/lib/safety";
@@ -30,76 +20,28 @@ import { sendPushToUser } from "../../src/lib/pushSend";
 type Msg = { id: string; from: string; text: string; createdAt?: any };
 type UserProfile = { uid: string; name?: string };
 
-type ChatMeta = {
-  typing?: Record<string, boolean>;
-  readAt?: Record<string, any>;
-  lastAt?: any;
-  lastText?: string;
-};
-
-function toMs(ts: any) {
-  if (!ts) return 0;
-  if (ts?.toMillis) return ts.toMillis();
-  if (ts?.toDate) return ts.toDate().getTime();
-  const ms = new Date(ts).getTime();
-  return Number.isFinite(ms) ? ms : 0;
-}
-
-function fmtTime(ts: any) {
-  const ms = toMs(ts);
-  if (!ms) return "";
-  const d = new Date(ms);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
-}
-
 export default function ChatScreen() {
   const { chatId, otherUid } = useLocalSearchParams<{ chatId: string; otherUid?: string }>();
   const [text, setText] = useState("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [otherName, setOtherName] = useState<string>("");
-  const [chatMeta, setChatMeta] = useState<ChatMeta>({});
   const [sending, setSending] = useState(false);
 
   const me = auth.currentUser?.uid;
 
-  const typingTimer = useRef<any>(null);
-  const lastReadMsgId = useRef<string | null>(null);
-
-  const chatRef = useMemo(() => (chatId ? doc(db, "chats", String(chatId)) : null), [chatId]);
-
   useEffect(() => {
     async function loadOther() {
       if (!otherUid) return;
-      try {
-        const snap = await getDoc(doc(db, "users", String(otherUid)));
-        if (snap.exists()) {
-          const p = snap.data() as UserProfile;
-          setOtherName(p?.name?.trim() || "");
-        }
-      } catch (e) {
-        console.log("loadOther failed:", e);
+      const snap = await getDoc(doc(db, "users", String(otherUid)));
+      if (snap.exists()) {
+        const p = snap.data() as UserProfile;
+        setOtherName(p?.name?.trim() || "");
       }
     }
     loadOther();
   }, [otherUid]);
 
-  // Listen to chat meta (typing + readAt + lastAt/lastText)
-  useEffect(() => {
-    if (!chatRef) return;
-    const unsub = onSnapshot(
-      chatRef,
-      (snap) => {
-        if (!snap.exists()) return;
-        setChatMeta(snap.data() as ChatMeta);
-      },
-      (err) => console.log("chat meta listen failed:", err)
-    );
-    return () => unsub();
-  }, [chatRef]);
-
-  // Reset unread + mark read when opening chat (your side)
+  // Reset unread when opening chat
   useEffect(() => {
     async function resetUnread() {
       if (!me || !otherUid) return;
@@ -116,19 +58,6 @@ export default function ChatScreen() {
     resetUnread();
   }, [me, otherUid]);
 
-  async function markReadForChat(lastMsgIdNow: string | null) {
-    if (!me || !chatRef || !lastMsgIdNow) return;
-    if (lastReadMsgId.current === lastMsgIdNow) return;
-
-    lastReadMsgId.current = lastMsgIdNow;
-    try {
-      await updateDoc(chatRef, { [`readAt.${me}`]: serverTimestamp() });
-    } catch (e) {
-      console.log("markRead failed (ignored):", e);
-    }
-  }
-
-  // Listen to messages
   useEffect(() => {
     if (!chatId) return;
 
@@ -138,12 +67,6 @@ export default function ChatScreen() {
       (snap) => {
         const list: Msg[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
         setMsgs(list);
-
-        // If newest message is from the other person, mark chat read (for Seen receipts)
-        const last = list[list.length - 1];
-        if (last && me && last.from !== me) {
-          void markReadForChat(last.id);
-        }
       },
       (err) => {
         console.error(err);
@@ -152,42 +75,10 @@ export default function ChatScreen() {
     );
 
     return () => unsub();
-  }, [chatId, me]);
-
-  async function setTyping(flag: boolean) {
-    if (!me || !chatRef) return;
-    try {
-      await updateDoc(chatRef, { [`typing.${me}`]: flag });
-    } catch (e) {
-      // typing should never break chat
-      console.log("typing update failed (ignored):", e);
-    }
-  }
-
-  function onChangeText(v: string) {
-    setText(v);
-
-    // typing indicator: set true, then auto-clear after pause
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-
-    void setTyping(v.trim().length > 0);
-
-    typingTimer.current = setTimeout(() => {
-      void setTyping(false);
-    }, 1200);
-  }
-
-  // Clear typing when leaving screen
-  useEffect(() => {
-    return () => {
-      if (typingTimer.current) clearTimeout(typingTimer.current);
-      void setTyping(false);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatRef, me]);
+  }, [chatId]);
 
   async function send() {
-    if (!chatId || !me || !chatRef) return;
+    if (!chatId || !me) return;
     if (sending) return;
 
     const clean = text.trim();
@@ -197,9 +88,6 @@ export default function ChatScreen() {
     setText("");
 
     try {
-      // 0) stop typing
-      void setTyping(false);
-
       // 1) write message
       await addDoc(collection(db, "chats", String(chatId), "messages"), {
         from: me,
@@ -207,9 +95,9 @@ export default function ChatScreen() {
         createdAt: serverTimestamp(),
       });
 
-      // 2) update chat meta (drives Matches list)
+      // 2) update chat meta (best effort, but should normally succeed)
       await setDoc(
-        chatRef,
+        doc(db, "chats", String(chatId)),
         { updatedAt: serverTimestamp(), lastText: clean, lastFrom: me, lastAt: serverTimestamp() },
         { merge: true }
       );
@@ -223,7 +111,7 @@ export default function ChatScreen() {
         { merge: true }
       );
 
-      // 4) their unread bump (best effort: message still exists even if this fails)
+      // 4) their unread bump (best effort; if it fails, message still exists)
       try {
         await runTransaction(db, async (tx) => {
           const ref = doc(db, "matches", String(otherUid), "with", me);
@@ -246,12 +134,12 @@ export default function ChatScreen() {
         console.log("unread bump failed (ignored):", e);
       }
 
-      // 5) push (non-blocking)
+      // 5) push notification (non-blocking, never crash)
       sendPushToUser(String(otherUid), "New message", clean).catch(() => {});
     } catch (e: any) {
       console.error(e);
       Alert.alert("Send failed", e?.message ?? String(e));
-      setText(clean); // restore draft
+      setText(clean); // restore what you typed
     } finally {
       setSending(false);
     }
@@ -259,21 +147,25 @@ export default function ChatScreen() {
 
   async function onBlock() {
     if (!me || !otherUid) return;
-    Alert.alert("Block user?", "They will disappear from your matches.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Block",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await blockUser(me, String(otherUid));
-            router.replace("/(tabs)/matches");
-          } catch (e: any) {
-            Alert.alert("Block failed", e?.message ?? String(e));
-          }
+    Alert.alert(
+      "Block user?",
+      "They will disappear from your matches and you won't see them again.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await blockUser(me, String(otherUid));
+              router.replace("/(tabs)/matches");
+            } catch (e: any) {
+              Alert.alert("Block failed", e?.message ?? String(e));
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   }
 
   async function onReport() {
@@ -296,17 +188,7 @@ export default function ChatScreen() {
   }
 
   const title = useMemo(() => (otherName ? `Chat with ${otherName}` : "Chat"), [otherName]);
-
-  const otherTyping = !!(otherUid && chatMeta?.typing?.[String(otherUid)]);
-  const otherReadMs = otherUid ? toMs(chatMeta?.readAt?.[String(otherUid)]) : 0;
-
-  const lastMineId = useMemo(() => {
-    if (!me) return null;
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].from === me) return msgs[i].id;
-    }
-    return null;
-  }, [msgs, me]);
+  const disabled = sending || text.trim().length === 0;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={80}>
@@ -317,7 +199,6 @@ export default function ChatScreen() {
 
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 18, fontWeight: "900" }}>{title}</Text>
-          {otherTyping ? <Text style={{ opacity: 0.6, marginTop: 2 }}>Typing…</Text> : null}
         </View>
 
         <Pressable onPress={onReport} style={{ paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: "#ddd", borderRadius: 10 }}>
@@ -335,19 +216,10 @@ export default function ChatScreen() {
         keyExtractor={(m) => m.id}
         renderItem={({ item }) => {
           const mine = item.from === me;
-          const time = fmtTime(item.createdAt);
-          const mineMsgMs = toMs(item.createdAt);
-          const seen = mine && item.id === lastMineId && otherReadMs > 0 && mineMsgMs > 0 && otherReadMs >= mineMsgMs;
-
           return (
-            <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "82%" }}>
+            <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "80%" }}>
               <View style={{ padding: 12, borderRadius: 14, borderWidth: 1, borderColor: "#eee", backgroundColor: mine ? "#111" : "#fff" }}>
                 <Text style={{ color: mine ? "white" : "black" }}>{item.text}</Text>
-              </View>
-
-              <View style={{ flexDirection: "row", justifyContent: mine ? "flex-end" : "flex-start", gap: 8, marginTop: 4 }}>
-                {time ? <Text style={{ fontSize: 12, opacity: 0.6 }}>{time}</Text> : null}
-                {seen ? <Text style={{ fontSize: 12, opacity: 0.6 }}>Seen</Text> : null}
               </View>
             </View>
           );
@@ -357,19 +229,19 @@ export default function ChatScreen() {
       <View style={{ padding: 12, borderTopWidth: 1, borderColor: "#eee", flexDirection: "row", gap: 10 }}>
         <TextInput
           value={text}
-          onChangeText={onChangeText}
+          onChangeText={setText}
           placeholder="Message…"
           style={{ flex: 1, borderWidth: 1, borderColor: "#ddd", borderRadius: 12, padding: 12 }}
         />
         <Pressable
           onPress={send}
-          disabled={sending || text.trim().length === 0}
+          disabled={disabled}
           style={{
             backgroundColor: "#111",
             paddingHorizontal: 16,
             borderRadius: 12,
             justifyContent: "center",
-            opacity: sending || text.trim().length === 0 ? 0.5 : 1,
+            opacity: disabled ? 0.5 : 1,
           }}
         >
           <Text style={{ color: "white", fontWeight: "900" }}>{sending ? "Sending…" : "Send"}</Text>
