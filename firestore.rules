@@ -1,0 +1,147 @@
+rules_version = '2';
+
+// DuoDialect authorization.
+//
+// Default deny. Clients may read what they are entitled to see and may write almost
+// nothing: every write carrying an invariant (identity, membership, consent, matching,
+// invitation state) goes through a Cloud Function callable instead. These rules are the
+// independent second layer. The callables run with the Admin SDK, which bypasses this
+// file completely, so they validate their own caller and inputs as well.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.uid is string;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // A block in either direction hides both people from each other.
+    function blockedEither(otherUid) {
+      return exists(/databases/$(database)/documents/blocks/$(request.auth.uid)/users/$(otherUid))
+        || exists(/databases/$(database)/documents/blocks/$(otherUid)/users/$(request.auth.uid));
+    }
+
+    function isMember(participants) {
+      return signedIn() && request.auth.uid in participants;
+    }
+
+    // Public profile. Readable one document at a time by a signed in member who is not
+    // blocked. Listing is closed: a query cannot be filtered per block, and an open list
+    // would expose the whole member base. Discovery is the discoverCandidates callable.
+    match /profiles/{uid} {
+      allow get: if signedIn() && (isSelf(uid) || !blockedEither(uid));
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Birth date, gender and dating preferences. Owner reads only; never written by a client.
+    match /privateProfiles/{uid} {
+      allow get: if isSelf(uid);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Blocks are visible to the person who made them. Writing goes through setBlock,
+    // which also cancels the invitations the block invalidates.
+    match /blocks/{uid}/users/{otherUid} {
+      allow get, list: if isSelf(uid);
+      allow create, update, delete: if false;
+    }
+
+    // Invitations are readable by their two participants. A query must filter on
+    // participants array-contains the caller, or it returns nothing.
+    match /invitations/{invitationId} {
+      allow get, list: if signedIn() && request.auth.uid in resource.data.participants;
+      allow create, update, delete: if false;
+    }
+
+    // Duplicate suppression records. Server only.
+    match /invitationLocks/{lockId} {
+      allow read, write: if false;
+    }
+
+    // Conversation membership is set once on acceptance and can never be changed by a
+    // client, so a caller cannot add themselves to somebody else's conversation.
+    match /conversations/{conversationId} {
+      allow get, list: if signedIn() && request.auth.uid in resource.data.participants;
+      allow create, update, delete: if false;
+
+      // Membership is read from the parent conversation rather than from each message,
+      // so a participant can read the whole thread with a plain ordered query. A rule
+      // that reads resource.data would force every client query to carry a
+      // participants filter, because Firestore cannot otherwise prove a list is safe.
+      // The lookup is resolved once per request. Messages also store their own
+      // participants list, which keeps them self describing for the server.
+      match /messages/{messageId} {
+        allow get, list: if signedIn() && request.auth.uid in
+          get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        allow create, update, delete: if false;
+      }
+    }
+
+    // Per person inbox summary, including unread counts. Owner reads; server writes.
+    match /userConversations/{uid}/items/{conversationId} {
+      allow get, list: if isSelf(uid);
+      allow create, update, delete: if false;
+    }
+
+    // Push tokens stay writable by their owner: no invariant depends on them and the
+    // value is device state. The shape is constrained so the document cannot be reused
+    // as arbitrary storage.
+    match /pushTokens/{uid} {
+      allow get: if isSelf(uid);
+      allow list: if false;
+      allow create, update: if isSelf(uid)
+        && request.resource.data.keys().hasOnly(['token', 'platform', 'updatedAt'])
+        && request.resource.data.token is string
+        && request.resource.data.token.size() > 0
+        && request.resource.data.token.size() <= 256
+        && request.resource.data.platform in ['ios', 'android']
+        && request.resource.data.updatedAt is timestamp;
+      allow delete: if isSelf(uid);
+    }
+
+    // Reports go to moderation, not back to the reporter.
+    match /reports/{reportId} {
+      allow read, write: if false;
+    }
+
+    // Stubbed push delivery records written during emulator tests.
+    match /pushDeliveries/{deliveryId} {
+      allow read, write: if false;
+    }
+
+    // Suspension state, read by the callables on every authenticated call. Not readable
+    // by the account it describes: a suspended person is told at the point of action.
+    match /accountStatus/{uid} {
+      allow read, write: if false;
+    }
+
+    // Deletion audit trail. Written by requestAccountDeletion and kept after the account
+    // and its auth user are gone, so there is a record that the request was honoured.
+    match /deletionRequests/{uid} {
+      allow read, write: if false;
+    }
+
+    // Moderator audit trail, covering context reads as well as actions taken.
+    match /moderationActions/{actionId} {
+      allow read, write: if false;
+    }
+
+    // Collections the earlier Expo client wrote to directly. They are closed rather than
+    // migrated, so stale client code fails loudly instead of reading half migrated state.
+    // See docs/BACKEND-HANDOFF.md for the replacement for each one.
+    match /users/{document=**} { allow read, write: if false; }
+    match /chats/{document=**} { allow read, write: if false; }
+    match /matches/{document=**} { allow read, write: if false; }
+    match /swipes/{document=**} { allow read, write: if false; }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
