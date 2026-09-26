@@ -1,78 +1,123 @@
+import { useState } from "react";
 import { Text, View } from "react-native";
 import type { LanguageLevel, UserLang } from "../src/domain/language-exchange";
-import { LANGUAGE_LEVELS, LIMITS, SUGGESTED_LANGUAGES, capitalise } from "../src/domain/profile-form";
+import { LIMITS, TEACHING_LEVELS, capitalise } from "../src/domain/profile-form";
 import { normalizeLanguage } from "../src/domain/language-exchange";
-import { Button, Card, Chip, ChipRow, Field, styles } from "./ui";
+import { LANGUAGES, POPULAR_LANGUAGES, displayLanguage, isListedLanguage, searchLanguages } from "../src/domain/languages";
+import { Button, Card, Chip, ChipRow, Field, Heading, styles } from "./ui";
 
 type Props = {
   title: string;
   hint: string;
   value: UserLang[];
   onChange: (next: UserLang[]) => void;
+  /** Defaults to native and fluent: the only levels that can be offered to a partner. */
   levels?: LanguageLevel[];
   defaultLevel: LanguageLevel;
 };
 
 /** Edit one list of languages, each with a self declared proficiency. */
-export function LanguageEditor({ title, hint, value, onChange, levels = LANGUAGE_LEVELS, defaultLevel }: Props) {
-  const listed = new Set(value.map(item => normalizeLanguage(item.lang)));
-  const suggestions = SUGGESTED_LANGUAGES.filter(lang => !listed.has(normalizeLanguage(lang)));
+export function LanguageEditor({ title, hint, value, onChange, levels = TEACHING_LEVELS, defaultLevel }: Props) {
+  const [query, setQuery] = useState("");
+  const [browsing, setBrowsing] = useState(false);
+  const listed = value.map(item => normalizeLanguage(item.lang));
   const full = value.length >= LIMITS.languages;
+  const typed = query.trim();
+  const matches = searchLanguages(typed, listed);
+  const shown = typed || browsing
+    ? matches
+    : matches.filter(option => POPULAR_LANGUAGES.includes(option.name));
+  const exact = !!typed && LANGUAGES.some(option => normalizeLanguage(option.name) === normalizeLanguage(typed));
+  const alreadyListed = !!typed && listed.includes(normalizeLanguage(typed));
 
   const update = (index: number, patch: Partial<UserLang>) =>
     onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+
+  const add = (lang: string) => {
+    onChange([...value, { lang, level: defaultLevel }]);
+    setQuery("");
+    setBrowsing(false);
+  };
 
   return (
     <View style={{ gap: 8 }}>
       <Text accessibilityRole="header" style={styles.label}>{title}</Text>
       <Text style={styles.hint}>{hint}</Text>
-      {value.map((item, index) => (
-        <Card key={index}>
-          <Field
-            label={`Language ${index + 1}`}
-            value={item.lang}
-            onChangeText={lang => update(index, { lang })}
-            maxLength={LIMITS.language}
-            autoCapitalize="words"
-            placeholder="e.g. Japanese"
-          />
-          <Text style={styles.hint}>Level</Text>
-          <ChipRow>
-            {levels.map(level => (
-              <Chip
-                key={level}
-                role="radio"
-                label={capitalise(level)}
-                accessibilityLabel={`${item.lang || `Language ${index + 1}`}: ${level}`}
-                selected={item.level === level}
-                onPress={() => update(index, { level })}
+      {value.map((item, index) => {
+        const name = item.lang.trim() ? displayLanguage(item.lang) : `Language ${index + 1}`;
+        // A level saved before this list was narrowed stays visible so it can be changed.
+        const choices = levels.includes(item.level) ? levels : [...levels, item.level];
+        return (
+          <Card key={index}>
+            {isListedLanguage(item.lang) ? <Heading>{name}</Heading> : (
+              <Field
+                label={`Language ${index + 1}`}
+                value={item.lang}
+                onChangeText={lang => update(index, { lang })}
+                maxLength={LIMITS.language}
+                autoCapitalize="words"
+                placeholder="e.g. Xhosa"
               />
-            ))}
-          </ChipRow>
-          <Button
-            variant="ghost"
-            label="Remove"
-            accessibilityLabel={`Remove ${item.lang || `language ${index + 1}`}`}
-            onPress={() => onChange(value.filter((_, i) => i !== index))}
-          />
-        </Card>
-      ))}
+            )}
+            <Text style={styles.hint}>Level</Text>
+            <ChipRow>
+              {choices.map(level => (
+                <Chip
+                  key={level}
+                  role="radio"
+                  label={capitalise(level)}
+                  accessibilityLabel={`${name}: ${level}`}
+                  selected={item.level === level}
+                  onPress={() => update(index, { level })}
+                />
+              ))}
+            </ChipRow>
+            <Button
+              variant="ghost"
+              label="Remove"
+              accessibilityLabel={`Remove ${name}`}
+              onPress={() => onChange(value.filter((_, i) => i !== index))}
+            />
+          </Card>
+        );
+      })}
       {!full ? (
         <>
-          {suggestions.length ? (
+          <Field
+            label={value.length ? "Add another language" : "Add a language"}
+            value={query}
+            onChangeText={setQuery}
+            maxLength={LIMITS.language}
+            autoCapitalize="words"
+            autoCorrect={false}
+            placeholder="Search, e.g. Japanese"
+            returnKeyType="search"
+          />
+          {shown.length ? (
             <ChipRow>
-              {suggestions.map(lang => (
+              {shown.map(option => (
                 <Chip
-                  key={lang}
-                  label={`+ ${lang}`}
-                  accessibilityLabel={`Add ${lang}`}
+                  key={option.name}
+                  label={`+ ${option.name}`}
+                  accessibilityLabel={`Add ${option.name}`}
                   selected={false}
-                  onPress={() => onChange([...value, { lang, level: defaultLevel }])}
+                  onPress={() => add(option.name)}
                 />
               ))}
             </ChipRow>
           ) : null}
-          <Button label="Add another language" onPress={() => onChange([...value, { lang: "", level: defaultLevel }])} />
+          {typed && !exact && !alreadyListed ? (
+            <Button label={`Add “${typed}”`} hint="Adds a language that isn’t in the list" onPress={() => add(typed)} />
+          ) : null}
+          {alreadyListed ? <Text style={styles.hint}>{`${displayLanguage(typed)} is already listed.`}</Text> : null}
+          {!typed ? (
+            <Button
+              variant="ghost"
+              label={browsing ? "Show fewer languages" : `Browse all ${LANGUAGES.length} languages`}
+              onPress={() => setBrowsing(current => !current)}
+            />
+          ) : null}
+          {!typed ? <Text style={styles.hint}>Not listed? Type its name above to add it.</Text> : null}
         </>
       ) : <Text style={styles.hint}>{`Up to ${LIMITS.languages} languages.`}</Text>}
     </View>
