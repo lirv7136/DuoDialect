@@ -70,6 +70,7 @@ export default function Profile() {
           onPress={onEnableNotifications}
         />
       )}
+      <Button label="Meeting safely" hint="Tips for meeting a language partner" onPress={() => router.push("/account/safety")} />
       <Button label="Blocked members" onPress={() => router.push("/account/blocked")} />
       <Button label="Log out" onPress={onLogout} />
       <Button variant="danger" label="Delete account" hint="Permanently deletes your account and conversations" onPress={() => router.push("/account/delete")} />

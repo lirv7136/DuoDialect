@@ -11,6 +11,7 @@ import { createDraftKeys } from "../../src/domain/idempotency";
 import { capitalise } from "../../src/domain/profile-form";
 import { errorMessage } from "../../src/domain/errors";
 import { Body, Button, ErrorNotice, Loading, styles } from "../../components/ui";
+import { SafetyCard } from "../../components/safety-card";
 import { colors, space, TOUCH_TARGET } from "../../constants/theme";
 
 const MAX_MESSAGE = 2000;
@@ -147,7 +148,12 @@ export default function ChatScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={{ padding: space.lg, gap: space.sm }}
           onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
-          ListEmptyComponent={<Body muted>No messages yet. Say hello and confirm where you’ll meet.</Body>}
+          ListEmptyComponent={
+            <View style={{ gap: space.md }}>
+              <SafetyCard />
+              <Body muted>No messages yet. Say hello and confirm where you’ll meet.</Body>
+            </View>
+          }
           renderItem={({ item }) => {
             const mine = item.fromUid === me;
             return (

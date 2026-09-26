@@ -5,11 +5,13 @@ import { api } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
 import { getPublicProfile, subscribeInvitations, type InvitationDoc } from "../../src/lib/live";
 import { askForNotificationsInContext } from "../../src/lib/notification-prompt";
+import { dismissSafetyTips, safetyTipsDismissed } from "../../src/lib/safety-tips";
 import { formatMeeting } from "../../src/domain/schedule";
 import { capitalise } from "../../src/domain/profile-form";
 import { errorMessage } from "../../src/domain/errors";
 import { deviceTimeZone } from "../../src/lib/time-zone";
 import { Body, Button, Card, EmptyState, ErrorNotice, Eyebrow, Heading, Loading, Pill, Screen, Title, styles } from "../../components/ui";
+import { SafetyCard } from "../../components/safety-card";
 
 type Busy = Record<string, "accept" | "decline" | "cancel" | undefined>;
 
@@ -22,6 +24,10 @@ export default function Plans() {
   const [cardErrors, setCardErrors] = useState<Record<string, string>>({});
   const inFlight = useRef(new Set<string>());
   const requestedNames = useRef(new Set<string>());
+  // Unknown until read, so the tips never flash for someone who already dismissed them.
+  const [tipsDismissed, setTipsDismissed] = useState<boolean | null>(null);
+
+  useEffect(() => { void safetyTipsDismissed().then(setTipsDismissed); }, []);
 
   useEffect(() => {
     if (!uid) return;
@@ -146,6 +152,9 @@ export default function Plans() {
 
       {received.length ? <><Heading>{`Waiting for you (${received.length})`}</Heading>{received.map(card)}</> : null}
       {sent.length ? <><Heading>{`Sent (${sent.length})`}</Heading>{sent.map(card)}</> : null}
+      {confirmed.length && tipsDismissed === false ? (
+        <SafetyCard title="Your first meetup is confirmed. Meeting safely:" onDismiss={() => { setTipsDismissed(true); void dismissSafetyTips(); }} />
+      ) : null}
       {confirmed.length ? <><Heading>Confirmed</Heading>{confirmed.map(card)}</> : null}
       {closed.length ? <><Heading>Closed</Heading>{closed.map(card)}</> : null}
     </Screen>
