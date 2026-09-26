@@ -43,7 +43,7 @@ export default function ReportScreen() {
     return (
       <Screen edges={[]}>
         <Heading>Report received.</Heading>
-        <Body>Thank you. Your report is kept for review, including if either account is later deleted. You won’t receive an update in the app.</Body>
+        <Body>Thank you. Your report is kept for review, including if either account is later deleted. Our team reviews every report. If you feel unsafe right now, call 000.</Body>
         <Body muted>{`If you don’t want to hear from ${who} again, you can also block them.`}</Body>
         <Button variant="primary" label="Done" onPress={() => router.back()} />
       </Screen>
@@ -52,7 +52,7 @@ export default function ReportScreen() {
 
   return (
     <Screen edges={[]}>
-      <Heading>{`Flag a concern about ${who}.`}</Heading>
+      <Heading>{`Report ${who}.`}</Heading>
       <Body muted>Reports go to our moderation queue and aren’t shown to the person you report.</Body>
       <Text accessibilityRole="header" style={styles.label}>What happened?</Text>
       <ChipRow>

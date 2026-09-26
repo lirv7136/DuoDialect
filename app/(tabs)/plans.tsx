@@ -141,7 +141,7 @@ export default function Plans() {
     <Screen>
       <Eyebrow>MAKE A LITTLE TIME FOR CONNECTION</Eyebrow>
       <Title>Good things on the calendar.</Title>
-      <Body muted>Your invitations and weekly language exchanges, in one place. Weekly plans are a shared intention: there are no reminders, and each week isn’t booked separately.</Body>
+      <Body muted>Your invitations and weekly language exchanges, in one place. Weekly plans repeat on the same day and time. Message each other if a week doesn’t work.</Body>
       <ErrorNotice message={error} />
 
       {all.length === 0 && !error ? (

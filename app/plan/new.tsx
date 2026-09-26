@@ -163,7 +163,7 @@ export default function NewPlan() {
         <Chip role="radio" label="One meetup" selected={recurrence === "once"} onPress={() => setRecurrence("once")} />
         <Chip role="radio" label="Weekly practice" selected={recurrence === "weekly"} onPress={() => setRecurrence("weekly")} />
       </ChipRow>
-      {recurrence === "weekly" ? <Text style={styles.hint}>Same weekday and time from this date. It’s a shared intention: there are no reminders.</Text> : null}
+      {recurrence === "weekly" ? <Text style={styles.hint}>Weekly plans repeat on the same day and time. Message each other if a week doesn’t work.</Text> : null}
 
       <Field label="Public place" hint="Somewhere public, like a café or library." value={venue} onChangeText={setVenue} maxLength={MAX_VENUE} />
       <Field label="Note" value={note} onChangeText={setNote} maxLength={MAX_NOTE} multiline />
