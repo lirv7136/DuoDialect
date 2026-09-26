@@ -16,10 +16,12 @@ decide approval; this is a draft for review, not legal advice.
 | Price | Free, no in-app purchases, no ads |
 | Primary category | Education (Apple) / Education (Google Play) |
 | Secondary category | Social Networking (Apple) |
-| Support URL | *needs the public site*, e.g. https://talkeven.com/support |
-| Privacy policy URL | *needs the public site*, e.g. https://talkeven.com/privacy |
-| Account deletion URL | *needs the public site*, e.g. https://talkeven.com/delete-account (Google requires one that works without the app) |
-| Support email | *to decide*, e.g. hello@talkeven.com |
+| Support URL | https://talkeven.com/support/ |
+| Privacy policy URL | https://talkeven.com/privacy/ |
+| Account deletion URL | https://talkeven.com/delete-account/ (works without the app, as Google requires) |
+| Support email | hello@talkeven.com (forwards to Lachlan) |
+| Child safety standards URL | https://talkeven.com/child-safety/ (Google Play, social apps) |
+| Marketing URL | https://talkeven.com/ |
 
 ## App Store (Apple)
 
@@ -158,8 +160,8 @@ Suggested set, captured from staging with the test partner:
 
 ## Still needed from Lachlan
 
-- Support email address and whether to buy talkeven.com (it looked unregistered on
-  26 September 2026) for the support, privacy and deletion pages.
-- Who handles reports (a named person and response time), for the privacy policy, the
-  review notes and Google's child safety standards declaration.
+- Connect talkeven.com to the `talkeven` Cloudflare Pages project (the pages are live at
+  https://talkeven.pages.dev), and add the hello@ forwarding rule in Email Routing.
+- Reports are handled by Lachlan (the named operator and child safety contact on the
+  site); support replies within two business days, as the support page says.
 - Final review of this copy.

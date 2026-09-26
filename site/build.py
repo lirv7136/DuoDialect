@@ -2,13 +2,13 @@
 
     python3 site/build.py      # writes site/dist/
 
-Contact details are placeholders until the domain and support address are decided;
-every page shows a draft notice while DRAFT is True.
+Published to talkeven.com with Cloudflare Pages by site/deploy.sh.
+Set DRAFT = True to show a draft notice on every page.
 """
 from pathlib import Path
 
-DRAFT = True
-CONTACT = "hello@talkeven.com"  # placeholder: the address is not set up yet
+DRAFT = False
+CONTACT = "hello@talkeven.com"  # forwards to the operator through Cloudflare Email Routing
 OPERATOR = "Lachlan Irving, an individual developer based in Australia"
 UPDATED = "26 September 2026"
 
