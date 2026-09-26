@@ -1,104 +1,62 @@
 import { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, Alert, ActivityIndicator } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
-import { auth } from "../../src/lib/firebase";
-import { getUserProfile, updateUserProfile, UserLang } from "../../src/lib/profile";
+import { router } from "expo-router";
+import type { UserLang } from "../../src/domain/language-exchange";
+import { PRACTISING_LEVELS, draftFromProfile, validateLanguages } from "../../src/domain/profile-form";
+import { onboardingDraft } from "../../src/lib/onboarding-draft";
+import { useMyAccount } from "../../hooks/use-my-account";
+import { LanguageEditor } from "../../components/language-editor";
+import { Body, Button, ErrorNotice, Eyebrow, Loading, Screen, Title } from "../../components/ui";
 
-function parseLangs(raw: string): string[] {
-  return raw.split(",").map(s => s.trim()).filter(Boolean).map(s => s.toLowerCase());
-}
-
+/**
+ * Step one of onboarding. Nothing is saved here: `upsertProfile` needs the name and the
+ * languages together, so they are held until step two submits.
+ */
 export default function LanguagesOnboarding() {
-  const params = useLocalSearchParams<{ next?: string }>();
-  const next = typeof params.next === "string" ? params.next : undefined;
-
-  const [speaksRaw, setSpeaksRaw] = useState("");
-  const [learnsRaw, setLearnsRaw] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { profile, loading } = useMyAccount();
+  const [speaks, setSpeaks] = useState<UserLang[]>([]);
+  const [learns, setLearns] = useState<UserLang[]>([]);
+  const [ready, setReady] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
-    async function load() {
-      const user = auth.currentUser;
-      if (!user) return;
-      try {
-        const p = await getUserProfile(user.uid);
-        if (p?.speaks?.length && !speaksRaw) setSpeaksRaw(p.speaks.map(x => x.lang).join(", "));
-        if (p?.learns?.length && !learnsRaw) setLearnsRaw(p.learns.map(x => x.lang).join(", "));
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (ready || loading) return;
+    const saved = onboardingDraft.get() ?? (profile ? draftFromProfile(profile) : null);
+    if (saved) { setSpeaks(saved.speaks); setLearns(saved.learns); }
+    setReady(true);
+  }, [ready, loading, profile]);
 
-  async function onSave() {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const speaks = parseLangs(speaksRaw);
-    const learns = parseLangs(learnsRaw);
-
-    if (!speaks.length || !learns.length) {
-      Alert.alert("Missing info", "Add at least one language you speak and one you want to learn.");
-      return;
-    }
-
-    const speaksArr: UserLang[] = speaks.map(lang => ({ lang, level: "fluent" }));
-    const learnsArr: UserLang[] = learns.map(lang => ({ lang, level: "beginner" }));
-
-    try {
-      setBusy(true);
-      await updateUserProfile(user.uid, { speaks: speaksArr, learns: learnsArr });
-
-      if (next === "profile") router.replace("/(onboarding)/profile");
-      else router.back();
-    } catch (e: any) {
-      Alert.alert("Save failed", e?.message ?? String(e));
-    } finally {
-      setBusy(false);
-    }
+  function onContinue() {
+    const issue = validateLanguages(speaks, learns);
+    setProblem(issue);
+    if (issue) return;
+    onboardingDraft.set({ speaks, learns });
+    router.push("/(onboarding)/profile");
   }
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
+  if (!ready) return <Loading label="Loading your languages" />;
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 12 }}>
-      <Text style={{ fontSize: 28, fontWeight: "800" }}>Languages</Text>
-      <Text style={{ opacity: 0.7 }}>Comma-separated for now.</Text>
-
-      <Text style={{ fontWeight: "900" }}>I speak</Text>
-      <TextInput
-        placeholder="e.g., English, Mandarin"
-        value={speaksRaw}
-        onChangeText={setSpeaksRaw}
-        style={{ borderWidth: 1, borderColor: "#ddd", padding: 12, borderRadius: 12 }}
+    <Screen>
+      <Eyebrow>SOMETHING TO SHARE. SOMETHING TO LEARN.</Eyebrow>
+      <Title>Your side of the conversation.</Title>
+      <Body muted>Offer a language you speak fluently; you don’t need to be a native speaker. Partners are people who speak what you’re practising and are practising what you speak.</Body>
+      <LanguageEditor
+        title="I can share"
+        hint="Only native or fluent languages can be offered to a partner. Proficiency is self-declared."
+        value={speaks}
+        onChange={setSpeaks}
+        defaultLevel="fluent"
       />
-
-      <Text style={{ fontWeight: "900" }}>I’m learning</Text>
-      <TextInput
-        placeholder="e.g., Spanish, Japanese"
-        value={learnsRaw}
-        onChangeText={setLearnsRaw}
-        style={{ borderWidth: 1, borderColor: "#ddd", padding: 12, borderRadius: 12 }}
+      <LanguageEditor
+        title="I’m practising"
+        hint="Any level is welcome."
+        value={learns}
+        onChange={setLearns}
+        levels={PRACTISING_LEVELS}
+        defaultLevel="beginner"
       />
-
-      <Pressable
-        disabled={busy}
-        onPress={onSave}
-        style={{ backgroundColor: "#111", padding: 14, borderRadius: 12, opacity: busy ? 0.6 : 1 }}
-      >
-        <Text style={{ color: "white", textAlign: "center", fontWeight: "900" }}>
-          {busy ? "Saving..." : "Save"}
-        </Text>
-      </Pressable>
-    </View>
+      <ErrorNotice message={problem} />
+      <Button variant="primary" label="Continue" onPress={onContinue} />
+    </Screen>
   );
 }

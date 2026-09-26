@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
-import { View, ActivityIndicator, Text, Pressable } from "react-native";
+import { View, Text } from "react-native";
 import { onAuthStateChanged } from "firebase/auth";
 import { router } from "expo-router";
 import { auth } from "../src/lib/firebase";
-import { ensureUserProfile, getUserProfile } from "../src/lib/profile";
+import { api } from "../src/lib/api";
 import { profileDestination } from "../src/domain/language-exchange";
+import { errorMessage } from "../src/domain/errors";
+import { forgetAccount, rememberAccount } from "../hooks/use-my-account";
+import { Button, Loading } from "../components/ui";
+import { colors } from "../constants/theme";
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -16,20 +20,21 @@ export default function Index() {
     const unsub = onAuthStateChanged(auth, async (user) => {
       const currentRequest = ++request;
       setLoading(true);
-      setError(false);
+      setError(null);
       try {
         if (!user) {
+          forgetAccount();
           router.replace("/(auth)/login");
           return;
         }
 
-        await ensureUserProfile(user.uid);
-        const profile = await getUserProfile(user.uid);
-
+        // The server owns the profile now; a missing profile means onboarding.
+        const result = await api.getMyAccount();
         if (currentRequest !== request || auth.currentUser?.uid !== user.uid) return;
-        router.replace(profileDestination(profile));
-      } catch {
-        if (currentRequest === request) setError(true);
+        rememberAccount(result);
+        router.replace(profileDestination(result.profile));
+      } catch (e) {
+        if (currentRequest === request) setError(errorMessage(e));
       } finally {
         if (currentRequest === request) setLoading(false);
       }
@@ -39,13 +44,11 @@ export default function Index() {
   }, [attempt]);
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 16 }}>
-      {loading ? <ActivityIndicator accessibilityLabel="Opening your profile" /> : null}
+    <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 16, backgroundColor: colors.background }}>
+      {loading ? <Loading label="Opening your profile" /> : null}
       {error ? <>
-        <Text accessibilityRole="alert">We couldn’t open your profile. Check your connection and try again.</Text>
-        <Pressable accessibilityRole="button" onPress={() => setAttempt(value => value + 1)} style={{ padding: 16, borderWidth: 1, borderRadius: 8 }}>
-          <Text>Try again</Text>
-        </Pressable>
+        <Text accessibilityRole="alert" style={{ color: colors.ink, fontSize: 16 }}>{`We couldn’t open your profile. ${error}`}</Text>
+        <Button label="Try again" onPress={() => setAttempt(value => value + 1)} />
       </> : null}
     </View>
   );

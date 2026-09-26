@@ -1,6 +1,8 @@
 export type LanguageLevel = "native" | "fluent" | "intermediate" | "beginner";
 export type UserLang = { lang: string; level: LanguageLevel };
 export type ExchangeProfile = {
+  /** Server profiles use `displayName`; `name` is accepted for older data. */
+  displayName?: string;
   name?: string;
   speaks?: { lang: string; level: string }[];
   learns?: { lang: string; level: string }[];
@@ -36,6 +38,7 @@ export function profileDestination(profile: ExchangeProfile | null) {
   if (!profile || !languageSet(profile.speaks, true).size || !languageSet(profile.learns).size) {
     return "/(onboarding)/languages?next=profile" as const;
   }
-  if (typeof profile.name !== "string" || !profile.name.trim()) return "/(onboarding)/profile" as const;
+  const name = typeof profile.displayName === "string" ? profile.displayName : profile.name;
+  if (typeof name !== "string" || !name.trim()) return "/(onboarding)/profile" as const;
   return "/(tabs)" as const;
 }

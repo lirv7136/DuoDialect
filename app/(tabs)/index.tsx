@@ -1,296 +1,128 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  ActivityIndicator,
-  Alert,
-  Animated,
-  PanResponder,
-  Dimensions,
-} from "react-native";
-import { auth, db } from "../../src/lib/firebase";
-import { ensureChat, chatIdFor } from "../../src/lib/chat";
-import { exchangeLanguages, isReciprocalExchange } from "../../src/domain/language-exchange";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+import { useCallback, useEffect, useState } from "react";
+import { Text, View } from "react-native";
+import { router } from "expo-router";
+import { api, type Candidate } from "../../src/lib/api";
+import { auth } from "../../src/lib/firebase";
+import { candidateCache } from "../../src/lib/candidate-cache";
+import { subscribeInvitations } from "../../src/lib/live";
+import { capitalise } from "../../src/domain/profile-form";
+import { errorMessage } from "../../src/domain/errors";
+import { useMyAccount } from "../../hooks/use-my-account";
+import { Body, Button, Card, EmptyState, ErrorNotice, Eyebrow, Heading, Loading, Pill, Screen, Title, styles } from "../../components/ui";
+import { colors } from "../../constants/theme";
 
-type UserLang = { lang: string; level: string };
-type UserProfile = {
-  uid: string;
-  name?: string;
-  bio?: string;
-  speaks: UserLang[];
-  learns: UserLang[];
-};
+const list = (values: string[]) => values.map(capitalise).join(", ");
 
-const { width: SCREEN_W } = Dimensions.get("window");
-const SWIPE_THRESHOLD = SCREEN_W * 0.25;
-
-export default function Swipe() {
-  const [me, setMe] = useState<UserProfile | null>(null);
-  const [candidates, setCandidates] = useState<UserProfile[]>([]);
-  const [idx, setIdx] = useState(0);
+export default function Discover() {
+  const { profile } = useMyAccount();
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pendingWith, setPendingWith] = useState<Set<string>>(new Set());
 
-  const current = candidates[idx] ?? null;
-
-  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-
-  const rotate = pan.x.interpolate({
-    inputRange: [-SCREEN_W, 0, SCREEN_W],
-    outputRange: ["-12deg", "0deg", "12deg"],
-  });
-
-  const likeOpacity = pan.x.interpolate({
-    inputRange: [0, SWIPE_THRESHOLD],
-    outputRange: [0, 1],
-    extrapolate: "clamp",
-  });
-
-  const passOpacity = pan.x.interpolate({
-    inputRange: [-SWIPE_THRESHOLD, 0],
-    outputRange: [1, 0],
-    extrapolate: "clamp",
-  });
-
-  const cardStyle = {
-    transform: [{ translateX: pan.x }, { translateY: pan.y }, { rotate }],
-  } as const;
-
-  const panResponder = useMemo(() => {
-    return PanResponder.create({
-      onMoveShouldSetPanResponder: (_evt, gesture) => {
-        if (busy || !current) return false;
-        return Math.abs(gesture.dx) > 6 && Math.abs(gesture.dy) < 60;
-      },
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
-        useNativeDriver: false,
-      }),
-      onPanResponderRelease: (_evt, gesture) => {
-        if (busy || !current) {
-          pan.setValue({ x: 0, y: 0 });
-          return;
-        }
-        if (gesture.dx > SWIPE_THRESHOLD) forceSwipe("like", 1, gesture.dy);
-        else if (gesture.dx < -SWIPE_THRESHOLD) forceSwipe("pass", -1, gesture.dy);
-        else resetCard();
-      },
-      onPanResponderTerminate: () => resetCard(),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy, current]);
-
-  function resetCard() {
-    Animated.spring(pan, {
-      toValue: { x: 0, y: 0 },
-      useNativeDriver: false,
-      friction: 6,
-      tension: 80,
-    }).start();
-  }
-
-  function forceSwipe(decision: "like" | "pass", dir: 1 | -1, dy: number) {
-    Animated.timing(pan, {
-      toValue: { x: dir * SCREEN_W * 1.2, y: dy * 0.2 },
-      duration: 160,
-      useNativeDriver: false,
-    }).start(() => {
-      pan.setValue({ x: 0, y: 0 });
-      void swipe(decision);
-    });
-  }
-
-  async function load() {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    setLoading(true);
+  const load = useCallback(async (more: boolean, after: string | null) => {
+    setError(null);
+    if (more) setLoadingMore(true); else setLoading(true);
     try {
-      const meSnap = await getDoc(doc(db, "users", user.uid));
-      const myProfile = meSnap.data() as UserProfile | undefined;
-      if (!myProfile) throw new Error("Your profile doc is missing.");
-      setMe(myProfile);
-
-      const swipedSnap = await getDocs(collection(db, "swipes", user.uid, "outgoing"));
-      const swiped = new Set(swipedSnap.docs.map(d => d.id));
-
-      const blockedSnap = await getDocs(collection(db, "blocks", user.uid, "users"));
-      const blocked = new Set(blockedSnap.docs.map(d => d.id));
-
-      const usersSnap = await getDocs(query(collection(db, "users"), limit(50)));
-      const all = usersSnap.docs.map(d => d.data() as UserProfile);
-
-      const good = all
-        .filter(p => p?.uid && p.uid !== user.uid)
-        .filter(p => (p.speaks?.length ?? 0) > 0 && (p.learns?.length ?? 0) > 0)
-        .filter(p => !swiped.has(p.uid)).filter(p => !blocked.has(p.uid))
-        .filter(p => isReciprocalExchange(myProfile, p));
-
-      setCandidates(good);
-      setIdx(0);
-    } catch (e: any) {
-      console.error(e);
-      Alert.alert("Swipe load failed", e?.message ?? String(e));
+      const result = await api.discoverCandidates({ cursor: more ? after : null });
+      candidateCache.put(result.candidates);
+      setCandidates(current => {
+        if (!more) return result.candidates;
+        const seen = new Set(current.map(item => item.uid));
+        return [...current, ...result.candidates.filter(item => !seen.has(item.uid))];
+      });
+      setCursor(result.nextCursor);
+    } catch (e) {
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(false, null); }, [load]);
 
-  async function swipe(decision: "like" | "pass") {
-    const user = auth.currentUser;
-    if (!user || !current || busy) return;
-
-    setBusy(true);
-    try {
-      await setDoc(doc(db, "swipes", user.uid, "outgoing", current.uid), {
-        to: current.uid,
-        decision,
-        at: serverTimestamp(),
-      });
-
-      if (decision === "like") {
-        const theirs = await getDoc(doc(db, "swipes", current.uid, "outgoing", user.uid));
-        const theirsDecision = (theirs.data() as any)?.decision;
-
-        if (theirs.exists() && theirsDecision === "like") {
-          const cid = chatIdFor(user.uid, current.uid);
-          await ensureChat(user.uid, current.uid);
-
-          await setDoc(doc(db, "matches", user.uid, "with", current.uid), {
-            with: current.uid,
-            chatId: cid,
-            at: serverTimestamp(),
-            lastText: "",
-            lastAt: serverTimestamp(),
-            unread: 0,
-          });
-
-          await setDoc(doc(db, "matches", current.uid, "with", user.uid), {
-            with: user.uid,
-            chatId: cid,
-            at: serverTimestamp(),
-            lastText: "",
-            lastAt: serverTimestamp(),
-            unread: 0,
-          });
-
-
-          Alert.alert("💥 Match!", "Matches → tap to chat.");
-        }
-      }
-
-      setIdx(i => i + 1);
-    } catch (e: any) {
-      console.error(e);
-      Alert.alert("Swipe failed", e?.message ?? String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (loading) {
-    return <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}><ActivityIndicator /></View>;
-  }
-
-  if (!me) {
-    return <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}><Text>Profile not loaded.</Text></View>;
-  }
-
-  if (!current) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 12 }}>
-        <Text style={{ fontSize: 22, fontWeight: "900" }}>No candidates</Text>
-        <Text style={{ opacity: 0.7, textAlign: "center" }}>
-          Try creating another test account with reciprocal languages.
-        </Text>
-        <Pressable onPress={load} style={{ backgroundColor: "#111", padding: 14, borderRadius: 12 }}>
-          <Text style={{ color: "white", fontWeight: "900" }}>Reload</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  const { theyCanHelpWith: learnMatch, iCanHelpWith: speakMatch } = exchangeLanguages(me, current);
+  // Show which people already have an open invitation, in either direction.
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    return subscribeInvitations(uid, items => setPendingWith(new Set(items
+      .filter(item => item.status === "pending")
+      .map(item => (item.fromUid === uid ? item.toUid : item.fromUid)))), () => undefined);
+  }, []);
 
   return (
-    <View style={{ flex: 1, padding: 24, justifyContent: "center", gap: 14 }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <Text style={{ fontSize: 22, fontWeight: "900" }}>Swipe</Text>
-        <Pressable
-          disabled={busy}
-          onPress={load}
-          style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: "#ddd", opacity: busy ? 0.6 : 1 }}
+    <Screen>
+      <Eyebrow>LESS SCROLLING. MORE CONVERSATION.</Eyebrow>
+      <Title>Your next conversation starts here.</Title>
+      <Body muted>Meet someone who speaks your next language, and share yours in return.</Body>
+
+      {profile ? (
+        <Card style={{ backgroundColor: colors.pale }}>
+          <Text style={styles.body}>
+            {`Your exchange: you share ${list(profile.offers) || "—"} and practise ${list(profile.seeks) || "—"}.`}
+          </Text>
+          <Button variant="ghost" label="Edit my languages" onPress={() => router.push("/account/edit")} />
+        </Card>
+      ) : null}
+
+      <Heading>Language partners</Heading>
+      <Body muted>Only people with a two-way exchange: they speak what you’re practising, and are practising what you speak.</Body>
+
+      {loading ? <Loading label="Finding language partners" /> : null}
+      <ErrorNotice message={error} onRetry={() => void load(false, null)} />
+
+      {!loading && !error && candidates.length === 0 ? (
+        <EmptyState
+          title="A little more room to find your people."
+          body={cursor
+            ? "Nobody in this batch fits your exchange. Look further, or add more times you can meet."
+            : "Nobody fits your exchange yet. Try adding another language you’re practising or more times you can meet. We won’t show a one-way exchange."}
         >
-          <Text style={{ fontWeight: "900" }}>Reload</Text>
-        </Pressable>
-      </View>
+          {cursor ? <Button variant="primary" label="Look further" busy={loadingMore} onPress={() => void load(true, cursor)} /> : null}
+          <Button label="Edit profile" onPress={() => router.push("/account/edit")} />
+          <Button variant="ghost" label="Refresh" onPress={() => void load(false, null)} />
+        </EmptyState>
+      ) : null}
 
-      <Animated.View
-        {...panResponder.panHandlers}
-        style={[
-          { borderWidth: 1, borderColor: "#eee", borderRadius: 18, padding: 18, gap: 8, backgroundColor: "white" },
-          cardStyle,
-        ]}
-      >
-        <Animated.View style={{ position: "absolute", top: 14, left: 14, opacity: passOpacity }}>
-          <Text style={{ fontWeight: "900", fontSize: 18 }}>PASS</Text>
-        </Animated.View>
-        <Animated.View style={{ position: "absolute", top: 14, right: 14, opacity: likeOpacity }}>
-          <Text style={{ fontWeight: "900", fontSize: 18 }}>LIKE</Text>
-        </Animated.View>
+      {candidates.map(person => (
+        <Card key={person.uid}>
+          <Pill label="You can help each other" tone="good" />
+          <Heading>{person.displayName}</Heading>
+          {person.area ? <Text style={styles.hint}>{person.area}</Text> : null}
+          <View style={{ gap: 2 }}>
+            <Text style={styles.body}>{`Can help you with: ${list(person.exchange.theyOffer)}`}</Text>
+            <Text style={styles.body}>{`You can help with: ${list(person.exchange.youOffer)}`}</Text>
+          </View>
+          <Text style={styles.hint}>
+            {person.sharedAvailability.length ? `Shared times: ${person.sharedAvailability.join(", ")}` : "No shared times listed yet"}
+          </Text>
+          {person.bio ? <Text style={styles.body} numberOfLines={3}>{person.bio}</Text> : null}
+          <Text style={styles.hint}>Fluency is self-declared.</Text>
+          <View style={styles.row}>
+            <Button label="View profile" accessibilityLabel={`View ${person.displayName}’s profile`}
+              onPress={() => router.push({ pathname: "/person/[uid]", params: { uid: person.uid } })} />
+            {pendingWith.has(person.uid) ? (
+              <Button variant="ghost" label="Invitation open · see Plans" onPress={() => router.push("/(tabs)/plans")} />
+            ) : (
+              <Button variant="primary" label="Suggest a meetup" accessibilityLabel={`Suggest a meetup with ${person.displayName}`}
+                onPress={() => router.push({ pathname: "/plan/new", params: { toUid: person.uid } })} />
+            )}
+          </View>
+        </Card>
+      ))}
 
-        <Text style={{ fontSize: 18, fontWeight: "900" }}>
-          {current.name?.trim() ? current.name : "Anonymous"}
-        </Text>
-        {current.bio?.trim() ? <Text style={{ opacity: 0.75 }}>{current.bio}</Text> : null}
+      {candidates.length > 0 && cursor ? (
+        <Button label="Show more partners" busy={loadingMore} busyLabel="Looking…" onPress={() => void load(true, cursor)} />
+      ) : null}
+      {candidates.length > 0 && !cursor ? <Text style={styles.hint}>That’s everyone who fits your exchange right now.</Text> : null}
 
-        <Text style={{ fontWeight: "900", marginTop: 8 }}>Why you match</Text>
-        <Text style={{ opacity: 0.85 }}>
-          You learn ↔ they speak: {learnMatch.length ? learnMatch.join(", ") : "—"}
-        </Text>
-        <Text style={{ opacity: 0.85 }}>
-          You speak ↔ they learn: {speakMatch.length ? speakMatch.join(", ") : "—"}
-        </Text>
-
-        <Text style={{ fontWeight: "900", marginTop: 8 }}>They speak</Text>
-        <Text>{(current.speaks || []).map(x => `${x.lang} (${x.level})`).join(", ")}</Text>
-
-        <Text style={{ fontWeight: "900", marginTop: 8 }}>They’re learning</Text>
-        <Text>{(current.learns || []).map(x => `${x.lang} (${x.level})`).join(", ")}</Text>
-      </Animated.View>
-
-      <View style={{ flexDirection: "row", gap: 12 }}>
-        <Pressable
-          disabled={busy}
-          onPress={() => swipe("pass")}
-          style={{ flex: 1, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#ddd", opacity: busy ? 0.6 : 1 }}
-        >
-          <Text style={{ textAlign: "center", fontWeight: "900" }}>Pass</Text>
-        </Pressable>
-        <Pressable
-          disabled={busy}
-          onPress={() => swipe("like")}
-          style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: "#111", opacity: busy ? 0.6 : 1 }}
-        >
-          <Text style={{ textAlign: "center", fontWeight: "900", color: "white" }}>Like</Text>
-        </Pressable>
-      </View>
-
-      <Text style={{ opacity: 0.6, textAlign: "center" }}>
-        Showing {idx + 1} / {candidates.length}
-      </Text>
-    </View>
+      <Card>
+        <Text style={styles.label}>You bring a language. They bring another.</Text>
+        <Text style={styles.hint}>Try 20 minutes in each language. A coffee and a few mistakes are a great place to start.</Text>
+      </Card>
+    </Screen>
   );
 }

@@ -1,393 +1,187 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-} from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  runTransaction,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
-import { auth, db } from "../../src/lib/firebase";
-import { blockUser, reportUser } from "../../src/lib/safety";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, FlatList, KeyboardAvoidingView, Platform, Text, TextInput, View } from "react-native";
+import { Stack, router, useLocalSearchParams } from "expo-router";
+import { useHeaderHeight } from "@react-navigation/elements";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { api } from "../../src/lib/api";
+import { auth } from "../../src/lib/firebase";
+import { getPublicProfile, subscribeConversation, subscribeMessages, type ConversationDoc, type Message } from "../../src/lib/live";
+import { rememberBlockedName } from "../../src/lib/blocked-names";
+import { createDraftKeys } from "../../src/domain/idempotency";
+import { capitalise } from "../../src/domain/profile-form";
+import { errorMessage } from "../../src/domain/errors";
+import { Body, Button, ErrorNotice, Loading, styles } from "../../components/ui";
+import { colors, space, TOUCH_TARGET } from "../../constants/theme";
 
-type Msg = { id: string; from: string; text: string; createdAt?: any };
-type UserProfile = { uid: string; name?: string };
+const MAX_MESSAGE = 2000;
 
-type ChatMeta = {
-  typing?: Record<string, boolean>;
-  readAt?: Record<string, any>;
-  lastAt?: any;
-  lastText?: string;
-  lastFrom?: string;
-  updatedAt?: any;
-};
-
-function toMs(ts: any) {
-  if (!ts) return 0;
-  if (ts?.toMillis) return ts.toMillis();
-  if (ts?.toDate) return ts.toDate().getTime();
-  const ms = new Date(ts).getTime();
-  return Number.isFinite(ms) ? ms : 0;
-}
-
-function fmtTime(ts: any) {
-  const ms = toMs(ts);
-  if (!ms) return "";
-  const d = new Date(ms);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
+function clock(date: Date | null) {
+  if (!date) return "Sending…";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 export default function ChatScreen() {
-  const { chatId, otherUid } = useLocalSearchParams<{ chatId: string; otherUid?: string }>();
+  const params = useLocalSearchParams<{ chatId: string; otherUid?: string }>();
+  const chatId = String(params.chatId);
+  const me = auth.currentUser?.uid ?? "";
+  const headerHeight = useHeaderHeight();
+
+  const [conversation, setConversation] = useState<ConversationDoc | null | undefined>(undefined);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [otherName, setOtherName] = useState("");
   const [text, setText] = useState("");
-  const [msgs, setMsgs] = useState<Msg[]>([]);
-  const [otherName, setOtherName] = useState<string>("");
-  const [chatMeta, setChatMeta] = useState<ChatMeta>({});
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [gone, setGone] = useState(false);
+  const inFlight = useRef(false);
+  const lastMarked = useRef<string | null>(null);
+  const list = useRef<FlatList<Message>>(null);
+  // One clientMessageId per typed message, reused if that same message is retried.
+  const keys = useRef(createDraftKeys()).current;
 
-  const me = auth.currentUser?.uid;
+  const otherUid = useMemo(() => {
+    if (params.otherUid) return String(params.otherUid);
+    return conversation?.participants.find(uid => uid !== me) ?? "";
+  }, [params.otherUid, conversation, me]);
 
-  const typingTimer = useRef<any>(null);
-  const myTyping = useRef<boolean>(false);
-  const lastReadMsgId = useRef<string | null>(null);
+  useEffect(() => subscribeConversation(chatId, value => {
+    setConversation(value);
+    if (value === null) setGone(true);
+  }, e => {
+    // A conversation deleted with an account, or a block, both surface as a refused read.
+    if ((e as { code?: string }).code === "permission-denied") setGone(true);
+    else setError(errorMessage(e));
+  }), [chatId]);
 
-  const chatRef = useMemo(() => (chatId ? doc(db, "chats", String(chatId)) : null), [chatId]);
+  useEffect(() => subscribeMessages(chatId, setMessages, e => {
+    if ((e as { code?: string }).code !== "permission-denied") setError(errorMessage(e));
+  }), [chatId]);
 
   useEffect(() => {
-    async function loadOther() {
-      if (!otherUid) return;
-      try {
-        const snap = await getDoc(doc(db, "users", String(otherUid)));
-        if (snap.exists()) {
-          const p = snap.data() as UserProfile;
-          setOtherName(p?.name?.trim() || "");
-        }
-      } catch (e) {
-        console.log("loadOther failed:", e);
-      }
-    }
-    loadOther();
+    if (!otherUid) return;
+    getPublicProfile(otherUid).then(profile => setOtherName(profile?.displayName || "A member")).catch(() => setOtherName("A member"));
   }, [otherUid]);
 
-  // Listen to chat meta (typing + readAt + lastAt/lastText)
+  // Clear my unread count when I open the chat and whenever a new message arrives.
   useEffect(() => {
-    if (!chatRef) return;
-    const unsub = onSnapshot(
-      chatRef,
-      (snap) => {
-        if (!snap.exists()) return;
-        setChatMeta(snap.data() as ChatMeta);
-      },
-      (err) => console.log("chat meta listen failed:", err)
-    );
-    return () => unsub();
-  }, [chatRef]);
-
-  // Reset unread + mark read when opening chat (your side)
-  useEffect(() => {
-    async function resetUnread() {
-      if (!me || !otherUid) return;
-      try {
-        await setDoc(
-          doc(db, "matches", me, "with", String(otherUid)),
-          { unread: 0, lastReadAt: serverTimestamp() },
-          { merge: true }
-        );
-      } catch (e) {
-        console.log("resetUnread failed (ignored):", e);
-      }
-    }
-    resetUnread();
-  }, [me, otherUid]);
-
-  const markReadForChat = useCallback(async (lastMsgIdNow: string | null) => {
-    if (!me || !chatRef || !lastMsgIdNow) return;
-    if (lastReadMsgId.current === lastMsgIdNow) return;
-
-    try {
-      await updateDoc(chatRef, { [`readAt.${me}`]: serverTimestamp() });
-      lastReadMsgId.current = lastMsgIdNow;
-    } catch (e) {
-      console.log("markRead failed (ignored):", e);
-    }
-  }, [me, chatRef]);
-
-  async function setTyping(flag: boolean) {
-    if (!me || !chatRef) return;
-
-    // IMPORTANT: avoid writing on every keystroke
-    if (myTyping.current === flag) return;
-    myTyping.current = flag;
-
-    try {
-      await updateDoc(chatRef, { [`typing.${me}`]: flag });
-    } catch (e) {
-      // typing should never break chat
-      console.log("typing update failed (ignored):", e);
-    }
-  }
-
-  function onChangeText(v: string) {
-    setText(v);
-
-    const shouldType = v.trim().length > 0;
-
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    void setTyping(shouldType);
-
-    typingTimer.current = setTimeout(() => {
-      void setTyping(false);
-    }, 1200);
-  }
-
-  // Clear typing when leaving screen
-  useEffect(() => {
-    return () => {
-      if (typingTimer.current) clearTimeout(typingTimer.current);
-      void setTyping(false);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatRef, me]);
-
-  // Listen to messages
-  useEffect(() => {
-    if (!chatId) return;
-
-    const q = query(collection(db, "chats", String(chatId), "messages"), orderBy("createdAt", "asc"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const list: Msg[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-        setMsgs(list);
-
-        // If newest message is from the other person, mark chat read (for Seen receipts)
-        const last = list[list.length - 1];
-        if (last && me && last.from !== me) {
-          void markReadForChat(last.id);
-        }
-      },
-      (err) => {
-        console.error(err);
-        Alert.alert("Chat load failed", err.message);
-      }
-    );
-
-    return () => unsub();
-  }, [chatId, me, markReadForChat]);
+    if (gone) return;
+    const last = messages[messages.length - 1];
+    const marker = last && last.fromUid !== me ? last.id : (lastMarked.current ?? "open");
+    if (marker === lastMarked.current) return;
+    lastMarked.current = marker;
+    api.markConversationRead(chatId).catch(() => undefined);
+  }, [messages, chatId, me, gone]);
 
   async function send() {
-    if (!chatId || !me || !chatRef) return;
-    if (sending) return;
-
     const clean = text.trim();
-    if (!clean) return;
-
+    if (!clean || inFlight.current) return;
+    if (clean.length > MAX_MESSAGE) { setError(`Messages can be up to ${MAX_MESSAGE} characters.`); return; }
+    const clientMessageId = keys.keyFor(clean);
+    inFlight.current = true;
     setSending(true);
+    setError(null);
     setText("");
-
     try {
-      // stop typing immediately (best effort)
-      if (typingTimer.current) clearTimeout(typingTimer.current);
-      void setTyping(false);
-
-      // 1) write message
-      await addDoc(collection(db, "chats", String(chatId), "messages"), {
-        from: me,
-        text: clean,
-        createdAt: serverTimestamp(),
-      });
-
-      // 2) update chat meta (drives Matches list)
-      await setDoc(
-        chatRef,
-        { updatedAt: serverTimestamp(), lastText: clean, lastFrom: me, lastAt: serverTimestamp() },
-        { merge: true }
-      );
-
-      if (!otherUid) return;
-
-      // 3) my match meta
-      await setDoc(
-        doc(db, "matches", me, "with", String(otherUid)),
-        { lastText: clean, lastAt: serverTimestamp(), unread: 0, chatId: String(chatId), with: String(otherUid) },
-        { merge: true }
-      );
-
-      // 4) their unread bump (best effort)
-      try {
-        await runTransaction(db, async (tx) => {
-          const ref = doc(db, "matches", String(otherUid), "with", me);
-          const snap = await tx.get(ref);
-          const cur = snap.exists() ? Number((snap.data() as any)?.unread || 0) : 0;
-
-          tx.set(
-            ref,
-            {
-              with: me,
-              chatId: String(chatId),
-              lastText: clean,
-              lastAt: serverTimestamp(),
-              unread: cur + 1,
-            },
-            { merge: true }
-          );
-        });
-      } catch (e) {
-        console.log("unread bump failed (ignored):", e);
-      }
-
-      // The onMessageCreated Cloud Function delivers notifications after the write.
-    } catch (e: any) {
-      console.error(e);
-      Alert.alert("Send failed", e?.message ?? String(e));
-      setText(clean); // restore draft
+      await api.sendMessage(chatId, clean, clientMessageId);
+      keys.settle();
+    } catch (e) {
+      // Restoring the same text keeps the same clientMessageId, so a retry cannot duplicate.
+      setText(current => current || clean);
+      setError(errorMessage(e));
     } finally {
+      inFlight.current = false;
       setSending(false);
     }
   }
 
-  async function onBlock() {
-    if (!me || !otherUid) return;
-    Alert.alert("Block user?", "They will disappear from your matches.", [
-      { text: "Cancel", style: "cancel" },
+  function onBlock() {
+    if (!otherUid) return;
+    Alert.alert(`Block ${otherName || "this member"}?`, "Neither of you will be able to message, invite or find the other. You can unblock from Your profile.", [
+      { text: "Keep", style: "cancel" },
       {
-        text: "Block",
-        style: "destructive",
-        onPress: async () => {
+        text: "Block", style: "destructive", onPress: async () => {
           try {
-            await blockUser(me, String(otherUid));
-            router.replace("/(tabs)/matches");
-          } catch (e: any) {
-            Alert.alert("Block failed", e?.message ?? String(e));
+            await api.setBlock(otherUid, true);
+            if (me) await rememberBlockedName(me, otherUid, otherName || "A member");
+            router.replace("/(tabs)/chats");
+          } catch (e) {
+            setError(errorMessage(e));
           }
         },
       },
     ]);
   }
 
-  async function onReport() {
-    if (!me || !otherUid || !chatId) return;
-    Alert.alert("Report user", "Pick a reason:", [
-      { text: "Spam", onPress: () => doReport("spam") },
-      { text: "Harassment", onPress: () => doReport("harassment") },
-      { text: "Other", onPress: () => doReport("other") },
-      { text: "Cancel", style: "cancel" },
-    ]);
+  const title = otherName || "Conversation";
+  const exchange = conversation?.languages
+    ? `Your exchange: ${capitalise(conversation.languages.fromOffers)} ⇄ ${capitalise(conversation.languages.toOffers)}`
+    : null;
+
+  if (gone) {
+    return (
+      <SafeAreaView edges={["bottom"]} style={[styles.screen, { padding: space.lg, gap: space.md }]}>
+        <Stack.Screen options={{ title: "Conversation" }} />
+        <Body>This conversation is no longer available. The other person may have deleted their account, or one of you blocked the other.</Body>
+        <Button label="Back to chats" onPress={() => router.replace("/(tabs)/chats")} />
+      </SafeAreaView>
+    );
   }
-
-  async function doReport(reason: string) {
-    try {
-      await reportUser(me!, String(otherUid), String(chatId), reason);
-      Alert.alert("Reported", "Thanks — we recorded that report.");
-    } catch (e: any) {
-      Alert.alert("Report failed", e?.message ?? String(e));
-    }
-  }
-
-  const title = useMemo(() => (otherName ? `Chat with ${otherName}` : "Chat"), [otherName]);
-
-  const otherTyping = !!(otherUid && chatMeta?.typing?.[String(otherUid)]);
-  const otherReadMs = otherUid ? toMs(chatMeta?.readAt?.[String(otherUid)]) : 0;
-
-  const lastMineId = useMemo(() => {
-    if (!me) return null;
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].from === me) return msgs[i].id;
-    }
-    return null;
-  }, [msgs, me]);
+  if (conversation === undefined) return <Loading label="Opening conversation" />;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={80}>
-      <View style={{ padding: 16, borderBottomWidth: 1, borderColor: "#eee", flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <Pressable onPress={() => router.back()} style={{ paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: "#ddd", borderRadius: 10 }}>
-          <Text style={{ fontWeight: "900" }}>Back</Text>
-        </Pressable>
-
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 18, fontWeight: "900" }}>{title}</Text>
-          {otherTyping ? <Text style={{ opacity: 0.6, marginTop: 2 }}>Typing…</Text> : null}
+    <SafeAreaView edges={["bottom"]} style={styles.screen}>
+      <Stack.Screen options={{ title }} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={headerHeight}>
+        <View style={{ paddingHorizontal: space.lg, paddingVertical: space.sm, gap: space.sm, borderBottomWidth: 1, borderColor: colors.line }}>
+          {exchange ? <Text style={styles.hint}>{exchange}</Text> : null}
+          <View style={styles.row}>
+            <Button label="Report" accessibilityLabel={`Report ${title}`}
+              onPress={() => router.push({ pathname: "/report/[uid]", params: { uid: otherUid, name: otherName, conversationId: chatId } })} />
+            <Button label="Block" accessibilityLabel={`Block ${title}`} onPress={onBlock} />
+          </View>
         </View>
 
-        <Pressable onPress={onReport} style={{ paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: "#ddd", borderRadius: 10 }}>
-          <Text style={{ fontWeight: "900" }}>Report</Text>
-        </Pressable>
-
-        <Pressable onPress={onBlock} style={{ paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: "#ddd", borderRadius: 10 }}>
-          <Text style={{ fontWeight: "900" }}>Block</Text>
-        </Pressable>
-      </View>
-
-      <FlatList
-        contentContainerStyle={{ padding: 16, gap: 10 }}
-        data={msgs}
-        keyExtractor={(m) => m.id}
-        renderItem={({ item }) => {
-          const mine = item.from === me;
-          const time = fmtTime(item.createdAt);
-
-          const mineMsgMs = toMs(item.createdAt);
-          const seen =
-            mine &&
-            item.id === lastMineId &&
-            otherReadMs > 0 &&
-            mineMsgMs > 0 &&
-            otherReadMs >= mineMsgMs;
-
-          return (
-            <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "82%" }}>
-              <View style={{ padding: 12, borderRadius: 14, borderWidth: 1, borderColor: "#eee", backgroundColor: mine ? "#111" : "#fff" }}>
-                <Text style={{ color: mine ? "white" : "black" }}>{item.text}</Text>
+        <FlatList
+          ref={list}
+          data={messages}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ padding: space.lg, gap: space.sm }}
+          onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
+          ListEmptyComponent={<Body muted>No messages yet. Say hello and confirm where you’ll meet.</Body>}
+          renderItem={({ item }) => {
+            const mine = item.fromUid === me;
+            return (
+              <View
+                accessible
+                accessibilityLabel={`${mine ? "You" : title}, ${clock(item.createdAt)}: ${item.text}`}
+                style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "85%" }}
+              >
+                <View style={{ padding: space.md, borderRadius: 14, backgroundColor: mine ? colors.green : colors.paper, borderWidth: 1, borderColor: mine ? colors.green : colors.line }}>
+                  <Text style={{ color: mine ? colors.onGreen : colors.ink, fontSize: 16 }}>{item.text}</Text>
+                </View>
+                <Text style={[styles.hint, { alignSelf: mine ? "flex-end" : "flex-start", fontSize: 12 }]}>{clock(item.createdAt)}</Text>
               </View>
-
-              <View style={{ flexDirection: "row", justifyContent: mine ? "flex-end" : "flex-start", gap: 8, marginTop: 4 }}>
-                {time ? <Text style={{ fontSize: 12, opacity: 0.6 }}>{time}</Text> : null}
-                {seen ? <Text style={{ fontSize: 12, opacity: 0.6 }}>Seen</Text> : null}
-              </View>
-            </View>
-          );
-        }}
-      />
-
-      <View style={{ padding: 12, borderTopWidth: 1, borderColor: "#eee", flexDirection: "row", gap: 10 }}>
-        <TextInput
-          value={text}
-          onChangeText={onChangeText}
-          placeholder="Message…"
-          style={{ flex: 1, borderWidth: 1, borderColor: "#ddd", borderRadius: 12, padding: 12 }}
-        />
-        <Pressable
-          onPress={send}
-          disabled={sending || text.trim().length === 0}
-          style={{
-            backgroundColor: "#111",
-            paddingHorizontal: 16,
-            borderRadius: 12,
-            justifyContent: "center",
-            opacity: sending || text.trim().length === 0 ? 0.5 : 1,
+            );
           }}
-        >
-          <Text style={{ color: "white", fontWeight: "900" }}>{sending ? "Sending…" : "Send"}</Text>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+        />
+
+        <View style={{ paddingHorizontal: space.md, paddingTop: space.sm, gap: space.sm }}>
+          <ErrorNotice message={error} />
+          <View style={{ flexDirection: "row", gap: space.sm, alignItems: "flex-end" }}>
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              placeholder="Message…"
+              placeholderTextColor={colors.muted}
+              accessibilityLabel={`Message ${title}`}
+              maxLength={MAX_MESSAGE}
+              multiline
+              style={[styles.input, { flex: 1, maxHeight: 140 }]}
+            />
+            <Button variant="primary" label="Send" busy={sending} disabled={!text.trim()} onPress={send} style={{ minWidth: TOUCH_TARGET * 1.6 }} />
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

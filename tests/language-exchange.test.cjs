@@ -31,3 +31,8 @@ test('new and incomplete accounts go through onboarding before discovering peopl
   assert.equal(profileDestination({ ...me, name: ' ' }), '/(onboarding)/profile');
   assert.equal(profileDestination(me), '/(tabs)');
 });
+test('server profiles carry displayName rather than name', () => {
+  const server = { displayName: 'Alex', speaks: me.speaks, learns: me.learns };
+  assert.equal(profileDestination(server), '/(tabs)');
+  assert.equal(profileDestination({ ...server, displayName: '  ' }), '/(onboarding)/profile');
+});

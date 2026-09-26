@@ -1,22 +1,16 @@
-import { useEffect, useState } from "react";
-import { View, Text, Pressable, ActivityIndicator, ScrollView, Alert } from "react-native";
+import { useState } from "react";
+import { Alert, Text } from "react-native";
 import { router } from "expo-router";
-import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db } from "../../src/lib/firebase";
 import { logOut } from "../../src/lib/auth";
 import { registerForPush } from "../../src/lib/push";
-
-type UserLang = { lang: string; level: string };
-type UserProfile = { uid: string; name?: string; bio?: string; speaks?: UserLang[]; learns?: UserLang[] };
-
-function fmt(arr?: UserLang[]) {
-  if (!arr?.length) return "—";
-  return arr.map(x => `${x.lang} (${x.level})`).join(", ");
-}
+import { candidateCache } from "../../src/lib/candidate-cache";
+import { formatLanguages } from "../../src/domain/profile-form";
+import { forgetAccount, useMyAccount } from "../../hooks/use-my-account";
+import { Body, Button, Card, ErrorNotice, Eyebrow, Heading, Loading, Screen, Title, styles } from "../../components/ui";
+import { APP_NAME } from "../../constants/brand";
 
 export default function Profile() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { profile, loading, error, reload } = useMyAccount();
   const [registeringPush, setRegisteringPush] = useState(false);
 
   async function onEnableNotifications() {
@@ -32,95 +26,46 @@ export default function Profile() {
     } finally { setRegisteringPush(false); }
   }
 
-  // Load profile (live)
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) {
-      router.replace("/(auth)/login");
-      return;
-    }
-
-    const ref = doc(db, "users", user.uid);
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        setProfile((snap.data() as UserProfile) ?? null);
-        setLoading(false);
-      },
-      (err) => {
-        console.error(err);
-        Alert.alert("Profile load failed", err.message);
-        setLoading(false);
-      }
-    );
-
-    return () => unsub();
-  }, []);
-
   async function onLogout() {
+    candidateCache.clear();
+    forgetAccount();
     await logOut();
     router.replace("/(auth)/login");
   }
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
+  if (loading) return <Loading label="Loading your profile" />;
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 24, gap: 12 }}>
-      <Text style={{ fontSize: 28, fontWeight: "900" }}>Profile</Text>
+    <Screen>
+      <Eyebrow>SOMETHING TO SHARE. SOMETHING TO LEARN.</Eyebrow>
+      <Title>Your side of the conversation.</Title>
+      <ErrorNotice message={error} onRetry={() => void reload()} />
 
-      <View style={{ padding: 14, borderWidth: 1, borderColor: "#eee", borderRadius: 14, gap: 8 }}>
-        <Text style={{ fontWeight: "900" }}>Name</Text>
-        <Text style={{ opacity: 0.9 }}>{profile?.name?.trim() ? profile?.name : "—"}</Text>
+      {profile ? (
+        <Card>
+          <Heading>{profile.displayName}</Heading>
+          {profile.area ? <Text style={styles.hint}>{profile.area}</Text> : null}
+          {profile.bio ? <Body>{profile.bio}</Body> : null}
+          <Text style={styles.label}>I can share</Text>
+          <Body>{formatLanguages(profile.speaks)}</Body>
+          <Text style={styles.label}>I’m practising</Text>
+          <Body>{formatLanguages(profile.learns)}</Body>
+          <Text style={styles.label}>Usually free</Text>
+          <Body>{profile.availability?.length ? profile.availability.join(", ") : "No times chosen"}</Body>
+          {profile.interests?.length ? <><Text style={styles.label}>Interests</Text><Body>{profile.interests.join(", ")}</Body></> : null}
+          <Text style={styles.hint}>Fluency and age are self-declared. {APP_NAME} doesn’t verify them.</Text>
+        </Card>
+      ) : null}
 
-        <Text style={{ fontWeight: "900", marginTop: 6 }}>Bio</Text>
-        <Text style={{ opacity: 0.9 }}>{profile?.bio?.trim() ? profile?.bio : "—"}</Text>
-
-        <Text style={{ fontWeight: "900", marginTop: 10 }}>I speak</Text>
-        <Text style={{ opacity: 0.9 }}>{fmt(profile?.speaks)}</Text>
-
-        <Text style={{ fontWeight: "900", marginTop: 6 }}>I’m learning</Text>
-        <Text style={{ opacity: 0.9 }}>{fmt(profile?.learns)}</Text>
-      </View>
-
-      <Pressable
-        onPress={() => router.push("/(onboarding)/profile")}
-        style={{ backgroundColor: "#111", padding: 14, borderRadius: 12 }}
-      >
-        <Text style={{ color: "white", textAlign: "center", fontWeight: "900" }}>
-          Edit name & bio
-        </Text>
-      </Pressable>
-
-      <Pressable
-        onPress={() => router.push("/(onboarding)/languages")}
-        style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#ddd" }}
-      >
-        <Text style={{ textAlign: "center", fontWeight: "900" }}>
-          Edit languages
-        </Text>
-      </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
+      <Button variant="primary" label="Edit profile" hint="Languages, levels, times and neighbourhood" onPress={() => router.push("/account/edit")} />
+      <Button
+        label={registeringPush ? "Enabling notifications…" : "Enable message notifications"}
+        busy={registeringPush}
         onPress={onEnableNotifications}
-        disabled={registeringPush}
-        style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#ddd", opacity: registeringPush ? 0.6 : 1 }}
-      >
-        <Text style={{ textAlign: "center", fontWeight: "900" }}>{registeringPush ? "Enabling notifications…" : "Enable message notifications"}</Text>
-      </Pressable>
-
-      <Pressable
-        onPress={onLogout}
-        style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#ddd" }}
-      >
-        <Text style={{ textAlign: "center", fontWeight: "900" }}>Log out</Text>
-      </Pressable>
-    </ScrollView>
+      />
+      <Button label="Blocked members" onPress={() => router.push("/account/blocked")} />
+      <Button label="Log out" onPress={onLogout} />
+      <Button variant="danger" label="Delete account" hint="Permanently deletes your account and conversations" onPress={() => router.push("/account/delete")} />
+    </Screen>
   );
 }
