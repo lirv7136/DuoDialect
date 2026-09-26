@@ -6,18 +6,36 @@
     "preview": {
       "distribution": "internal",
       "environment": "preview",
-      "android": { "buildType": "apk" },
-      "ios": { "image": "sdk-54" }
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "image": "sdk-54"
+      }
     },
     "simulator": {
       "extends": "preview",
-      "ios": { "simulator": true }
+      "ios": {
+        "simulator": true
+      }
     },
     "production": {
       "environment": "production",
       "autoIncrement": true,
-      "android": { "buildType": "app-bundle" },
-      "ios": { "image": "sdk-54" }
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "image": "sdk-54"
+      }
+    },
+    "testflight": {
+      "extends": "production",
+      "environment": "preview",
+      "ios": {
+        "image": "latest"
+      }
     }
-  }
+  },
+  "submit": {}
 }

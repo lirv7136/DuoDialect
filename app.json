@@ -9,8 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.lachlanirving.duodialect"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.lachlanirving.duodialect",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
