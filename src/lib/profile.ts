@@ -1,8 +1,8 @@
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
-export type LanguageLevel = "native" | "fluent" | "intermediate" | "beginner";
-export type UserLang = { lang: string; level: LanguageLevel };
+import type { UserLang } from "../domain/language-exchange";
+export type { LanguageLevel, UserLang } from "../domain/language-exchange";
 
 export type UserProfile = {
   uid: string;

@@ -1,0 +1,17 @@
+{
+  "reviewedOn": "2026-09-19",
+  "target": "DuoDialect 1.0 for iOS and Android",
+  "gates": [
+    { "id": "native-baseline", "name": "Native typecheck, lint, domain and notification adapter tests", "status": "passed", "evidence": "npm run verify; see RELEASE-PLAN.md" },
+    { "id": "native-bundles", "name": "iOS and Android JavaScript bundle export", "status": "passed", "evidence": "npm run bundle:check; dummy Firebase configuration, not signed builds" },
+    { "id": "native-product", "name": "Native implementation of the reviewed three-mode experience", "status": "pending", "evidence": "The new experience currently lives in prototype/; old native UI is not equivalent." },
+    { "id": "backend-access", "name": "Server authorization, database rules and adversarial emulator tests", "status": "pending", "evidence": "No checked-in Firestore rules or rule tests; deployed rules have not been inspected." },
+    { "id": "live-exchange", "name": "Real account lifecycle, invitations, acceptance, groups and chat", "status": "pending", "evidence": "Staging service, transactional workflows and two-account tests required." },
+    { "id": "privacy-safety", "name": "Age controls, consent, deletion, reporting and moderation", "status": "pending", "evidence": "Must be implemented and tested in the actual app and backend." },
+    { "id": "signed-builds", "name": "Installable signed iOS and Android builds meet current SDK requirements", "status": "pending", "evidence": "EAS profiles prepared; no cloud build, signing or upload requested." },
+    { "id": "physical-devices", "name": "Recorded tests on real iPhone and Android devices", "status": "pending", "evidence": "Device availability not yet confirmed; browser emulation does not satisfy this gate." },
+    { "id": "beta", "name": "TestFlight and Google Play closed test completed and defects resolved", "status": "pending", "evidence": "Store account status and testers not yet confirmed." },
+    { "id": "listing", "name": "Accurate listing, policies, support, declarations and reviewer access", "status": "pending", "evidence": "Public support/privacy/deletion URLs and responsible operator details needed." },
+    { "id": "release-review", "name": "Final tested candidate approved for submission", "status": "pending", "evidence": "All prior gates must have evidence for the exact build being submitted." }
+  ]
+}

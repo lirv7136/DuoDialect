@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -25,7 +25,6 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../../src/lib/firebase";
 import { blockUser, reportUser } from "../../src/lib/safety";
-import { sendPushToUser } from "../../src/lib/pushSend";
 
 type Msg = { id: string; from: string; text: string; createdAt?: any };
 type UserProfile = { uid: string; name?: string };
@@ -119,17 +118,17 @@ export default function ChatScreen() {
     resetUnread();
   }, [me, otherUid]);
 
-  async function markReadForChat(lastMsgIdNow: string | null) {
+  const markReadForChat = useCallback(async (lastMsgIdNow: string | null) => {
     if (!me || !chatRef || !lastMsgIdNow) return;
     if (lastReadMsgId.current === lastMsgIdNow) return;
 
-    lastReadMsgId.current = lastMsgIdNow;
     try {
       await updateDoc(chatRef, { [`readAt.${me}`]: serverTimestamp() });
+      lastReadMsgId.current = lastMsgIdNow;
     } catch (e) {
       console.log("markRead failed (ignored):", e);
     }
-  }
+  }, [me, chatRef]);
 
   async function setTyping(flag: boolean) {
     if (!me || !chatRef) return;
@@ -192,7 +191,7 @@ export default function ChatScreen() {
     );
 
     return () => unsub();
-  }, [chatId, me]);
+  }, [chatId, me, markReadForChat]);
 
   async function send() {
     if (!chatId || !me || !chatRef) return;
@@ -255,8 +254,7 @@ export default function ChatScreen() {
         console.log("unread bump failed (ignored):", e);
       }
 
-      // 5) push (non-blocking)
-      sendPushToUser(String(otherUid), "New message", clean).catch(() => {});
+      // The onMessageCreated Cloud Function delivers notifications after the write.
     } catch (e: any) {
       console.error(e);
       Alert.alert("Send failed", e?.message ?? String(e));

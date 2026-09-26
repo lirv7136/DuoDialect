@@ -17,11 +17,20 @@ function fmt(arr?: UserLang[]) {
 export default function Profile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [registeringPush, setRegisteringPush] = useState(false);
 
-  // ✅ Register push token once when Profile tab mounts
-  useEffect(() => {
-    registerForPush().catch(console.error);
-  }, []);
+  async function onEnableNotifications() {
+    if (registeringPush) return;
+    setRegisteringPush(true);
+    try {
+      const token = await registerForPush();
+      Alert.alert(token ? "Notifications enabled" : "Notifications unavailable", token
+        ? "This device can now receive message notifications."
+        : "Use an installed app on a physical phone and allow notifications in its settings.");
+    } catch {
+      Alert.alert("Couldn’t enable notifications", "Please check your connection and try again.");
+    } finally { setRegisteringPush(false); }
+  }
 
   // Load profile (live)
   useEffect(() => {
@@ -95,6 +104,15 @@ export default function Profile() {
         <Text style={{ textAlign: "center", fontWeight: "900" }}>
           Edit languages
         </Text>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={onEnableNotifications}
+        disabled={registeringPush}
+        style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#ddd", opacity: registeringPush ? 0.6 : 1 }}
+      >
+        <Text style={{ textAlign: "center", fontWeight: "900" }}>{registeringPush ? "Enabling notifications…" : "Enable message notifications"}</Text>
       </Pressable>
 
       <Pressable

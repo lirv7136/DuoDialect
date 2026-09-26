@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { auth, db } from "../../src/lib/firebase";
 import { ensureChat, chatIdFor } from "../../src/lib/chat";
+import { exchangeLanguages, isReciprocalExchange } from "../../src/domain/language-exchange";
 import {
   collection,
   doc,
@@ -30,23 +31,6 @@ type UserProfile = {
   speaks: UserLang[];
   learns: UserLang[];
 };
-
-function norm(s: string) {
-  return (s || "").trim().toLowerCase();
-}
-function langSet(arr?: UserLang[]) {
-  return new Set((arr || []).map(x => norm(x.lang)).filter(Boolean));
-}
-function intersects(a: Set<string>, b: Set<string>) {
-  for (const x of a) if (b.has(x)) return true;
-  return false;
-}
-function intersectList(a: Set<string>, b: Set<string>) {
-  const out: string[] = [];
-  for (const x of a) if (b.has(x)) out.push(x);
-  out.sort();
-  return out;
-}
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SCREEN_W * 0.25;
@@ -146,18 +130,11 @@ export default function Swipe() {
       const usersSnap = await getDocs(query(collection(db, "users"), limit(50)));
       const all = usersSnap.docs.map(d => d.data() as UserProfile);
 
-      const mineSpeaks = langSet(myProfile.speaks);
-      const mineLearns = langSet(myProfile.learns);
-
       const good = all
         .filter(p => p?.uid && p.uid !== user.uid)
         .filter(p => (p.speaks?.length ?? 0) > 0 && (p.learns?.length ?? 0) > 0)
         .filter(p => !swiped.has(p.uid)).filter(p => !blocked.has(p.uid))
-        .filter(p => {
-          const theirSpeaks = langSet(p.speaks);
-          const theirLearns = langSet(p.learns);
-          return intersects(mineLearns, theirSpeaks) && intersects(mineSpeaks, theirLearns);
-        });
+        .filter(p => isReciprocalExchange(myProfile, p));
 
       setCandidates(good);
       setIdx(0);
@@ -245,13 +222,7 @@ export default function Swipe() {
     );
   }
 
-  const mineSpeaks = langSet(me.speaks);
-  const mineLearns = langSet(me.learns);
-  const theirSpeaks = langSet(current.speaks);
-  const theirLearns = langSet(current.learns);
-
-  const learnMatch = intersectList(mineLearns, theirSpeaks);
-  const speakMatch = intersectList(mineSpeaks, theirLearns);
+  const { theyCanHelpWith: learnMatch, iCanHelpWith: speakMatch } = exchangeLanguages(me, current);
 
   return (
     <View style={{ flex: 1, padding: 24, justifyContent: "center", gap: 14 }}>

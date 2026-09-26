@@ -1,12 +1,14 @@
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { auth, db } from "./firebase";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: false,
     shouldSetBadge: true,
   }),
@@ -17,9 +19,19 @@ export async function registerForPush() {
   if (!user) return null;
 
   // Push tokens require a physical device
-  if (!Device.isDevice) {
-    console.log("Push: must run on a physical device.");
+  if (Platform.OS === "web" || !Device.isDevice) {
     return null;
+  }
+
+  const projectId = Constants.easConfig?.projectId ?? Constants.expoConfig?.extra?.eas?.projectId;
+  if (!projectId) throw new Error("Notifications are not configured for this build.");
+
+  // Android needs a notification channel before requesting notification permission.
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "Messages",
+      importance: Notifications.AndroidImportance.DEFAULT,
+    });
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -31,18 +43,11 @@ export async function registerForPush() {
   }
 
   if (finalStatus !== "granted") {
-    console.log("Push: permission not granted.");
     return null;
   }
 
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "default",
-      importance: Notifications.AndroidImportance.DEFAULT,
-    });
-  }
-
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
+  const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  if (auth.currentUser?.uid !== user.uid) return null;
 
   // ✅ Private token storage
   await setDoc(
@@ -55,6 +60,5 @@ export async function registerForPush() {
     { merge: true }
   );
 
-  console.log("Expo push token saved:", token);
   return token;
 }

@@ -12,7 +12,7 @@ export default function Login() {
     try {
       setBusy(true);
       await signIn(email, password);
-      router.replace("/(tabs)");
+      router.replace("/");
     } catch (e: any) {
       Alert.alert("Login failed", e?.message ?? "Unknown error");
     } finally {

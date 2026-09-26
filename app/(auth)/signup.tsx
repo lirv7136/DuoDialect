@@ -12,7 +12,7 @@ export default function Signup() {
     try {
       setBusy(true);
       await signUp(email, password);
-      router.replace("/(tabs)");
+      router.replace("/");
     } catch (e: any) {
       Alert.alert("Signup failed", e?.message ?? "Unknown error");
     } finally {

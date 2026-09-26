@@ -145,18 +145,19 @@ export default function Matches() {
   // For every match row, also listen to chats/{chatId} so lastText/lastAt update instantly
   useEffect(() => {
     const active = new Set(baseRows.map((r) => r.chatId));
+    const subscriptions = chatUnsubs.current;
 
     // remove listeners we no longer need
-    for (const chatId of Object.keys(chatUnsubs.current)) {
+    for (const chatId of Object.keys(subscriptions)) {
       if (!active.has(chatId)) {
-        chatUnsubs.current[chatId]?.();
-        delete chatUnsubs.current[chatId];
+        subscriptions[chatId]?.();
+        delete subscriptions[chatId];
       }
     }
 
     // add listeners for new chatIds
     for (const chatId of active) {
-      if (chatUnsubs.current[chatId]) continue;
+      if (subscriptions[chatId]) continue;
 
       const unsub = onSnapshot(
         doc(db, "chats", chatId),
@@ -168,14 +169,14 @@ export default function Matches() {
         (err) => console.log("chat meta listen failed:", err)
       );
 
-      chatUnsubs.current[chatId] = unsub;
+      subscriptions[chatId] = unsub;
     }
 
     // cleanup all on unmount
     return () => {
-      for (const k of Object.keys(chatUnsubs.current)) {
-        chatUnsubs.current[k]?.();
-        delete chatUnsubs.current[k];
+      for (const k of Object.keys(subscriptions)) {
+        subscriptions[k]?.();
+        delete subscriptions[k];
       }
     };
   }, [baseRows]);
