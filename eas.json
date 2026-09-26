@@ -37,5 +37,18 @@
       }
     }
   },
-  "submit": {}
+  "submit": {
+    "testflight": {
+      "ios": {
+        "ascAppId": "6816316060",
+        "appleTeamId": "MAYKX6UAZK"
+      }
+    },
+    "production": {
+      "ios": {
+        "ascAppId": "6816316060",
+        "appleTeamId": "MAYKX6UAZK"
+      }
+    }
+  }
 }
