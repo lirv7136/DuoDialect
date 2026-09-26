@@ -40,5 +40,5 @@ export function profileDestination(profile: ExchangeProfile | null) {
   }
   const name = typeof profile.displayName === "string" ? profile.displayName : profile.name;
   if (typeof name !== "string" || !name.trim()) return "/(onboarding)/profile" as const;
-  return "/(tabs)" as const;
+  return "/(tabs)/discover" as const;
 }

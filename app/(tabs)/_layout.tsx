@@ -37,8 +37,9 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontSize: 12 },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Discover", tabBarIcon: icon("compass-outline") }} />
-      <Tabs.Screen name="groups" options={{ title: "Groups", tabBarIcon: icon("people-outline") }} />
+      <Tabs.Screen name="discover" options={{ title: "Discover", tabBarIcon: icon("compass-outline") }} />
+      {/* Groups need backend support first; hidden for v1 rather than shown as "coming soon". */}
+      <Tabs.Screen name="groups" options={{ href: null }} />
       <Tabs.Screen
         name="plans"
         options={{

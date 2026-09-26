@@ -18,7 +18,7 @@ export default function Groups() {
         title="Small groups aren’t open yet."
         body="We’re not taking group sign-ups yet, so there are no sessions to join and no seats are held for anyone. In the meantime, meet one language partner at a time."
       >
-        <Button variant="primary" label="Find a language partner" onPress={() => router.push("/(tabs)")} />
+        <Button variant="primary" label="Find a language partner" onPress={() => router.push("/(tabs)/discover")} />
       </EmptyState>
     </Screen>
   );

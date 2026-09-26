@@ -138,7 +138,7 @@ export default function Plans() {
 
       {all.length === 0 && !error ? (
         <EmptyState title="Nothing planned yet." body="Find a language partner and suggest a public place and time to meet.">
-          <Button variant="primary" label="Discover partners" onPress={() => router.push("/(tabs)")} />
+          <Button variant="primary" label="Discover partners" onPress={() => router.push("/(tabs)/discover")} />
         </EmptyState>
       ) : null}
 

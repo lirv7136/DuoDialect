@@ -59,7 +59,7 @@ export default function PersonScreen() {
               const myUid = auth.currentUser?.uid;
               if (myUid) await rememberBlockedName(myUid, person.uid, person.displayName);
               candidateCache.remove(person.uid);
-              router.replace("/(tabs)");
+              router.replace("/(tabs)/discover");
             } catch (e) {
               setError(errorMessage(e));
             } finally {

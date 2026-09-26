@@ -1,5 +1,7 @@
 import { initializeApp, getApps } from "firebase/app";
-import { connectAuthEmulator, getAuth } from "firebase/auth";
+import * as FirebaseAuth from "firebase/auth";
+import { connectAuthEmulator, getAuth, initializeAuth, type Auth, type Persistence } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 import { Platform } from "react-native";
@@ -36,7 +38,19 @@ const firebaseConfig = usingEmulators
 const firstInit = getApps().length === 0;
 const app = firstInit ? initializeApp(firebaseConfig) : getApps()[0];
 
-export const auth = getAuth(app);
+// On a phone, getAuth keeps the session in memory only, so every app launch signs the
+// person out. React Native persistence is exported only by the react-native build of
+// firebase/auth, which the default TypeScript types do not describe.
+const getReactNativePersistence = (FirebaseAuth as unknown as {
+  getReactNativePersistence?: (storage: typeof AsyncStorage) => Persistence;
+}).getReactNativePersistence;
+
+function createAuth(): Auth {
+  if (Platform.OS === "web" || !firstInit || !getReactNativePersistence) return getAuth(app);
+  return initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+}
+
+export const auth = createAuth();
 export const db = getFirestore(app);
 /** The region every callable is deployed to. The emulator ignores it but keeps it in the URL. */
 export const FUNCTIONS_REGION = "australia-southeast1";

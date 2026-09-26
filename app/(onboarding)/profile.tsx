@@ -55,7 +55,7 @@ export default function ProfileOnboarding() {
       // Replaying the same full profile is harmless, so a double tap needs no key.
       rememberAccount(await api.upsertProfile(buildUpsertPayload(draft, options)));
       onboardingDraft.clear();
-      router.replace("/(tabs)");
+      router.replace("/(tabs)/discover");
     } catch (e) {
       setProblem(errorMessage(e));
     } finally {
