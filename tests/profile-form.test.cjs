@@ -67,6 +67,7 @@ test('payloads are complete, trimmed, and never carry dating fields or gender', 
 test('stored profiles become well formed drafts; interests are parsed and de-duplicated', () => {
   const d = f.draftFromProfile({ displayName: 'Aiko', speaks: [{ lang: 'japanese', level: 'native' }, { lang: 'x', level: 'bogus' }, null], availability: ['Saturday morning', 3] });
   assert.equal(d.speaks.length, 1);
+  assert.equal(d.speaks[0].lang, 'Japanese');
   assert.equal(JSON.stringify(d.availability), JSON.stringify(['Saturday morning']));
   assert.equal(d.bio, '');
   assert.equal(JSON.stringify(f.parseInterests(' Coffee, coffee ,Film,, ')), JSON.stringify(['Coffee', 'Film']));

@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { useEffect, useState } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from "../../src/lib/firebase";
 import { subscribeInbox, subscribeInvitations } from "../../src/lib/live";
 import { colors } from "../../constants/theme";
@@ -11,6 +12,7 @@ const icon = (name: IconName) => function TabIcon({ color, size }: { color: stri
 };
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [invitesWaiting, setInvitesWaiting] = useState(0);
 
@@ -33,7 +35,9 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.green,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: { backgroundColor: colors.paper },
+        // Each tab item gets 56pt: the 28pt icon, its label and padding. The default bar
+        // left the label about 9pt and clipped it.
+        tabBarStyle: { backgroundColor: colors.paper, height: 64 + insets.bottom, paddingTop: 4, paddingBottom: insets.bottom + 4 },
         tabBarLabelStyle: { fontSize: 12 },
       }}
     >

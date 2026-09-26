@@ -62,7 +62,8 @@ export function emptyProfileDraft(): ProfileDraft {
 export function draftFromProfile(profile: Partial<ProfileDraft> | null | undefined): ProfileDraft {
   const langs = (value: unknown): UserLang[] => Array.isArray(value)
     ? value.filter(item => item && typeof item.lang === "string" && LANGUAGE_LEVELS.includes(item.level))
-      .map(item => ({ lang: item.lang, level: item.level }))
+      // The server stores names lower cased; show them as a person would write them.
+      .map(item => ({ lang: capitalise(item.lang), level: item.level }))
     : [];
   const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter(item => typeof item === "string") : [];
   return {
