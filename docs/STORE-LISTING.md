@@ -9,7 +9,7 @@ decide approval; this is a draft for review, not legal advice.
 
 | | |
 |---|---|
-| Name | Talkeven |
+| Name | Talkeven: Language Exchange (from 1.0.1; the home-screen name stays "Talkeven") |
 | Bundle ID / package | `com.lachlanirving.duodialect` (both stores) |
 | App Store Connect app | 6816316060 |
 | Audience | Adults, 18+ (self-declared date of birth at sign up) |
@@ -31,7 +31,7 @@ decide approval; this is a draft for review, not legal advice.
 > Find someone who speaks the language you're learning and wants to learn yours. Trade 20 minutes each way over coffee, and keep it going every week.
 
 **Keywords** (100 max, comma separated, no spaces wasted):
-`language exchange,tandem,conversation,practice,speaking,partner,bilingual,learn,fluent,meetup,expat`
+`exchange,japanese,spanish,korean,english,tandem,conversation,practice,speaking,partner,sydney,local` (from 1.0.1; "language" is already in the name)
 
 **Description**:
 > Talkeven pairs you with someone who speaks the language you're learning and is learning yours. You help each other, evenly.
