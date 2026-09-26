@@ -1,65 +1,95 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { KeyboardAvoidingView, Platform } from "react-native";
 import { router } from "expo-router";
-import { APP_NAME } from "../../constants/brand";
-import { signIn } from "../../src/lib/auth";
+import { APP_NAME, APP_TAGLINE } from "../../constants/brand";
+import { requestPasswordReset, signIn } from "../../src/lib/auth";
+import { authErrorMessage } from "../../src/domain/errors";
+import { Body, Button, Card, ErrorNotice, Eyebrow, Field, Screen, Title } from "../../components/ui";
+import { PasswordField } from "../../components/password-field";
+import { colors } from "../../constants/theme";
+
+const RESET_SENT = "If an account exists for that email, we’ve sent a reset link.";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function onLogin() {
+    if (busy) return;
+    setError(null);
+    setNotice(null);
+    if (!email.trim() || !password) { setError("Enter your email and password."); return; }
+    setBusy(true);
     try {
-      setBusy(true);
       await signIn(email, password);
       router.replace("/");
-    } catch (e: any) {
-      Alert.alert("Login failed", e?.message ?? "Unknown error");
+    } catch (e) {
+      setError(authErrorMessage(e));
     } finally {
       setBusy(false);
     }
   }
 
+  async function onForgot() {
+    if (resetting) return;
+    setError(null);
+    setNotice(null);
+    if (!email.trim()) { setError("Enter your email above, then tap “Forgot password?” again."); return; }
+    setResetting(true);
+    try {
+      await requestPasswordReset(email);
+      setNotice(RESET_SENT);
+    } catch (e) {
+      setError(authErrorMessage(e));
+    } finally {
+      setResetting(false);
+    }
+  }
+
   return (
-    <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 12 }}>
-      <Text accessibilityRole="header" style={{ fontSize: 28, fontWeight: "700" }}>{APP_NAME}</Text>
-      <Text style={{ opacity: 0.7 }}>Log in to find a language partner.</Text>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <Screen edges={["top", "bottom"]}>
+        <Eyebrow>{APP_TAGLINE.toLocaleUpperCase("en")}</Eyebrow>
+        <Title>{APP_NAME}</Title>
+        <Body muted>Log in to find a language partner.</Body>
 
-      <TextInput
-        autoCapitalize="none"
-        keyboardType="email-address"
-        accessibilityLabel="Email"
-        autoComplete="email"
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        style={{ borderWidth: 1, borderColor: "#ddd", padding: 12, borderRadius: 12, minHeight: 48, fontSize: 16 }}
-      />
-      <TextInput
-        accessibilityLabel="Password"
-        placeholder="Password"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        style={{ borderWidth: 1, borderColor: "#ddd", padding: 12, borderRadius: 12, minHeight: 48, fontSize: 16 }}
-      />
+        <Field
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          autoComplete="email"
+          returnKeyType="next"
+        />
+        <PasswordField
+          label="Password"
+          value={password}
+          onChangeText={setPassword}
+          textContentType="password"
+          autoComplete="current-password"
+          returnKeyType="go"
+          onSubmitEditing={() => void onLogin()}
+        />
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: busy, busy }}
-        disabled={busy}
-        onPress={onLogin}
-        style={{ backgroundColor: "#315d49", padding: 14, minHeight: 48, justifyContent: "center", borderRadius: 12, opacity: busy ? 0.6 : 1 }}
-      >
-        <Text style={{ color: "white", textAlign: "center", fontWeight: "600" }}>
-          {busy ? "Logging in..." : "Log in"}
-        </Text>
-      </Pressable>
+        <ErrorNotice message={error} />
+        {notice ? (
+          <Card style={{ backgroundColor: colors.pale }}>
+            <Body>{notice}</Body>
+          </Card>
+        ) : null}
 
-      <Pressable accessibilityRole="link" style={{ minHeight: 48, justifyContent: "center" }} onPress={() => router.push("/(auth)/signup")}>
-        <Text style={{ textAlign: "center", opacity: 0.7 }}>No account? Sign up</Text>
-      </Pressable>
-    </View>
+        <Button variant="primary" label="Log in" busy={busy} busyLabel="Logging in…" onPress={() => void onLogin()} />
+        <Button variant="ghost" label="Forgot password?" busy={resetting} busyLabel="Sending…"
+          hint="Sends a reset link to the email above" onPress={() => void onForgot()} />
+        <Button variant="ghost" label={`New to ${APP_NAME}? Create an account`} onPress={() => router.push("/(auth)/signup")} />
+      </Screen>
+    </KeyboardAvoidingView>
   );
 }

@@ -91,3 +91,24 @@ export function describeFailure(failure: CallableFailure): string {
 export function errorMessage(error: unknown): string {
   return describeFailure(toCallableFailure(error));
 }
+
+const AUTH_MESSAGES: Record<string, string> = {
+  "auth/invalid-credential": "That email and password don’t match. Try again or reset your password.",
+  "auth/wrong-password": "That email and password don’t match. Try again or reset your password.",
+  "auth/user-not-found": "That email and password don’t match. Try again or reset your password.",
+  "auth/invalid-login-credentials": "That email and password don’t match. Try again or reset your password.",
+  "auth/weak-password": "Choose a password with at least 6 characters.",
+  "auth/email-already-in-use": "An account already uses that email. Log in, or reset your password.",
+  "auth/invalid-email": "That doesn’t look like an email address. Check it and try again.",
+  "auth/missing-email": "Enter your email address.",
+  "auth/missing-password": "Enter your password.",
+  "auth/too-many-requests": "Too many attempts. Wait a few minutes, or reset your password.",
+  "auth/network-request-failed": "We couldn’t reach the server. Check your connection and try again.",
+  "auth/user-disabled": "This account has been disabled. Contact support if you think this is a mistake.",
+};
+
+/** Sign in, sign up and password reset: a Firebase Auth error, to a sentence. */
+export function authErrorMessage(error: unknown): string {
+  const { code } = toCallableFailure(error);
+  return AUTH_MESSAGES[code] ?? GENERIC;
+}
