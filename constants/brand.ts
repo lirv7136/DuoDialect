@@ -8,3 +8,8 @@
 export const APP_NAME = "Talkeven";
 
 export const APP_TAGLINE = "Find your words. Find your people.";
+
+/** The city Talkeven is launching in, used in copy about who is nearby. */
+export const LAUNCH_CITY = "Sydney";
+
+export const SITE_URL = "https://talkeven.com";

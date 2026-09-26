@@ -1,15 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
-import { Text, View } from "react-native";
-import { router } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { RefreshControl, Share, Text, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 import { api, type Candidate } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
 import { candidateCache } from "../../src/lib/candidate-cache";
 import { subscribeInvitations } from "../../src/lib/live";
+import { useNotificationsEnabled } from "../../src/lib/notification-prompt";
+import { emptyDiscoverTitle, inviteMessage } from "../../src/domain/invite-copy";
 import { capitalise } from "../../src/domain/profile-form";
 import { errorMessage } from "../../src/domain/errors";
 import { useMyAccount } from "../../hooks/use-my-account";
 import { Body, Button, Card, EmptyState, ErrorNotice, Eyebrow, Heading, Loading, Pill, Screen, Title, styles } from "../../components/ui";
 import { colors } from "../../constants/theme";
+import { APP_NAME, LAUNCH_CITY, SITE_URL } from "../../constants/brand";
 
 const list = (values: string[]) => values.map(capitalise).join(", ");
 
@@ -21,10 +24,16 @@ export default function Discover() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingWith, setPendingWith] = useState<Set<string>>(new Set());
+  const [refreshing, setRefreshing] = useState(false);
+  const [enablingPush, setEnablingPush] = useState(false);
+  const [pushProblem, setPushProblem] = useState<string | null>(null);
+  const notifications = useNotificationsEnabled();
+  const loadedOnce = useRef(false);
 
-  const load = useCallback(async (more: boolean, after: string | null) => {
+  // `quiet` refreshes (pull to refresh, returning to the tab) keep the current list on screen.
+  const load = useCallback(async (more: boolean, after: string | null, quiet = false) => {
     setError(null);
-    if (more) setLoadingMore(true); else setLoading(true);
+    if (more) setLoadingMore(true); else if (quiet) setRefreshing(true); else setLoading(true);
     try {
       const result = await api.discoverCandidates({ cursor: more ? after : null });
       candidateCache.put(result.candidates);
@@ -39,10 +48,34 @@ export default function Discover() {
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { void load(false, null); }, [load]);
+  // Load on first focus, then refresh quietly each time the tab comes back into view.
+  useFocusEffect(useCallback(() => {
+    void load(false, null, loadedOnce.current);
+    loadedOnce.current = true;
+  }, [load]));
+
+  async function onEnableNotifications() {
+    if (enablingPush) return;
+    setEnablingPush(true);
+    setPushProblem(null);
+    try {
+      const result = await notifications.enable();
+      if (result === "denied") setPushProblem("Allow notifications for this app in your phone’s settings, then try again.");
+      if (result === "unavailable") setPushProblem("Notifications need the installed app on a phone.");
+    } catch {
+      setPushProblem("We couldn’t turn on notifications. Check your connection and try again.");
+    } finally {
+      setEnablingPush(false);
+    }
+  }
+
+  function onShare() {
+    void Share.share({ message: inviteMessage(profile?.offers ?? [], profile?.seeks ?? [], APP_NAME, SITE_URL) }).catch(() => undefined);
+  }
 
   // Show which people already have an open invitation, in either direction.
   useEffect(() => {
@@ -54,7 +87,7 @@ export default function Discover() {
   }, []);
 
   return (
-    <Screen>
+    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(false, null, true)} tintColor={colors.green} />}>
       <Eyebrow>LESS SCROLLING. MORE CONVERSATION.</Eyebrow>
       <Title>Your next conversation starts here.</Title>
       <Body muted>Meet someone who speaks your next language, and share yours in return.</Body>
@@ -76,13 +109,18 @@ export default function Discover() {
 
       {!loading && !error && candidates.length === 0 ? (
         <EmptyState
-          title="A little more room to find your people."
+          title={cursor ? "Nobody in this batch fits your exchange." : emptyDiscoverTitle(profile?.offers ?? [], profile?.seeks ?? [], LAUNCH_CITY)}
           body={cursor
-            ? "Nobody in this batch fits your exchange. Look further, or add more times you can meet."
-            : "Nobody fits your exchange yet. Try adding another language you’re practising or more times you can meet. We won’t show a one-way exchange."}
+            ? "Look further, or add more times you can meet."
+            : "Check back soon, and turn on notifications so you don’t miss an invitation."}
         >
           {cursor ? <Button variant="primary" label="Look further" busy={loadingMore} onPress={() => void load(true, cursor)} /> : null}
-          <Button label="Edit profile" onPress={() => router.push("/account/edit")} />
+          {notifications.enabled
+            ? <Text style={[styles.hint, { textAlign: "center" }]}>✓ Notifications on</Text>
+            : <Button variant={cursor ? "secondary" : "primary"} label="Turn on notifications" busy={enablingPush} busyLabel="Turning on…" onPress={() => void onEnableNotifications()} />}
+          <ErrorNotice message={pushProblem} />
+          <Button label="Invite a friend" hint="Share an invitation to join" onPress={onShare} />
+          <Button variant="ghost" label="Edit my languages or times" onPress={() => router.push("/account/edit")} />
           <Button variant="ghost" label="Refresh" onPress={() => void load(false, null)} />
         </EmptyState>
       ) : null}

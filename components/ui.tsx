@@ -3,7 +3,7 @@
  * a touch target of at least 48dp, and no fixed text heights, so layouts grow with the
  * system font size instead of clipping.
  */
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -12,17 +12,20 @@ import {
   Text,
   TextInput,
   View,
+  type RefreshControlProps,
   type TextInputProps,
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { colors, space, TOUCH_TARGET } from "../constants/theme";
 
-export function Screen({ children, scroll = true, edges = ["top"] }: { children: ReactNode; scroll?: boolean; edges?: Edge[] }) {
+export function Screen({ children, scroll = true, edges = ["top"], refreshControl }: {
+  children: ReactNode; scroll?: boolean; edges?: Edge[]; refreshControl?: ReactElement<RefreshControlProps>;
+}) {
   return (
     <SafeAreaView style={styles.screen} edges={edges}>
       {scroll
-        ? <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">{children}</ScrollView>
+        ? <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" refreshControl={refreshControl}>{children}</ScrollView>
         : <View style={[styles.scrollContent, { flex: 1 }]}>{children}</View>}
     </SafeAreaView>
   );
