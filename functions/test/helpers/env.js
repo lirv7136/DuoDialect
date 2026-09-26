@@ -46,7 +46,7 @@ function clientApp(label) {
   connectAuthEmulator(auth, `http://${AUTH_HOST}`, { disableWarnings: true });
   const db = getFirestore(app);
   connectFirestoreEmulator(db, FIRESTORE_HOSTNAME, Number(FIRESTORE_PORT));
-  const functions = getFunctions(app, "us-central1");
+  const functions = getFunctions(app, "australia-southeast1");
   connectFunctionsEmulator(functions, FIRESTORE_HOSTNAME, FUNCTIONS_PORT);
   apps.push(app);
   return { app, auth, db, functions };

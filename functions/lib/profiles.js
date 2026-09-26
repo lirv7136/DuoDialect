@@ -38,6 +38,13 @@ function requireDatingPreferences(value, field, { age }) {
   return { enabled: true, genders: [...new Set(genders)], ageMin, ageMax };
 }
 
+/** Gender is optional until dating is on; mutual preference matching needs it then. */
+function requireGenderForDating(dating, gender) {
+  if (dating.enabled === true && !gender) {
+    throw reject("failed-precondition", "dating/gender-required", "Add your gender before turning on language dates.");
+  }
+}
+
 /**
  * Creates or replaces the caller's profile.
  *
@@ -92,20 +99,22 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
     : requireBirthDate(body.birthDate, "birthDate");
   const age = ageFromBirthDate(birthDate, now);
 
-  // DuoDialect is an adults only service, matching the reviewed product. This is a
+  // Talkeven is an adults only service, matching the reviewed product. This is a
   // self declared date of birth with no verification behind it; the dating gate in
   // eligibility.js re-checks age independently, so an edited or stale record still fails.
   if (typeof age !== "number" || age < LIMITS.minAge) {
     throw reject(
       "failed-precondition",
       REASON.accountNotAdult,
-      "DuoDialect is for adults aged 18 and over.",
+      "Talkeven is for adults aged 18 and over.",
     );
   }
 
-  const gender = body.gender === undefined && existingPrivate
-    ? existingPrivate.gender
-    : requireEnum(String(body.gender || "").toLocaleLowerCase("en"), "gender", GENDERS);
+  // Optional: only dating uses it, and v1 of the app does not offer dating. Omitted or null
+  // keeps what is stored; dating refuses to switch on without one (requireGenderForDating).
+  const gender = body.gender === undefined || body.gender === null
+    ? (existingPrivate && existingPrivate.gender) || null
+    : requireEnum(String(body.gender).toLocaleLowerCase("en"), "gender", GENDERS);
 
   const previousDating = (existingPrivate && existingPrivate.dating) || null;
   let dating;
@@ -117,6 +126,7 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
   } else {
     dating = { enabled: false, genders: [], ageMin: LIMITS.minAge, ageMax: LIMITS.maxAge };
   }
+  requireGenderForDating(dating, gender);
 
   const batch = db.batch();
   batch.set(r.profile(uid), {
@@ -185,6 +195,7 @@ async function setDatingConsent(db, uid, payload, now = new Date()) {
   const age = ageFromBirthDate(existing.birthDate, now);
   const previous = existing.dating || { enabled: false };
   const dating = requireDatingPreferences(body, "dating", { age });
+  requireGenderForDating(dating, existing.gender);
 
   await r.privateProfile(uid).set({
     dating,

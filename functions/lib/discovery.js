@@ -106,7 +106,11 @@ async function discoverCandidates(db, uid, payload = {}, now = new Date()) {
 
   const page = eligible.slice(0, limit);
   const lastScanned = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1].get("uid") : null;
-  const nextCursor = snap.size === LIMITS.discoveryScan ? lastScanned : null;
+  // Rows are in uid order. When more people qualified than fit on this page, resume just
+  // after the last one returned so the rest are not skipped; otherwise resume after the scan.
+  const nextCursor = eligible.length > limit
+    ? page[page.length - 1].profile.uid
+    : snap.size === LIMITS.discoveryScan ? lastScanned : null;
 
   return {
     mode,

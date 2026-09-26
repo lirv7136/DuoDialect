@@ -236,3 +236,53 @@ test("a blocked member cannot be invited in either direction", async () => {
 
   await aiko.call("setBlock", { otherUid: alex.uid, blocked: false });
 });
+
+function welshProfile(name, extra = {}) {
+  return {
+    displayName: name,
+    speaks: [{ lang: "icelandic", level: "native" }],
+    learns: [{ lang: "welsh", level: "beginner" }],
+    birthDate: birthDateForAge(30),
+    ...extra,
+  };
+}
+
+test("a profile saves without a gender, but dating cannot switch on without one", async () => {
+  const noGender = await makeActor("nogender");
+  const saved = await noGender.call("upsertProfile", welshProfile("No Gender"));
+  assert.equal(saved.account.gender, null);
+
+  const error = await expectFailure(
+    noGender.call("setDatingConsent", { enabled: true, genders: ["woman"], ageMin: 18, ageMax: 40 }),
+    "failed-precondition",
+  );
+  assert.equal(error.details.reason, "dating/gender-required");
+});
+
+test("paging past a full page returns every eligible person exactly once", async () => {
+  const seeker = await makeActor("pager");
+  await seeker.call("upsertProfile", {
+    displayName: "Pager",
+    speaks: [{ lang: "welsh", level: "native" }],
+    learns: [{ lang: "icelandic", level: "beginner" }],
+    birthDate: birthDateForAge(30),
+  });
+  const partners = [];
+  for (const name of ["Ari", "Bryn", "Dilys"]) {
+    const actor = await makeActor(name.toLowerCase());
+    await actor.call("upsertProfile", welshProfile(name));
+    partners.push(actor.uid);
+  }
+
+  const seen = [];
+  let cursor = null;
+  for (let pages = 0; pages < 10; pages++) {
+    const result = await seeker.call("discoverCandidates", { mode: "platonic", limit: 1, ...(cursor ? { cursor } : {}) });
+    seen.push(...result.candidates.map((candidate) => candidate.uid));
+    cursor = result.nextCursor;
+    if (!cursor) break;
+  }
+  const found = seen.filter((uid) => partners.includes(uid));
+  assert.deepEqual([...found].sort(), [...partners].sort());
+  assert.equal(new Set(seen).size, seen.length, "nobody is returned twice");
+});

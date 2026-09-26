@@ -83,12 +83,12 @@ doc(db, "profiles", otherUid)
 
 ## Callables
 
-All callables are v2 `onCall` in `us-central1`. They require a signed in caller and reject
+All callables are v2 `onCall` in `australia-southeast1` (Sydney, beside the Firestore database). They require a signed in caller and reject
 anyone else with `unauthenticated`. Call them with the Functions SDK:
 
 ```ts
 import { getFunctions, httpsCallable } from "firebase/functions";
-const fns = getFunctions(app, "us-central1");
+const fns = getFunctions(app, "australia-southeast1");
 const result = await httpsCallable(fns, "createInvitation")(payload);
 // result.data is the shape documented below
 ```
@@ -108,7 +108,7 @@ batch, so they cannot drift apart.
   availability?: string[],             // up to 14 entries, 32 chars each
   interests?: string[],                // up to 8 entries, 24 chars each
   birthDate: string,                   // "YYYY-MM-DD"; required on first save
-  gender: "woman"|"man"|"nonbinary",   // required on first save
+  gender?: "woman"|"man"|"nonbinary",  // optional; only dating uses it, and dating needs it
   dating?: {
     enabled: boolean,
     genders?: ("woman"|"man"|"nonbinary")[],  // required and non empty when enabled

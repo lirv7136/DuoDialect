@@ -27,7 +27,7 @@ const { assertModerator, listReports, getReportContext, actOnReport } = require(
 const { deliver } = require("./lib/notifier");
 const { refs } = require("./lib/refs");
 
-setGlobalOptions({ region: "us-central1", maxInstances: 10 });
+setGlobalOptions({ region: "australia-southeast1", maxInstances: 10 });
 
 initializeApp();
 const db = getFirestore();
