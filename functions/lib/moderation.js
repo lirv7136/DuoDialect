@@ -6,6 +6,7 @@ const logger = require("firebase-functions/logger");
 const { requireObject, requireString, requireEnum, requireInteger, optionalString } = require("./validation");
 const { reject } = require("./eligibility");
 const { refs } = require("./refs");
+const { publicPhotos, deleteAllPhotosFor } = require("./photos");
 
 /**
  * Minimum moderation.
@@ -23,7 +24,7 @@ const { refs } = require("./refs");
  */
 
 const REPORT_STATUSES = ["received", "reviewing", "actioned", "dismissed"];
-const ACTIONS = ["claim", "dismiss", "warn", "suspend", "reinstate"];
+const ACTIONS = ["claim", "dismiss", "warn", "suspend", "reinstate", "remove-photos"];
 
 /** Throws unless the verified token carries the moderator claim. */
 function assertModerator(token) {
@@ -125,12 +126,18 @@ async function getReportContext(db, moderatorUid, payload) {
     }
   }
 
+  // The reported person's current profile photos, as Storage paths. A moderator opens them
+  // in the Firebase console; no download URL is minted or stored.
+  const subjectProfile = report.reportedUid ? await r.profile(report.reportedUid).get() : null;
+  const reportedPhotos = subjectProfile && subjectProfile.exists ? publicPhotos(subjectProfile.get("photos")) : [];
+
   await recordAction(db, moderatorUid, {
     action: "viewed-context",
     reportId,
     subjectUid: report.reportedUid,
     conversationId: report.conversationId || null,
     messagesRead: messages.length,
+    photosListed: reportedPhotos.length,
   });
 
   const names = await namesFor(db, [report.reporterUid, report.reportedUid]);
@@ -144,6 +151,7 @@ async function getReportContext(db, moderatorUid, payload) {
       reason: report.reason,
       detail: report.detail || "",
       status: report.status,
+      reportedPhotos,
     },
     conversation,
     messages,
@@ -177,7 +185,15 @@ async function actOnReport(db, moderatorUid, payload) {
     warn: "actioned",
     suspend: "actioned",
     reinstate: "actioned",
+    "remove-photos": "actioned",
   };
+
+  // Removes every photo the reported person has, from Storage and from their profile, along
+  // with the screening records. They may upload again; repeat offences are for `suspend`.
+  let photosRemoved = null;
+  if (action === "remove-photos") {
+    photosRemoved = (await deleteAllPhotosFor(db, subjectUid)).objects;
+  }
 
   if (action === "suspend" || action === "reinstate") {
     const suspended = action === "suspend";
@@ -222,9 +238,13 @@ async function actOnReport(db, moderatorUid, payload) {
     reportId,
     subjectUid,
     note,
+    ...(photosRemoved === null ? {} : { photosRemoved }),
   });
 
-  return { reportId, action, reportStatus: statusForAction[action], subjectUid };
+  return {
+    reportId, action, reportStatus: statusForAction[action], subjectUid,
+    ...(photosRemoved === null ? {} : { photosRemoved }),
+  };
 }
 
 module.exports = {

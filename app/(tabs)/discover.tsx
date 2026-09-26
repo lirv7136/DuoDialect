@@ -9,7 +9,8 @@ import { capitalise } from "../../src/domain/profile-form";
 import { errorMessage } from "../../src/domain/errors";
 import { useMyAccount } from "../../hooks/use-my-account";
 import { Body, Button, Card, EmptyState, ErrorNotice, Eyebrow, Heading, Loading, Pill, Screen, Title, styles } from "../../components/ui";
-import { colors } from "../../constants/theme";
+import { Avatar } from "../../components/avatar";
+import { colors, space } from "../../constants/theme";
 
 const list = (values: string[]) => values.map(capitalise).join(", ");
 
@@ -90,8 +91,13 @@ export default function Discover() {
       {candidates.map(person => (
         <Card key={person.uid}>
           <Pill label="You can help each other" tone="good" />
-          <Heading>{person.displayName}</Heading>
-          {person.area ? <Text style={styles.hint}>{person.area}</Text> : null}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+            <Avatar name={person.displayName} photos={person.photos} size={56} />
+            <View style={{ flexShrink: 1, gap: 2 }}>
+              <Heading>{person.displayName}</Heading>
+              {person.area ? <Text style={styles.hint}>{person.area}</Text> : null}
+            </View>
+          </View>
           <View style={{ gap: 2 }}>
             <Text style={styles.body}>{`Can help you with: ${list(person.exchange.theyOffer)}`}</Text>
             <Text style={styles.body}>{`You can help with: ${list(person.exchange.youOffer)}`}</Text>

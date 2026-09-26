@@ -3,12 +3,15 @@ import { Alert, Text, View } from "react-native";
 import { router } from "expo-router";
 import { api } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
-import { getPublicProfile, subscribeInvitations, type InvitationDoc } from "../../src/lib/live";
+import { subscribeInvitations, type InvitationDoc } from "../../src/lib/live";
 import { formatMeeting } from "../../src/domain/schedule";
 import { capitalise } from "../../src/domain/profile-form";
 import { errorMessage } from "../../src/domain/errors";
 import { deviceTimeZone } from "../../src/lib/time-zone";
 import { Body, Button, Card, EmptyState, ErrorNotice, Eyebrow, Heading, Loading, Pill, Screen, Title, styles } from "../../components/ui";
+import { Avatar } from "../../components/avatar";
+import { usePeople } from "../../hooks/use-people";
+import { space } from "../../constants/theme";
 
 type Busy = Record<string, "accept" | "decline" | "cancel" | undefined>;
 
@@ -16,28 +19,16 @@ export default function Plans() {
   const uid = auth.currentUser?.uid ?? "";
   const [items, setItems] = useState<InvitationDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [names, setNames] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Busy>({});
   const [cardErrors, setCardErrors] = useState<Record<string, string>>({});
   const inFlight = useRef(new Set<string>());
-  const requestedNames = useRef(new Set<string>());
+  // Name and photos for the other person on each invitation. A hidden profile reads as a neutral label.
+  const people = usePeople((items ?? []).map(item => (item.fromUid === uid ? item.toUid : item.fromUid)));
 
   useEffect(() => {
     if (!uid) return;
     return subscribeInvitations(uid, next => { setItems(next); setError(null); }, e => setError(errorMessage(e)));
   }, [uid]);
-
-  // Names for the other person on each invitation. A hidden profile reads as a neutral label.
-  useEffect(() => {
-    for (const item of items ?? []) {
-      const other = item.fromUid === uid ? item.toUid : item.fromUid;
-      if (requestedNames.current.has(other)) continue;
-      requestedNames.current.add(other);
-      getPublicProfile(other)
-        .then(profile => setNames(current => ({ ...current, [other]: profile?.displayName || "A member" })))
-        .catch(() => setNames(current => ({ ...current, [other]: "A member" })));
-    }
-  }, [items, uid]);
 
   // One action per invitation at a time; the callables are also idempotent on repeat.
   async function run(item: InvitationDoc, action: "accept" | "decline" | "cancel") {
@@ -63,7 +54,7 @@ export default function Plans() {
   }
 
   function confirm(item: InvitationDoc, action: "decline" | "cancel") {
-    const name = names[item.fromUid === uid ? item.toUid : item.fromUid] ?? "them";
+    const name = people[item.fromUid === uid ? item.toUid : item.fromUid]?.name ?? "them";
     Alert.alert(
       action === "decline" ? "Decline this invitation?" : "Cancel this invitation?",
       action === "decline"
@@ -88,7 +79,7 @@ export default function Plans() {
   const card = (item: InvitationDoc) => {
     const mine = item.fromUid === uid;
     const other = mine ? item.toUid : item.fromUid;
-    const name = names[other] ?? "…";
+    const name = people[other]?.name ?? "…";
     const iShare = mine ? item.languages?.fromOffers : item.languages?.toOffers;
     const theyShare = mine ? item.languages?.toOffers : item.languages?.fromOffers;
     const state = busy[item.id];
@@ -98,7 +89,12 @@ export default function Plans() {
     return (
       <Card key={item.id}>
         <Pill label={status} tone={item.status === "accepted" ? "good" : item.status === "pending" ? "warn" : "neutral"} />
-        <Heading>{mine ? `You invited ${name}` : `${name} invited you`}</Heading>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+          <Avatar name={name === "…" ? "" : name} photos={people[other]?.photos} size={48} />
+          <View style={{ flexShrink: 1 }}>
+            <Heading>{mine ? `You invited ${name}` : `${name} invited you`}</Heading>
+          </View>
+        </View>
         <Text style={styles.body}>{formatMeeting(item.meeting)}</Text>
         <Text style={styles.body}>{item.meeting.venue}</Text>
         {item.meeting.timeZone !== myZone ? <Text style={styles.hint}>{`Times are in ${item.meeting.timeZone}.`}</Text> : null}

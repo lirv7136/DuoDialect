@@ -19,6 +19,7 @@ const crypto = require("crypto");
  * accountStatus/{uid}                         server only; suspension state
  * deletionRequests/{uid}                      server only; deletion audit trail
  * moderationActions/{actionId}                server only; who did what, and why
+ * photoScreening/{uid}_{photoId}              owner may get; server writes; screening verdict
  */
 const COLLECTIONS = {
   profiles: "profiles",
@@ -35,6 +36,7 @@ const COLLECTIONS = {
   accountStatus: "accountStatus",
   deletionRequests: "deletionRequests",
   moderationActions: "moderationActions",
+  photoScreening: "photoScreening",
 };
 
 function shortHash(...parts) {
@@ -73,6 +75,14 @@ function messageId(conversationIdValue, senderUid, clientMessageId) {
   return `msg_${shortHash(conversationIdValue, senderUid, clientMessageId)}`;
 }
 
+/**
+ * One screening record per uploaded photo. Photo ids never contain an underscore, so the
+ * owner is everything before the last one; firestore.rules relies on that.
+ */
+function photoScreeningId(uid, photoId) {
+  return `${uid}_${photoId}`;
+}
+
 function refs(db) {
   return {
     profile: (uid) => db.collection(COLLECTIONS.profiles).doc(uid),
@@ -106,6 +116,9 @@ function refs(db) {
     deletionRequest: (uid) => db.collection(COLLECTIONS.deletionRequests).doc(uid),
     moderationActions: () => db.collection(COLLECTIONS.moderationActions),
     report: (id) => db.collection(COLLECTIONS.reports).doc(id),
+    photoScreening: (uid, photoId) =>
+      db.collection(COLLECTIONS.photoScreening).doc(photoScreeningId(uid, photoId)),
+    photoScreenings: () => db.collection(COLLECTIONS.photoScreening),
   };
 }
 
@@ -118,5 +131,6 @@ module.exports = {
   invitationLockId,
   conversationId,
   messageId,
+  photoScreeningId,
   shortHash,
 };

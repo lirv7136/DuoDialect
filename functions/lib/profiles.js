@@ -10,6 +10,7 @@ const { GENDERS, LIMITS, AGE_ASSURANCE, FLUENCY_ASSURANCE } = require("./constan
 const { REASON, reject } = require("./eligibility");
 const { refs } = require("./refs");
 const { cancelPendingInvitationsFor } = require("./invitations");
+const { publicPhotos } = require("./photos");
 
 /**
  * Validates a dating preferences block. Callers who are not adults, by their own
@@ -128,6 +129,10 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
   }
   requireGenderForDating(dating, gender);
 
+  // `photos` is managed only by setProfilePhotos. It is never written here, and the merge
+  // below leaves it untouched, so saving the profile cannot wipe a person's photos.
+  const photos = publicPhotos(publicSnap.exists ? publicSnap.get("photos") : null);
+
   const batch = db.batch();
   batch.set(r.profile(uid), {
     uid,
@@ -170,7 +175,7 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
 
   return {
     profile: {
-      uid, displayName, bio, area, speaks, learns, offers, seeks, availability, interests,
+      uid, displayName, bio, area, speaks, learns, offers, seeks, availability, interests, photos,
       discoverable: true, fluencyAssurance: FLUENCY_ASSURANCE,
     },
     account: {
@@ -221,7 +226,7 @@ async function getMyAccount(db, uid, now = new Date()) {
   const account = privateSnap.data();
   const age = ageFromBirthDate(account.birthDate, now);
   return {
-    profile: publicSnap.exists ? publicSnap.data() : null,
+    profile: publicSnap.exists ? { ...publicSnap.data(), photos: publicPhotos(publicSnap.get("photos")) } : null,
     account: {
       birthDate: account.birthDate,
       age,

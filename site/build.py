@@ -60,7 +60,8 @@ and chat to agree the details.</p>
 <p><strong>Language partners only.</strong> Talkeven is for adults and is not a dating app.
 No ads, no tracking, and we never ask for your location.</p>
 </div>
-<p class="muted">Coming soon to the App Store and Google Play.</p>
+<p><a class="button" href="join/">Join the founding members</a></p>
+<p class="muted">Launching in Sydney on 12 October 2026, on iPhone first and Android soon after.</p>
 """
 
 PRIVACY = f"""
@@ -74,26 +75,40 @@ run by {OPERATOR} ("we"). Contact: <a href="mailto:{CONTACT}">{CONTACT}</a>.</p>
 <tr><th>Data</th><th>Why</th><th>Who can see it</th></tr>
 <tr><td>Email address and password (the password is handled by our sign-in provider; we never see it)</td><td>To create and secure your account</td><td>Only you</td></tr>
 <tr><td>First name, neighbourhood, bio, interests, languages and levels, times you can meet</td><td>To show your profile to people whose exchange works with yours</td><td>Members you match with</td></tr>
+<tr><td>Profile photos, if you add any (up to 3)</td><td>So language partners can recognise you when you meet. Each photo is checked automatically for explicit or violent content before anyone else can see it</td><td>Signed-in members, except anyone you have blocked or who has blocked you. Our moderation team if a photo is reported</td></tr>
 <tr><td>Date of birth</td><td>Only to confirm you're 18 or over</td><td>Only you. It is never shown to other members</td></tr>
 <tr><td>Meetup invitations (place, date, time, note) and chat messages</td><td>So you and your partner can plan and talk</td><td>You and that partner</td></tr>
 <tr><td>Blocks and reports</td><td>To keep members safe and review concerns</td><td>Blocks: only you. Reports: our moderation team</td></tr>
 <tr><td>A push notification token, if you turn notifications on</td><td>To tell you about new messages and invitations</td><td>Only our systems</td></tr>
 </table>
-<p>We do <strong>not</strong> collect your location, contacts, photos or device diagnostics.
-The neighbourhood on your profile is whatever you type. We do not use advertising or
+<p>We do <strong>not</strong> collect your location, contacts, camera or device diagnostics.
+Photos are only the ones you choose to add from your library; the app re-sizes them on
+your phone before upload, which drops location data embedded in the original. The
+neighbourhood on your profile is whatever you type. We do not use advertising or
 analytics tools, we do not track you across other apps or websites, and we do not sell or
 share your data.</p>
 
+<h2>Founding members list</h2>
+<p>If you join the founding members list on this website, we keep your first name, email,
+the languages you speak and are learning, your suburb (optional) and your phone type, so we
+can invite you when there are partners for you. We don't share the list. Email
+<a href="mailto:{CONTACT}">{CONTACT}</a> to be removed at any time.</p>
+
 <h2>Service providers</h2>
 <p>We use Google Firebase to run the app: Firebase Authentication for sign in, and a
-database and server functions hosted in Sydney, Australia. Push notifications are delivered
-through Expo's push service, Apple and Google. They process data on our
+database, photo storage and server functions hosted in Sydney, Australia. Profile photos
+are screened automatically by Google Cloud Vision, which checks each new photo for
+explicit, violent or racy content (this check may be processed outside Australia); a
+photo that fails is deleted straight away and never shown. Nobody on our team looks at
+your photos unless someone reports them. Push notifications are delivered through Expo's
+push service, Apple and Google. They process data on our
 behalf under their own security and privacy terms, and only to provide these services.</p>
 
 <h2>How long we keep it</h2>
 <p>We keep your data while your account exists. When you delete your account we delete your
-profile, date of birth, invitations, conversations and messages (for both people in a
-conversation), blocks and notification tokens. <strong>Exception:</strong> safety reports
+profile, profile photos and their screening records, date of birth, invitations,
+conversations and messages (for both people in a conversation), blocks and notification
+tokens. Removing a photo from your profile deletes it too. <strong>Exception:</strong> safety reports
 made by you or about you are kept after deletion so we can act on patterns of abuse; they
 are only accessible to moderators.</p>
 
@@ -140,7 +155,7 @@ from the address you signed up with, with the subject "Delete my Talkeven accoun
 confirm the request came from you and delete the account within 30 days, usually much sooner.</p>
 
 <h2>What is deleted</h2>
-<p>Your sign-in, profile, date of birth, languages, availability, invitations,
+<p>Your sign-in, profile, profile photos, date of birth, languages, availability, invitations,
 conversations and messages (for both people in each conversation), blocks and
 notification tokens.</p>
 <h2>What is kept</h2>
@@ -195,6 +210,77 @@ enforcement requests made through proper legal channels.</p>
 <p>Our designated child safety contact is {OPERATOR}: <a href="mailto:{CONTACT}">{CONTACT}</a>.</p>
 """
 
+LANGUAGES = ["English", "Japanese", "Spanish", "Korean", "Mandarin", "Cantonese", "Portuguese",
+             "French", "Italian", "German", "Vietnamese", "Thai", "Indonesian", "Hindi", "Arabic",
+             "Greek", "Turkish", "Russian", "Filipino", "Nepali"]
+
+JOIN = f"""
+<h1>Join the founding members</h1>
+<p>Be one of the first people in Sydney on Talkeven. We'll invite you as soon as there are
+partners for your languages, and before the public launch on 12 October.</p>
+<div class="card">
+<ul>
+<li>Early access: iPhone now, Android testing soon</li>
+<li>An invite to the launch night on Saturday 17 October</li>
+<li>A real say in what we build next</li>
+</ul>
+</div>
+<form class="join" method="post" action="/api/join" id="join">
+<p class="form-error" id="form-error" role="alert" hidden></p>
+<label for="first_name">First name</label>
+<input id="first_name" name="first_name" autocomplete="given-name" maxlength="40" required>
+<label for="email">Email</label>
+<input id="email" name="email" type="email" autocomplete="email" maxlength="254" required>
+<label for="speaks">A language you speak fluently</label>
+<input id="speaks" name="speaks" list="languages" maxlength="40" placeholder="e.g. English" required>
+<label for="learning">A language you're learning</label>
+<input id="learning" name="learning" list="languages" maxlength="40" placeholder="e.g. Japanese" required>
+<datalist id="languages">{''.join(f'<option value="{l}">' for l in LANGUAGES)}</datalist>
+<label for="suburb">Suburb <span class="muted">(optional)</span></label>
+<input id="suburb" name="suburb" maxlength="60" placeholder="e.g. Newtown">
+<fieldset>
+<legend>Your phone</legend>
+<label class="choice"><input type="radio" name="platform" value="ios" required> iPhone</label>
+<label class="choice"><input type="radio" name="platform" value="android"> Android</label>
+</fieldset>
+<label class="choice"><input type="checkbox" name="adult" required> I'm 18 or over</label>
+<div class="hp" aria-hidden="true"><label for="website">Leave this empty</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
+<input type="hidden" name="source" id="source">
+<button type="submit">Join the founding members</button>
+<p class="muted small">Language partners only. Not dating. We'll only email you about Talkeven, and you can ask to be removed any time. See our <a href="../privacy/">privacy policy</a>.</p>
+</form>
+<script>
+(function () {{
+  var params = new URLSearchParams(location.search);
+  var err = params.get("error"), box = document.getElementById("form-error");
+  if (err) {{ box.textContent = err; box.hidden = false; }}
+  document.getElementById("source").value = params.get("from") || "";
+  var form = document.getElementById("join");
+  form.addEventListener("submit", function (e) {{
+    e.preventDefault();
+    var button = form.querySelector("button"); button.disabled = true; button.textContent = "Joining…";
+    fetch("/api/join", {{ method: "POST", headers: {{ accept: "application/json" }}, body: new FormData(form) }})
+      .then(function (r) {{ return r.json(); }})
+      .then(function (res) {{
+        if (res.ok) {{ location.href = "thanks/"; return; }}
+        box.textContent = res.error || "Something went wrong. Please try again."; box.hidden = false;
+        button.disabled = false; button.textContent = "Join the founding members";
+      }})
+      .catch(function () {{ form.submit(); }});
+  }});
+}})();
+</script>
+"""
+
+THANKS = f"""
+<h1>You're on the list</h1>
+<p>Thanks for joining the founding members. We'll email you as soon as there are partners
+for your languages, and with details of the launch night on Saturday 17 October.</p>
+<p>Know someone who speaks the language you're learning? Send them
+<a href="../">talkeven.com/join</a>. Every person on the other side is a partner for you.</p>
+<p class="muted">Questions? <a href="mailto:{CONTACT}">{CONTACT}</a></p>
+"""
+
 if __name__ == "__main__":
     import shutil
     if OUT.exists():
@@ -206,5 +292,7 @@ if __name__ == "__main__":
     page("privacy", "Privacy policy · Talkeven", "What Talkeven collects and why.", PRIVACY)
     page("delete-account", "Delete your account · Talkeven", "How to delete your Talkeven account and data.", DELETE)
     page("support", "Support · Talkeven", "Get help with Talkeven.", SUPPORT)
+    page("join", "Join the founding members · Talkeven", "Be one of the first people in Sydney on Talkeven.", JOIN)
+    page("join/thanks", "You're on the list · Talkeven", "Thanks for joining the Talkeven founding members.", THANKS)
     page("child-safety", "Child safety standards · Talkeven", "Talkeven's standards against child sexual abuse and exploitation.", CHILD_SAFETY)
     print(f"Built {len(list(OUT.rglob('index.html')))} pages in {OUT}")

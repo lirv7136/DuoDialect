@@ -12,10 +12,12 @@ import { sharedSlots } from "../../src/domain/schedule";
 import { errorMessage } from "../../src/domain/errors";
 import { useMyAccount } from "../../hooks/use-my-account";
 import { Body, Button, Card, ErrorNotice, Heading, Loading, Screen, Title, styles } from "../../components/ui";
+import { PhotoStrip } from "../../components/avatar";
+import { sanitizePhotos, type ProfilePhoto } from "../../src/domain/photos";
 
 type PersonView = {
   uid: string; displayName: string; area: string; bio: string; interests: string[];
-  theyOffer: string[]; youOffer: string[]; shared: string[];
+  theyOffer: string[]; youOffer: string[]; shared: string[]; photos: ProfilePhoto[];
 };
 
 export default function PersonScreen() {
@@ -31,7 +33,8 @@ export default function PersonScreen() {
     const cached = candidateCache.get(String(uid));
     if (cached) {
       setPerson({ uid: cached.uid, displayName: cached.displayName, area: cached.area, bio: cached.bio, interests: cached.interests,
-        theyOffer: cached.exchange.theyOffer, youOffer: cached.exchange.youOffer, shared: cached.sharedAvailability });
+        theyOffer: cached.exchange.theyOffer, youOffer: cached.exchange.youOffer, shared: cached.sharedAvailability,
+        photos: sanitizePhotos(cached.photos) });
       return;
     }
     getPublicProfile(String(uid)).then(profile => {
@@ -39,7 +42,7 @@ export default function PersonScreen() {
       const exchange = me ? exchangeLanguages(me, profile) : { iCanHelpWith: [], theyCanHelpWith: [] };
       setPerson({ uid: profile.uid, displayName: profile.displayName, area: profile.area, bio: profile.bio,
         interests: profile.interests ?? [], theyOffer: exchange.theyCanHelpWith, youOffer: exchange.iCanHelpWith,
-        shared: sharedSlots(me?.availability, profile.availability) });
+        shared: sharedSlots(me?.availability, profile.availability), photos: sanitizePhotos(profile.photos) });
     }).catch(e => setError(errorMessage(e)));
   }, [uid, me, meLoading, person]);
 
@@ -86,6 +89,7 @@ export default function PersonScreen() {
 
   return (
     <Screen edges={[]}>
+      <PhotoStrip name={person.displayName} photos={person.photos} />
       <Title>{`Meet ${person.displayName}.`}</Title>
       {person.area ? <Text style={styles.hint}>{person.area}</Text> : null}
       <Body muted>A platonic language exchange.</Body>

@@ -4,10 +4,11 @@ import { connectAuthEmulator, getAuth, initializeAuth, type Auth, type Persisten
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
+import { connectStorageEmulator, getStorage } from "firebase/storage";
 import { Platform } from "react-native";
 
 /**
- * EXPO_PUBLIC_USE_EMULATORS=1 points Auth, Firestore and Functions at the local emulator
+ * EXPO_PUBLIC_USE_EMULATORS=1 points Auth, Firestore, Functions and Storage at the local emulator
  * suite (ports from firebase.json). In that mode the app also uses a `demo-` project id,
  * so a misconfigured emulator run can never reach the real Firebase project.
  * The Android emulator reaches the host machine at 10.0.2.2; a physical device needs
@@ -15,7 +16,7 @@ import { Platform } from "react-native";
  */
 export const usingEmulators = process.env.EXPO_PUBLIC_USE_EMULATORS === "1";
 
-const EMULATOR_PORTS = { auth: 9099, firestore: 8080, functions: 5001 } as const;
+const EMULATOR_PORTS = { auth: 9099, firestore: 8080, functions: 5001, storage: 9199 } as const;
 const emulatorHost = process.env.EXPO_PUBLIC_EMULATOR_HOST || (Platform.OS === "android" ? "10.0.2.2" : "127.0.0.1");
 const emulatorProjectId = process.env.EXPO_PUBLIC_EMULATOR_PROJECT_ID || "demo-duodialect";
 
@@ -24,6 +25,7 @@ const firebaseConfig = usingEmulators
     apiKey: "demo-api-key",
     authDomain: `${emulatorProjectId}.firebaseapp.com`,
     projectId: emulatorProjectId,
+    storageBucket: `${emulatorProjectId}.appspot.com`,
     appId: "1:1234567890:web:demo",
   }
   : {
@@ -55,10 +57,13 @@ export const db = getFirestore(app);
 /** The region every callable is deployed to. The emulator ignores it but keeps it in the URL. */
 export const FUNCTIONS_REGION = "australia-southeast1";
 export const functions = getFunctions(app, FUNCTIONS_REGION);
+/** Profile photos only. Access is decided by storage.rules; see docs/BACKEND-CONTRACT.md. */
+export const storage = getStorage(app);
 
 // Connecting twice throws, and fast refresh re-evaluates this module, so connect once.
 if (usingEmulators && firstInit) {
   connectAuthEmulator(auth, `http://${emulatorHost}:${EMULATOR_PORTS.auth}`, { disableWarnings: true });
   connectFirestoreEmulator(db, emulatorHost, EMULATOR_PORTS.firestore);
   connectFunctionsEmulator(functions, emulatorHost, EMULATOR_PORTS.functions);
+  connectStorageEmulator(storage, emulatorHost, EMULATOR_PORTS.storage);
 }

@@ -15,6 +15,7 @@ import { describeFailure, isRetryable, toCallableFailure, type CallableFailure }
 import type { LanguageLevel, UserLang } from "../domain/language-exchange";
 import type { UpsertProfilePayload } from "../domain/profile-form";
 import type { Recurrence } from "../domain/schedule";
+import type { ProfilePhoto } from "../domain/photos";
 
 export class ApiError extends Error {
   readonly code: string;
@@ -40,6 +41,8 @@ export type PublicProfile = {
   seeks: string[];
   availability: string[];
   interests: string[];
+  /** Managed only by setProfilePhotos. Older profiles may not have it. */
+  photos?: ProfilePhoto[];
   discoverable?: boolean;
   fluencyAssurance?: "self-declared";
 };
@@ -63,6 +66,8 @@ export type Candidate = {
   seeks: string[];
   availability: string[];
   interests: string[];
+  /** In order; the first is the main photo. Paths only, resolved through Storage. */
+  photos: ProfilePhoto[];
   fluencyAssurance: "self-declared";
   exchange: { theyOffer: string[]; youOffer: string[] };
   sharedAvailability: string[];
@@ -126,6 +131,10 @@ export const api = {
   upsertProfile: (payload: UpsertProfilePayload) =>
     call<UpsertProfilePayload, AccountResult>("upsertProfile", payload),
 
+  /** Up to three screened photo ids, main first. Unreferenced photos are deleted by the server. */
+  setProfilePhotos: (photoIds: string[]) =>
+    call<{ photoIds: string[] }, { photos: ProfilePhoto[]; deleted: number }>("setProfilePhotos", { photoIds }),
+
   discoverCandidates: (options: { cursor?: string | null; limit?: number } = {}) =>
     call<{ mode: "platonic"; limit: number; cursor?: string }, DiscoverResult>("discoverCandidates", {
       mode: "platonic",
@@ -169,4 +178,4 @@ export const api = {
     ),
 };
 
-export type { UserLang };
+export type { UserLang, ProfilePhoto };

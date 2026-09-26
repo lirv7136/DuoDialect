@@ -1,0 +1,58 @@
+rules_version = '2';
+
+// Talkeven Storage authorization.
+//
+// Default deny. The only objects are profile photos at profilePhotos/{uid}/{photoId}.jpg.
+// The owner uploads and deletes their own; nobody may overwrite, list or rename. Reading
+// needs three things: a signed in member, a photo that has passed screening, and no block
+// between the reader and the owner in either direction. Blocks are read from Firestore,
+// the same documents firestore.rules and the callables use (blocks/{uid}/users/{otherUid}).
+//
+// Screening approval is custom object metadata `talkevenScreening: "approved"`, set only
+// by the onProfilePhotoUploaded function with the Admin SDK. A client cannot set it: it is
+// refused on create, and updates are closed. Until it is set (pending) the photo cannot be
+// read by anyone, the owner included; a rejected photo is deleted by the same function.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null && request.auth.uid is string;
+    }
+
+    function blockedEither(owner) {
+      return firestore.exists(/databases/(default)/documents/blocks/$(owner)/users/$(request.auth.uid))
+        || firestore.exists(/databases/(default)/documents/blocks/$(request.auth.uid)/users/$(owner));
+    }
+
+    function screened() {
+      return resource.metadata != null
+        && resource.metadata.get('talkevenScreening', '') == 'approved';
+    }
+
+    match /profilePhotos/{owner}/{fileName} {
+      allow get: if signedIn()
+        && screened()
+        && (request.auth.uid == owner || !blockedEither(owner));
+      allow list: if false;
+
+      // Photo ids never contain an underscore; see functions/lib/refs.js photoScreeningId.
+      allow create: if signedIn()
+        && request.auth.uid == owner
+        && resource == null
+        && fileName.matches('[A-Za-z0-9-]{8,64}[.]jpg')
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png)')
+        && (request.resource.metadata == null
+          || !request.resource.metadata.keys().hasAny(['talkevenScreening']));
+
+      // No overwrite: new content would otherwise inherit an old approval.
+      allow update: if false;
+      allow delete: if signedIn() && request.auth.uid == owner;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

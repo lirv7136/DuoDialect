@@ -48,6 +48,7 @@ const LIMITS = {
   discoveryScan: 60,
   minAge: 18,
   maxAge: 120,
+  photos: 3,
 };
 
 /** Self declared age assurance. There is no identity or document verification. */

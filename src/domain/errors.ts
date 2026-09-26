@@ -33,6 +33,8 @@ const REASON_MESSAGES: Record<string, string> = {
   "conversation/not-found": "This conversation no longer exists.",
   "conversation/not-member": "You’re not part of this conversation.",
   "deletion/not-confirmed": "Type DELETE to confirm.",
+  "photo/not-found": "That photo is no longer available. Please add it again.",
+  "photo/not-screened": "That photo is still being checked. Please try again in a moment.",
 };
 
 const DATING_FALLBACK = "That isn’t available.";

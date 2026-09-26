@@ -12,6 +12,7 @@
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onObjectFinalized } = require("firebase-functions/v2/storage");
 const { setGlobalOptions } = require("firebase-functions/v2/options");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
@@ -27,6 +28,7 @@ const { assertModerator, listReports, getReportContext, actOnReport } = require(
 const { deliver } = require("./lib/notifier");
 const { invitationNotice, acceptedNotice } = require("./lib/notifications");
 const { refs } = require("./lib/refs");
+const { setProfilePhotos, screenUpload } = require("./lib/photos");
 
 setGlobalOptions({ region: "australia-southeast1", maxInstances: 10 });
 
@@ -68,6 +70,9 @@ exports.getMyAccount = authenticated("getMyAccount", (database, uid, data, now) 
 
 exports.setDatingConsent = authenticated("setDatingConsent", (database, uid, data, now) =>
   setDatingConsent(database, uid, data, now));
+
+exports.setProfilePhotos = authenticated("setProfilePhotos", (database, uid, data, now) =>
+  setProfilePhotos(database, uid, data, now));
 
 exports.discoverCandidates = authenticated("discoverCandidates", (database, uid, data, now) =>
   discoverCandidates(database, uid, data, now));
@@ -192,3 +197,21 @@ exports.onInvitationUpdated = onDocumentUpdated("invitations/{invitationId}", as
     toUid: after.fromUid, aboutUid: after.toUid, notice: acceptedNotice,
   });
 });
+
+/**
+ * Profile photo screening. Runs on every object written to the default bucket and ignores
+ * anything outside profilePhotos/. Approved photos are marked readable; rejected ones are
+ * deleted. The verdict is written to photoScreening/{uid}_{photoId} for the owner's app.
+ *
+ * Screening is stubbed (approve everything, call nothing) whenever the Functions emulator
+ * is running, so tests never reach Cloud Vision. See lib/photos.js.
+ *
+ * The trigger must be in the same location as the bucket, so the default bucket needs to
+ * be created in australia-southeast1. See docs/BACKEND-CONTRACT.md.
+ */
+exports.onProfilePhotoUploaded = onObjectFinalized(
+  { region: "australia-southeast1", memory: "512MiB", timeoutSeconds: 60 },
+  async (event) => {
+    await screenUpload(db, event.data);
+  },
+);

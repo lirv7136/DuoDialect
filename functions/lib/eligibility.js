@@ -29,6 +29,8 @@ const REASON = {
   invitationNotFound: "invitation/not-found",
   conversationNotMember: "conversation/not-member",
   conversationNotFound: "conversation/not-found",
+  photoNotFound: "photo/not-found",
+  photoNotScreened: "photo/not-screened",
 };
 
 function reject(code, reason, message) {

@@ -8,7 +8,7 @@
  * emulators. Callables are invoked over the wire and direct Firestore access goes
  * through the real rules; nothing here reimplements backend logic.
  *
- * Requires the auth, firestore and functions emulators. Run via `npm test` in functions/,
+ * Requires the auth, firestore, functions and storage emulators. Run via `npm test` in functions/,
  * which starts them with the demo project id and shuts them down afterwards.
  */
 
@@ -22,15 +22,24 @@ const {
   collection, getDocs, query, where, orderBy, addDoc, serverTimestamp,
 } = require("firebase/firestore");
 const { getFunctions, connectFunctionsEmulator, httpsCallable } = require("firebase/functions");
+const {
+  getStorage, connectStorageEmulator, ref: storageRef, uploadBytes, getDownloadURL, getBytes, deleteObject,
+} = require("firebase/storage");
 const { initializeApp: initAdminApp, deleteApp: deleteAdminApp } = require("firebase-admin/app");
 const { getFirestore: getAdminFirestore } = require("firebase-admin/firestore");
 const { getAuth: getAdminAuth } = require("firebase-admin/auth");
+const { getStorage: getAdminStorage } = require("firebase-admin/storage");
 
 const PROJECT_ID = process.env.GCLOUD_PROJECT || "demo-duodialect";
 const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || "127.0.0.1:9099";
 const FIRESTORE_HOST = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
 const [FIRESTORE_HOSTNAME, FIRESTORE_PORT] = FIRESTORE_HOST.split(":");
 const FUNCTIONS_PORT = Number(process.env.FUNCTIONS_EMULATOR_PORT || 5001);
+const STORAGE_HOST = process.env.FIREBASE_STORAGE_EMULATOR_HOST || "127.0.0.1:9199";
+const [STORAGE_HOSTNAME, STORAGE_PORT] = STORAGE_HOST.split(":");
+/** The default bucket the Functions emulator gives a demo project. */
+const BUCKET = `${PROJECT_ID}.appspot.com`;
+if (!process.env.FIREBASE_STORAGE_EMULATOR_HOST) process.env.FIREBASE_STORAGE_EMULATOR_HOST = STORAGE_HOST;
 
 if (!PROJECT_ID.startsWith("demo-")) {
   throw new Error(`Refusing to run tests against project "${PROJECT_ID}". Use a demo- project id.`);
@@ -48,8 +57,10 @@ function clientApp(label) {
   connectFirestoreEmulator(db, FIRESTORE_HOSTNAME, Number(FIRESTORE_PORT));
   const functions = getFunctions(app, "australia-southeast1");
   connectFunctionsEmulator(functions, FIRESTORE_HOSTNAME, FUNCTIONS_PORT);
+  const storage = getStorage(app, `gs://${BUCKET}`);
+  connectStorageEmulator(storage, STORAGE_HOSTNAME, Number(STORAGE_PORT));
   apps.push(app);
-  return { app, auth, db, functions };
+  return { app, auth, db, functions, storage };
 }
 
 function wrap(handle, uid) {
@@ -74,6 +85,12 @@ function wrap(handle, uid) {
     remove: (path) => deleteDoc(doc(handle.db, path)),
     append: (path, data) => addDoc(collection(handle.db, path), data),
     signOut: () => signOut(handle.auth),
+    /** Storage, through the real storage.rules. */
+    upload: (path, bytes, metadata = { contentType: "image/jpeg" }) =>
+      uploadBytes(storageRef(handle.storage, path), bytes, metadata),
+    downloadUrl: (path) => getDownloadURL(storageRef(handle.storage, path)),
+    download: (path) => getBytes(storageRef(handle.storage, path)),
+    removeObject: (path) => deleteObject(storageRef(handle.storage, path)),
   };
 }
 
@@ -102,6 +119,16 @@ function admin() {
 
 function adminAuth() {
   return getAdminAuth(adminApplication());
+}
+
+/** The default bucket, through the Admin SDK (bypasses storage.rules). */
+function adminBucket() {
+  return getAdminStorage(adminApplication()).bucket(BUCKET);
+}
+
+/** Storage has no bulk reset endpoint the harness can rely on, so delete every object. */
+async function clearStorage() {
+  await adminBucket().deleteFiles({ force: true });
 }
 
 async function clearEmulators() {
@@ -178,6 +205,9 @@ module.exports = {
   anonymousActor,
   admin,
   adminAuth,
+  adminBucket,
+  clearStorage,
+  BUCKET,
   clearEmulators,
   shutdown,
   expectFailure,

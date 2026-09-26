@@ -180,7 +180,7 @@ test("discovery returns reciprocal partners only, and never private data", async
     assert.equal(candidate.dating, undefined);
     assert.deepEqual(Object.keys(candidate).sort(), [
       "area", "availability", "bio", "displayName", "exchange", "fluencyAssurance",
-      "interests", "offers", "seeks", "sharedAvailability", "uid",
+      "interests", "offers", "photos", "seeks", "sharedAvailability", "uid",
     ]);
   }
 

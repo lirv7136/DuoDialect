@@ -12,13 +12,20 @@ import {
 import { errorMessage } from "../../src/domain/errors";
 import { api } from "../../src/lib/api";
 import { rememberAccount, useMyAccount } from "../../hooks/use-my-account";
+import { usePhotoEditor } from "../../hooks/use-photo-editor";
+import { PhotoEditor } from "../../components/photo-editor";
 import { LanguageEditor } from "../../components/language-editor";
 import { AvailabilityPicker } from "../../components/availability-picker";
 import { Body, Button, ErrorNotice, Field, Loading, Screen } from "../../components/ui";
 
-/** Edits the whole public profile through `upsertProfile`, which replaces it in full. */
+/**
+ * Edits the whole public profile through `upsertProfile`, which replaces it in full.
+ * Photos are separate: each change is saved straight away through `setProfilePhotos`,
+ * and `upsertProfile` never touches them.
+ */
 export default function EditProfile() {
   const { profile, account, loading } = useMyAccount();
+  const photos = usePhotoEditor({ initial: loading ? null : profile?.photos ?? [], autoSave: true });
   const [draft, setDraft] = useState<ProfileDraft | null>(null);
   const [interestsRaw, setInterestsRaw] = useState("");
   const [busy, setBusy] = useState(false);
@@ -58,6 +65,7 @@ export default function EditProfile() {
 
   return (
     <Screen edges={[]}>
+      <PhotoEditor editor={photos} />
       <Field label="First name" value={draft.displayName} onChangeText={displayName => patch({ displayName })}
         maxLength={LIMITS.displayName} autoCapitalize="words" />
       <Field label="Neighbourhood (optional)" hint="Chosen by you. We never ask for your location."

@@ -13,6 +13,8 @@ import { errorMessage } from "../../src/domain/errors";
 import { api } from "../../src/lib/api";
 import { onboardingDraft } from "../../src/lib/onboarding-draft";
 import { rememberAccount, useMyAccount } from "../../hooks/use-my-account";
+import { usePhotoEditor } from "../../hooks/use-photo-editor";
+import { PhotoEditor } from "../../components/photo-editor";
 import { AvailabilityPicker } from "../../components/availability-picker";
 import { Body, Button, ErrorNotice, Eyebrow, Field, Loading, Screen, Title, styles } from "../../components/ui";
 import { APP_NAME } from "../../constants/brand";
@@ -28,6 +30,9 @@ export default function ProfileOnboarding() {
   const inFlight = useRef(false);
   // A profile that already exists keeps its private fields; the server only needs them once.
   const firstSave = !profile || !account;
+  // Photos are optional. Uploads and screening start as soon as one is picked, but they can
+  // only be attached once the profile exists, so a first save attaches them afterwards.
+  const photos = usePhotoEditor({ initial: loading ? null : profile?.photos ?? [], autoSave: !firstSave });
 
   useEffect(() => {
     if (ready || loading) return;
@@ -46,14 +51,17 @@ export default function ProfileOnboarding() {
   async function onSave() {
     if (inFlight.current) return;
     const options = { firstSave, private: { birthDate } };
-    const issue = validateProfileDraft(draft, options);
+    const issue = validateProfileDraft(draft, options)
+      ?? (photos.pending ? "Your photo is still being checked. Wait a moment, or remove it and add photos later." : null);
     setProblem(issue);
     if (issue) return;
     inFlight.current = true;
     setBusy(true);
     try {
       // Replaying the same full profile is harmless, so a double tap needs no key.
-      rememberAccount(await api.upsertProfile(buildUpsertPayload(draft, options)));
+      const saved = await api.upsertProfile(buildUpsertPayload(draft, options));
+      const savedPhotos = await photos.save();
+      rememberAccount(savedPhotos && saved.profile ? { ...saved, profile: { ...saved.profile, photos: savedPhotos } } : saved);
       onboardingDraft.clear();
       router.replace("/(tabs)/discover");
     } catch (e) {
@@ -70,7 +78,9 @@ export default function ProfileOnboarding() {
     <Screen>
       <Eyebrow>A LITTLE ABOUT YOU</Eyebrow>
       <Title>Nearly there.</Title>
-      <Body muted>{`Partners see your name, neighbourhood, bio, languages and the times you share. ${APP_NAME} is for adults aged 18 and over.`}</Body>
+      <Body muted>{`Partners see your name, any photos you add, neighbourhood, bio, languages and the times you share. ${APP_NAME} is for adults aged 18 and over.`}</Body>
+
+      <PhotoEditor editor={photos} />
 
       <Field label="First name" value={draft.displayName} onChangeText={displayName => patch({ displayName })}
         maxLength={LIMITS.displayName} autoComplete="given-name" autoCapitalize="words" />

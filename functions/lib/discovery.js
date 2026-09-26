@@ -4,6 +4,7 @@ const { requireObject, requireEnum, requireInteger, requireString } = require(".
 const { INTENTS, LIMITS } = require("./constants");
 const { REASON, reject, isUsableProfile, reciprocalExchange, datingEligibility, intersect } = require("./eligibility");
 const { refs } = require("./refs");
+const { publicPhotos } = require("./photos");
 
 /** Only these fields ever leave the server for another member. */
 function publicCandidate(profile, exchange, myAvailability) {
@@ -16,6 +17,8 @@ function publicCandidate(profile, exchange, myAvailability) {
     seeks: profile.seeks || [],
     availability: profile.availability || [],
     interests: profile.interests || [],
+    // { id, path } only. Clients fetch through the Storage SDK, gated by storage.rules.
+    photos: publicPhotos(profile.photos),
     fluencyAssurance: profile.fluencyAssurance || "self-declared",
     exchange: { theyOffer: exchange.bOffers, youOffer: exchange.aOffers },
     sharedAvailability: intersect(profile.availability || [], myAvailability || []),

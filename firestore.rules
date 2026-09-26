@@ -132,6 +132,19 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Profile photo screening verdicts, one per upload, written by the onProfilePhotoUploaded
+    // function. The owner may read their own so the app can wait for the check; the id is
+    // {uid}_{photoId} and photo ids never contain an underscore, so the prefix names the
+    // owner. A missing document is readable by its owner too, because the app starts
+    // listening before the verdict exists.
+    match /photoScreening/{screeningId} {
+      allow get: if signedIn()
+        && screeningId.matches(request.auth.uid + '_[A-Za-z0-9-]{8,64}')
+        && (resource == null || resource.data.uid == request.auth.uid);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
     // Collections the earlier Expo client wrote to directly. They are closed rather than
     // migrated, so stale client code fails loudly instead of reading half migrated state.
     // See docs/BACKEND-HANDOFF.md for the replacement for each one.

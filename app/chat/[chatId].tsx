@@ -11,6 +11,8 @@ import { createDraftKeys } from "../../src/domain/idempotency";
 import { capitalise } from "../../src/domain/profile-form";
 import { errorMessage } from "../../src/domain/errors";
 import { Body, Button, ErrorNotice, Loading, styles } from "../../components/ui";
+import { Avatar } from "../../components/avatar";
+import { sanitizePhotos, type ProfilePhoto } from "../../src/domain/photos";
 import { colors, space, TOUCH_TARGET } from "../../constants/theme";
 
 const MAX_MESSAGE = 2000;
@@ -29,6 +31,7 @@ export default function ChatScreen() {
   const [conversation, setConversation] = useState<ConversationDoc | null | undefined>(undefined);
   const [messages, setMessages] = useState<Message[]>([]);
   const [otherName, setOtherName] = useState("");
+  const [otherPhotos, setOtherPhotos] = useState<ProfilePhoto[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +62,10 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (!otherUid) return;
-    getPublicProfile(otherUid).then(profile => setOtherName(profile?.displayName || "A member")).catch(() => setOtherName("A member"));
+    getPublicProfile(otherUid).then(profile => {
+      setOtherName(profile?.displayName || "A member");
+      setOtherPhotos(sanitizePhotos(profile?.photos));
+    }).catch(() => setOtherName("A member"));
   }, [otherUid]);
 
   // Clear my unread count when I open the chat and whenever a new message arrives.
@@ -130,7 +136,15 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView edges={["bottom"]} style={styles.screen}>
-      <Stack.Screen options={{ title }} />
+      <Stack.Screen options={{
+        title,
+        headerTitle: () => (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, flexShrink: 1 }}>
+            <Avatar name={otherName} photos={otherPhotos} size={32} />
+            <Text accessibilityRole="header" numberOfLines={1} style={[styles.label, { fontSize: 17, flexShrink: 1 }]}>{title}</Text>
+          </View>
+        ),
+      }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={headerHeight}>
         <View style={{ paddingHorizontal: space.lg, paddingVertical: space.sm, gap: space.sm, borderBottomWidth: 1, borderColor: colors.line }}>
           {exchange ? <Text style={styles.hint}>{exchange}</Text> : null}

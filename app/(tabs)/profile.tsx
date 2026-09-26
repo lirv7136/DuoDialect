@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { Alert, Text } from "react-native";
+import { Alert, Text, View } from "react-native";
 import { router } from "expo-router";
 import { logOut } from "../../src/lib/auth";
 import { registerForPush } from "../../src/lib/push";
 import { candidateCache } from "../../src/lib/candidate-cache";
+import { clearPhotoUrls } from "../../src/lib/photos";
 import { formatLanguages } from "../../src/domain/profile-form";
 import { forgetAccount, useMyAccount } from "../../hooks/use-my-account";
 import { Body, Button, Card, ErrorNotice, Eyebrow, Heading, Loading, Screen, Title, styles } from "../../components/ui";
+import { Avatar } from "../../components/avatar";
 import { APP_NAME } from "../../constants/brand";
+import { space } from "../../constants/theme";
 
 export default function Profile() {
   const { profile, loading, error, reload } = useMyAccount();
@@ -28,6 +31,7 @@ export default function Profile() {
 
   async function onLogout() {
     candidateCache.clear();
+    clearPhotoUrls();
     forgetAccount();
     await logOut();
     router.replace("/(auth)/login");
@@ -43,8 +47,13 @@ export default function Profile() {
 
       {profile ? (
         <Card>
-          <Heading>{profile.displayName}</Heading>
-          {profile.area ? <Text style={styles.hint}>{profile.area}</Text> : null}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+            <Avatar name={profile.displayName} photos={profile.photos} size={64} />
+            <View style={{ flexShrink: 1, gap: 2 }}>
+              <Heading>{profile.displayName}</Heading>
+              {profile.area ? <Text style={styles.hint}>{profile.area}</Text> : null}
+            </View>
+          </View>
           {profile.bio ? <Body>{profile.bio}</Body> : null}
           <Text style={styles.label}>I can share</Text>
           <Body>{formatLanguages(profile.speaks)}</Body>
@@ -57,7 +66,7 @@ export default function Profile() {
         </Card>
       ) : null}
 
-      <Button variant="primary" label="Edit profile" hint="Languages, levels, times and neighbourhood" onPress={() => router.push("/account/edit")} />
+      <Button variant="primary" label="Edit profile" hint="Photos, languages, levels, times and neighbourhood" onPress={() => router.push("/account/edit")} />
       <Button
         label={registeringPush ? "Enabling notifications…" : "Enable message notifications"}
         busy={registeringPush}

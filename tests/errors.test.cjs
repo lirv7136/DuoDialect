@@ -25,7 +25,8 @@ test('every contract reason used by v1 flows has specific copy', () => {
   const reasons = ['account/not-adult', 'account/suspended', 'profile/incomplete', 'profile/not-found', 'target/self',
     'target/unavailable', 'language/not-reciprocal', 'language/insufficient-fluency', 'language/not-offered',
     'language/offered-and-sought', 'invitation/duplicate-active', 'invitation/not-pending', 'invitation/not-recipient',
-    'invitation/not-sender', 'invitation/not-found', 'conversation/not-found', 'conversation/not-member', 'deletion/not-confirmed'];
+    'invitation/not-sender', 'invitation/not-found', 'conversation/not-found', 'conversation/not-member', 'deletion/not-confirmed',
+    'photo/not-found', 'photo/not-screened'];
   const generic = describeFailure({ code: 'failed-precondition', reason: null, message: '' });
   for (const reason of reasons) {
     const text = describeFailure({ code: 'failed-precondition', reason, message: '' });

@@ -5,6 +5,7 @@ import { api } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
 import { logOut, reauthenticate } from "../../src/lib/auth";
 import { candidateCache } from "../../src/lib/candidate-cache";
+import { clearPhotoUrls } from "../../src/lib/photos";
 import { clearBlockedNames } from "../../src/lib/blocked-names";
 import { errorMessage } from "../../src/domain/errors";
 import { forgetAccount } from "../../hooks/use-my-account";
@@ -40,6 +41,7 @@ export default function DeleteAccount() {
         return;
       }
       candidateCache.clear();
+      clearPhotoUrls();
       forgetAccount();
       if (uid) await clearBlockedNames(uid);
       await logOut().catch(() => undefined);
@@ -58,7 +60,7 @@ export default function DeleteAccount() {
       <Heading>Delete your account permanently?</Heading>
       <Card>
         <Text style={styles.label}>This removes, straight away and for good:</Text>
-        <Body>• your profile and private details{"\n"}• every invitation you sent or received{"\n"}• your blocks{"\n"}• every conversation you’re part of, including all messages</Body>
+        <Body>• your profile, photos and private details{"\n"}• every invitation you sent or received{"\n"}• your blocks{"\n"}• every conversation you’re part of, including all messages</Body>
         <Text style={styles.label}>Conversations are deleted for both people.</Text>
         <Body>The people you’ve chatted with will lose those conversations too.</Body>
         <Text style={styles.label}>Safety reports are kept.</Text>

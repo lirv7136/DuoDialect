@@ -6,6 +6,7 @@ const logger = require("firebase-functions/logger");
 const { requireObject, requireString } = require("./validation");
 const { REASON, reject } = require("./eligibility");
 const { refs, invitationLockId } = require("./refs");
+const { deleteAllPhotosFor } = require("./photos");
 
 /**
  * Account deletion.
@@ -19,6 +20,7 @@ const { refs, invitationLockId } = require("./refs");
  *
  * What is removed:
  *   profile, private profile, push token, account status
+ *   every profile photo in Storage, and every photo screening record
  *   blocks the person made, and blocks other people made against them
  *   every invitation they are part of, and its duplicate lock
  *   every conversation they are part of, including all its messages
@@ -64,6 +66,7 @@ async function requestAccountDeletion(db, uid, payload) {
   const progress = {
     invitations: 0, conversations: 0, inboxEntries: 0,
     blocksMade: 0, blocksReceived: 0, reportsRetained: 0,
+    photos: 0, photoScreenings: 0,
   };
 
   await r.deletionRequest(uid).set({
@@ -79,6 +82,12 @@ async function requestAccountDeletion(db, uid, payload) {
     r.privateProfile(uid).delete(),
     r.pushToken(uid).delete(),
   ]);
+
+  // Photos go with the profile. An upload still in flight is caught by the screening
+  // trigger, which deletes anything that arrives once a deletion request exists.
+  const photoResult = await deleteAllPhotosFor(db, uid);
+  progress.photos = photoResult.objects;
+  progress.photoScreenings = photoResult.screenings;
 
   // 2. Invitations, and the locks that would otherwise block a future pair.
   progress.invitations = await deleteQueryDocs(

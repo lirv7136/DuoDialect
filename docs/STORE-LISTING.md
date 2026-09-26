@@ -89,13 +89,19 @@ advertising, product personalisation or third-party purposes):
 | Contact Info → Email Address | Sign-in email | Firebase Auth |
 | Contact Info → Name | First name shown to partners | Profile |
 | User Content → Emails or Text Messages | Chat messages | Conversations |
+| User Content → Photos or Videos | Optional profile photos (up to 3), shown to signed-in members to help partners recognise each other; screened automatically | Storage `profilePhotos/`, profile |
 | User Content → Other User Content | Bio, neighbourhood, interests, availability, meetup notes and venues, reports | Profile, plans, reports |
 | Identifiers → User ID | Account ID | Firebase Auth |
 | Identifiers → Device ID | Expo push token, only if notifications are enabled | pushTokens |
 | Other Data | Date of birth (private, age check only), languages and levels | privateProfiles, profiles |
 
+Photos or Videos is **linked to the user**, used for **App Functionality** only, and not
+used for tracking. Photos are sent to Google Cloud Vision for automated safety screening;
+Google acts as our service provider, which Apple does not count as third-party use.
+
 Not collected: location (neighbourhood is typed by the user and is not precise
-location), contacts, photos, health, financial info, browsing history, search history,
+location; photos are re-encoded on the device before upload, which does not carry over
+embedded location), contacts, health, financial info, browsing history, search history,
 purchases, diagnostics or crash data.
 
 ## Google Play
@@ -135,14 +141,15 @@ Google's form does not count as sharing).
 | Personal info → Email address | Yes | App functionality, account management | Required |
 | Personal info → User IDs | Yes | App functionality, account management | Required |
 | Personal info → Other info (date of birth, languages) | Yes | App functionality (age check, matching) | Required |
+| Photos and videos → Photos | Yes | App functionality (profile photos), safety screening | Optional |
 | Messages → Other in-app messages | Yes | App functionality | Required to chat |
 | App activity → Other user-generated content (bio, plans, reports) | Yes | App functionality, safety | Partly optional |
 | Device or other IDs (push token) | Yes | App functionality (notifications) | Optional |
 
-Not collected: location, financial info, health, photos/videos, audio, files, calendar,
+Not collected: location, financial info, health, videos, audio, files, calendar,
 contacts, web browsing, app diagnostics.
 
-Retention: account data is deleted when the account is deleted. Exception: safety reports
+Retention: account data, including profile photos, is deleted when the account is deleted. Exception: safety reports
 filed by or about the account are kept for moderation, and the privacy policy must say so.
 
 ## Screenshots
