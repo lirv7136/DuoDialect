@@ -19,7 +19,9 @@ import {
   validateMeetingDraft,
   type Recurrence,
 } from "../../src/domain/schedule";
+import { meetingDateBounds } from "../../src/domain/date-bounds";
 import { useMyAccount } from "../../hooks/use-my-account";
+import { DateTimeField } from "../../components/date-time-field";
 import { Body, Button, Card, Chip, ChipRow, ErrorNotice, Field, Heading, Loading, Screen, styles } from "../../components/ui";
 
 type Target = { uid: string; name: string; area: string; theyOffer: string[]; youOffer: string[]; shared: string[] };
@@ -104,6 +106,8 @@ export default function NewPlan() {
   if (!target) return <Loading label="Preparing your invitation" />;
 
   const suggestions = suggestMeetingTimes(target.shared.length ? target.shared : (me?.availability ?? []), new Date(), 4);
+  const { minimumDate, maximumDate } = meetingDateBounds();
+  const tomorrowSix = new Date(minimumDate.getFullYear(), minimumDate.getMonth(), minimumDate.getDate() + 1, 18, 0);
 
   return (
     <Screen edges={[]}>
@@ -145,10 +149,11 @@ export default function NewPlan() {
       ) : null}
       <View style={styles.row}>
         <View style={{ flexGrow: 1, flexBasis: 160 }}>
-          <Field label="Date" hint="YYYY-MM-DD" value={localDate} onChangeText={setLocalDate} maxLength={10} keyboardType="numbers-and-punctuation" />
+          <DateTimeField mode="date" label="Date" value={localDate} onChange={setLocalDate}
+            initial={tomorrowSix} minimumDate={minimumDate} maximumDate={maximumDate} />
         </View>
         <View style={{ flexGrow: 1, flexBasis: 120 }}>
-          <Field label="Time" hint="24-hour HH:mm" value={localTime} onChangeText={setLocalTime} maxLength={5} keyboardType="numbers-and-punctuation" />
+          <DateTimeField mode="time" label="Time" value={localTime} onChange={setLocalTime} initial={tomorrowSix} />
         </View>
       </View>
       <Text style={styles.hint}>{timeZone ? `Time zone: ${timeZone}` : "Time zone unavailable"}</Text>
