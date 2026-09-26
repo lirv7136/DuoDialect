@@ -2,16 +2,71 @@
   "reviewedOn": "2026-09-26",
   "target": "Talkeven 1.0 for iOS and Android (language partners, plans and chat; no groups, no dating)",
   "gates": [
-    { "id": "native-baseline", "name": "Native typecheck, lint, domain and notification adapter tests", "status": "passed", "evidence": "npm run verify: typecheck, lint with zero warnings, 36 unit and 7 prototype tests (commit 6a0e27f)." },
-    { "id": "native-bundles", "name": "iOS and Android JavaScript bundle export", "status": "passed", "evidence": "npm run bundle:check, plus EAS iOS builds 4 to 6 and Android preview APKs built from the same tree." },
-    { "id": "native-product", "name": "Native implementation of the v1 experience", "status": "passed", "evidence": "Discover, suggest a meetup (once or weekly), plans, chat, profile editing, block, report and delete account on the server callables (fad8c43 onward). Groups and dating are out of scope for v1." },
-    { "id": "backend-access", "name": "Server authorization, database rules and adversarial emulator tests", "status": "passed", "evidence": "Default deny rules and 16 callables; 86 emulator tests; deployed to duodialect-staging (Sydney) with a live two-account smoke test on 2026-09-26." },
-    { "id": "live-exchange", "name": "Real account lifecycle, invitations, acceptance and chat", "status": "pending", "evidence": "Verified end to end on staging in the web build on 2026-09-26: signup, onboarding, discover, weekly invitation, live acceptance, two-way chat, notification trigger, logout, login and in-app deletion. Still needs the same run on the native TestFlight build." },
-    { "id": "privacy-safety", "name": "Age controls, deletion, reporting and moderation", "status": "pending", "evidence": "Implemented: adult-only self-declared birth date, deletion cascade, reports and moderation queue with audit log. Pending: a named operator and response process, and publishing the privacy, deletion and child safety pages drafted in site/." },
-    { "id": "signed-builds", "name": "Installable signed iOS and Android builds meet current SDK requirements", "status": "pending", "evidence": "iOS: builds 4 to 6 accepted and processed by App Store Connect (TestFlight). Android: signed preview APK only; no AAB uploaded, API 36 target not yet confirmed from the artifact." },
-    { "id": "physical-devices", "name": "Recorded tests on real iPhone and Android devices", "status": "pending", "evidence": "iPhone 14 testing started on TestFlight; build 4 exposed the login loop fixed in build 5. No Android device yet." },
-    { "id": "beta", "name": "TestFlight and Google Play closed test completed and defects resolved", "status": "pending", "evidence": "TestFlight internal group 'Team' exists. Google Play app creation is blocked on Android device verification; the 12 tester, 14 day closed test applies (personal account created 2026-09-20)." },
-    { "id": "listing", "name": "Accurate listing, policies, support, declarations and reviewer access", "status": "pending", "evidence": "Drafts: docs/STORE-LISTING.md, docs/screenshots/ios-6.9, site/. Needs a support email, domain, published pages and production reviewer accounts." },
-    { "id": "release-review", "name": "Final tested candidate approved for submission", "status": "pending", "evidence": "All prior gates need evidence for the exact build submitted. The production Firebase project (duodialect) is not yet on Blaze or deployed." }
+    {
+      "id": "native-baseline",
+      "name": "Native typecheck, lint, domain and notification adapter tests",
+      "status": "passed",
+      "evidence": "npm run verify: typecheck, lint with zero warnings, 36 unit and 7 prototype tests (commit 6a0e27f)."
+    },
+    {
+      "id": "native-bundles",
+      "name": "iOS and Android JavaScript bundle export",
+      "status": "passed",
+      "evidence": "npm run bundle:check, plus EAS iOS builds 4 to 6 and Android preview APKs built from the same tree."
+    },
+    {
+      "id": "native-product",
+      "name": "Native implementation of the v1 experience",
+      "status": "passed",
+      "evidence": "Discover, suggest a meetup (once or weekly), plans, chat, profile editing, block, report and delete account on the server callables (fad8c43 onward). Groups and dating are out of scope for v1."
+    },
+    {
+      "id": "backend-access",
+      "name": "Server authorization, database rules and adversarial emulator tests",
+      "status": "passed",
+      "evidence": "Default deny rules and 16 callables; 86 emulator tests; deployed to duodialect-staging (Sydney) with a live two-account smoke test on 2026-09-26."
+    },
+    {
+      "id": "live-exchange",
+      "name": "Real account lifecycle, invitations, acceptance and chat",
+      "status": "pending",
+      "evidence": "Staging, 2026-09-26: full flow verified in the web build, and on an iPhone 14 (TestFlight build 7) with invitations, acceptance, chat and notifications against demo partner accounts. Remaining: an Android device run."
+    },
+    {
+      "id": "privacy-safety",
+      "name": "Age controls, deletion, reporting and moderation",
+      "status": "pending",
+      "evidence": "Implemented: adult-only self-declared birth date, deletion cascade, reports and moderation queue with audit log. Pending: a named operator and response process, and publishing the privacy, deletion and child safety pages drafted in site/."
+    },
+    {
+      "id": "signed-builds",
+      "name": "Installable signed iOS and Android builds meet current SDK requirements",
+      "status": "pending",
+      "evidence": "iOS: builds 4 to 6 accepted and processed by App Store Connect (TestFlight). Android: signed preview APK only; no AAB uploaded, API 36 target not yet confirmed from the artifact."
+    },
+    {
+      "id": "physical-devices",
+      "name": "Recorded tests on real iPhone and Android devices",
+      "status": "pending",
+      "evidence": "iPhone 14, TestFlight builds 5 to 7 (2026-09-26): login, onboarding, staying signed in, plans, chat, message and plan notifications, and tapping a notification from a closed app opening the chat all confirmed by Lachlan. No Android device yet."
+    },
+    {
+      "id": "beta",
+      "name": "TestFlight and Google Play closed test completed and defects resolved",
+      "status": "pending",
+      "evidence": "TestFlight internal group 'Team' exists. Google Play app creation is blocked on Android device verification; the 12 tester, 14 day closed test applies (personal account created 2026-09-20)."
+    },
+    {
+      "id": "listing",
+      "name": "Accurate listing, policies, support, declarations and reviewer access",
+      "status": "pending",
+      "evidence": "Drafts: docs/STORE-LISTING.md, docs/screenshots/ios-6.9, site/. Needs a support email, domain, published pages and production reviewer accounts."
+    },
+    {
+      "id": "release-review",
+      "name": "Final tested candidate approved for submission",
+      "status": "pending",
+      "evidence": "All prior gates need evidence for the exact build submitted. The production Firebase project (duodialect) is not yet on Blaze or deployed."
+    }
   ]
 }
