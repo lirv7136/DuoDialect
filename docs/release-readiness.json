@@ -42,7 +42,7 @@
       "id": "signed-builds",
       "name": "Installable signed iOS and Android builds meet current SDK requirements",
       "status": "pending",
-      "evidence": "iOS: builds 4 to 6 accepted and processed by App Store Connect (TestFlight). Android: signed preview APK only; no AAB uploaded, API 36 target not yet confirmed from the artifact."
+      "evidence": "iOS: production build 8 (duodialect backend) processed by App Store Connect and submitted. Android: signed preview APK only; no AAB yet."
     },
     {
       "id": "physical-devices",
@@ -59,14 +59,14 @@
     {
       "id": "listing",
       "name": "Accurate listing, policies, support, declarations and reviewer access",
-      "status": "pending",
-      "evidence": "Drafts: docs/STORE-LISTING.md, docs/screenshots/ios-6.9, site/. Needs a support email, domain, published pages and production reviewer accounts."
+      "status": "passed",
+      "evidence": "iOS listing complete in App Store Connect (text, URLs at talkeven.com, 5 screenshots, 18+ age rating, published privacy labels, free, 148 territories excluding the EU, review account and notes)."
     },
     {
       "id": "release-review",
       "name": "Final tested candidate approved for submission",
       "status": "pending",
-      "evidence": "All prior gates need evidence for the exact build submitted. The production Firebase project (duodialect) is not yet on Blaze or deployed."
+      "evidence": "iOS 1.0 (build 8) submitted for App Review on 2026-09-26; state WAITING_FOR_REVIEW. Production backend deployed to duodialect (Sydney) and smoke tested."
     }
   ]
 }
