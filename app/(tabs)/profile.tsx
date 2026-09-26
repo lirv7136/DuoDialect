@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Alert, Text } from "react-native";
 import { router } from "expo-router";
 import { logOut } from "../../src/lib/auth";
-import { registerForPush } from "../../src/lib/push";
+import { useNotificationsEnabled } from "../../src/lib/notification-prompt";
 import { candidateCache } from "../../src/lib/candidate-cache";
 import { formatLanguages } from "../../src/domain/profile-form";
 import { forgetAccount, useMyAccount } from "../../hooks/use-my-account";
@@ -12,15 +12,18 @@ import { APP_NAME } from "../../constants/brand";
 export default function Profile() {
   const { profile, loading, error, reload } = useMyAccount();
   const [registeringPush, setRegisteringPush] = useState(false);
+  const notifications = useNotificationsEnabled();
 
   async function onEnableNotifications() {
     if (registeringPush) return;
     setRegisteringPush(true);
     try {
-      const token = await registerForPush();
-      Alert.alert(token ? "Notifications enabled" : "Notifications unavailable", token
-        ? "This device can now receive message notifications."
-        : "Use an installed app on a physical phone and allow notifications in its settings.");
+      const result = await notifications.enable();
+      if (result !== "on") {
+        Alert.alert("Notifications unavailable", result === "denied"
+          ? "Allow notifications for this app in your phone’s settings, then try again."
+          : "Use an installed app on a physical phone and allow notifications in its settings.");
+      }
     } catch {
       Alert.alert("Couldn’t enable notifications", "Please check your connection and try again.");
     } finally { setRegisteringPush(false); }
@@ -58,11 +61,15 @@ export default function Profile() {
       ) : null}
 
       <Button variant="primary" label="Edit profile" hint="Languages, levels, times and neighbourhood" onPress={() => router.push("/account/edit")} />
-      <Button
-        label={registeringPush ? "Enabling notifications…" : "Enable message notifications"}
-        busy={registeringPush}
-        onPress={onEnableNotifications}
-      />
+      {notifications.enabled ? (
+        <Text accessibilityRole="text" style={[styles.hint, { textAlign: "center" }]}>✓ Notifications on</Text>
+      ) : (
+        <Button
+          label={registeringPush ? "Enabling notifications…" : "Enable message notifications"}
+          busy={registeringPush}
+          onPress={onEnableNotifications}
+        />
+      )}
       <Button label="Blocked members" onPress={() => router.push("/account/blocked")} />
       <Button label="Log out" onPress={onLogout} />
       <Button variant="danger" label="Delete account" hint="Permanently deletes your account and conversations" onPress={() => router.push("/account/delete")} />

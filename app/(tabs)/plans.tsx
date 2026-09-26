@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { api } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
 import { getPublicProfile, subscribeInvitations, type InvitationDoc } from "../../src/lib/live";
+import { askForNotificationsInContext } from "../../src/lib/notification-prompt";
 import { formatMeeting } from "../../src/domain/schedule";
 import { capitalise } from "../../src/domain/profile-form";
 import { errorMessage } from "../../src/domain/errors";
@@ -50,8 +51,9 @@ export default function Plans() {
         await api.cancelInvitation(item.id);
       } else {
         const result = await api.respondToInvitation(item.id, action);
-        if (action === "accept" && result.conversationId) {
-          router.push({ pathname: "/chat/[chatId]", params: { chatId: result.conversationId } });
+        if (action === "accept") {
+          await askForNotificationsInContext({ kind: "invitation-accepted", name: names[item.fromUid] });
+          if (result.conversationId) router.push({ pathname: "/chat/[chatId]", params: { chatId: result.conversationId } });
         }
       }
     } catch (e) {

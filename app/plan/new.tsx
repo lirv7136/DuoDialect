@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { api, ApiError } from "../../src/lib/api";
 import { candidateCache } from "../../src/lib/candidate-cache";
 import { getPublicProfile } from "../../src/lib/live";
+import { askForNotificationsInContext } from "../../src/lib/notification-prompt";
 import { deviceTimeZone } from "../../src/lib/time-zone";
 import { exchangeLanguages } from "../../src/domain/language-exchange";
 import { capitalise } from "../../src/domain/profile-form";
@@ -89,6 +90,7 @@ export default function NewPlan() {
       await api.createInvitation(input, requestKey);
       keys.settle();
       router.replace("/(tabs)/plans");
+      void askForNotificationsInContext({ kind: "invitation-sent", name: target.name });
     } catch (e) {
       setProblem(errorMessage(e));
       setDuplicate(e instanceof ApiError && e.reason === "invitation/duplicate-active");
