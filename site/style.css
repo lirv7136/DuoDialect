@@ -17,3 +17,16 @@ table{width:100%;border-collapse:collapse;font-size:15px}
 th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
 footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
 footer a{margin-right:16px}
+.button,form.join button{display:inline-block;background:#1f3a5f;color:#fff;border:0;border-radius:12px;padding:14px 22px;font:inherit;font-weight:700;text-decoration:none;cursor:pointer;min-height:48px}
+.button:hover,form.join button:hover{background:#16294a}
+form.join{display:grid;gap:6px;margin-top:24px}
+form.join label{font-weight:600;margin-top:10px}
+form.join input:not([type=radio]):not([type=checkbox]){font:inherit;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);min-height:48px}
+form.join fieldset{border:0;padding:0;margin:10px 0 0;display:flex;gap:18px;flex-wrap:wrap}
+form.join legend{font-weight:600;margin-bottom:6px}
+form.join .choice{font-weight:400;display:flex;align-items:center;gap:8px;min-height:44px;margin:0}
+form.join button{margin-top:16px}
+form.join button:disabled{opacity:.6}
+.form-error{background:#fdecea;color:#a1321f;border-radius:10px;padding:12px;margin:0}
+.hp{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
+.small{font-size:14px}
