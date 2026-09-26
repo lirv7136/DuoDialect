@@ -16,6 +16,8 @@ import { rememberAccount, useMyAccount } from "../../hooks/use-my-account";
 import { usePhotoEditor } from "../../hooks/use-photo-editor";
 import { PhotoEditor } from "../../components/photo-editor";
 import { AvailabilityPicker } from "../../components/availability-picker";
+import { DateTimeField } from "../../components/date-time-field";
+import { defaultBirthDate, earliestBirthDate, latestAdultBirthDate } from "../../src/domain/date-bounds";
 import { Body, Button, ErrorNotice, Eyebrow, Field, Loading, Screen, Title, styles } from "../../components/ui";
 import { APP_NAME } from "../../constants/brand";
 
@@ -94,8 +96,9 @@ export default function ProfileOnboarding() {
         <View style={{ gap: 12 }}>
           <Text accessibilityRole="header" style={styles.label}>Private details</Text>
           <Text style={styles.hint}>Never shown to other members. Your date of birth is self-declared and only used to confirm you’re 18 or over.</Text>
-          <Field label="Date of birth" hint="YYYY-MM-DD" value={birthDate} onChangeText={setBirthDate}
-            keyboardType="numbers-and-punctuation" maxLength={10} placeholder="1998-04-21" autoComplete="birthdate-full" />
+          <DateTimeField mode="date" dateStyle="long" label="Date of birth" value={birthDate} onChange={setBirthDate}
+            initial={defaultBirthDate()} minimumDate={earliestBirthDate()} maximumDate={latestAdultBirthDate()}
+            placeholder="1998-04-21" autoComplete="birthdate-full" />
         </View>
       ) : null}
 

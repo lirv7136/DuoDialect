@@ -55,3 +55,19 @@ test('only transport and server faults are offered as retryable', () => {
   assert.equal(isRetryable({ code: 'already-exists', reason: 'invitation/duplicate-active', message: '' }), false);
   assert.equal(isRetryable({ code: 'invalid-argument', reason: null, message: '' }), false);
 });
+
+test('Firebase Auth codes map to friendly sign in and sign up copy', () => {
+  const { authErrorMessage } = require('./load-typescript.cjs')('src/domain/errors.ts');
+  const authError = code => Object.assign(new Error(`Firebase: Error (${code}).`), { code });
+  assert.equal(authErrorMessage(authError('auth/invalid-credential')),
+    'That email and password don’t match. Try again or reset your password.');
+  assert.match(authErrorMessage(authError('auth/weak-password')), /at least 6 characters/);
+  assert.match(authErrorMessage(authError('auth/email-already-in-use')), /already uses that email/);
+  assert.match(authErrorMessage(authError('auth/invalid-email')), /doesn’t look like an email/);
+  assert.match(authErrorMessage(authError('auth/too-many-requests')), /Too many attempts/);
+  assert.match(authErrorMessage(authError('auth/network-request-failed')), /connection/);
+  // Unknown codes never leak Firebase's raw message.
+  const unknown = authErrorMessage(authError('auth/something-new'));
+  assert.doesNotMatch(unknown, /Firebase/);
+  assert.equal(unknown, 'Something went wrong. Please try again.');
+});

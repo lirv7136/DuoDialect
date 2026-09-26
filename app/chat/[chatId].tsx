@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, FlatList, KeyboardAvoidingView, Platform, Text, TextInput, View } from "react-native";
+import { ActionSheetIOS, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,6 +13,7 @@ import { errorMessage } from "../../src/domain/errors";
 import { Body, Button, ErrorNotice, Loading, styles } from "../../components/ui";
 import { Avatar } from "../../components/avatar";
 import { sanitizePhotos, type ProfilePhoto } from "../../src/domain/photos";
+import { SafetyCard } from "../../components/safety-card";
 import { colors, space, TOUCH_TARGET } from "../../constants/theme";
 
 const MAX_MESSAGE = 2000;
@@ -103,7 +104,7 @@ export default function ChatScreen() {
   function onBlock() {
     if (!otherUid) return;
     Alert.alert(`Block ${otherName || "this member"}?`, "Neither of you will be able to message, invite or find the other. You can unblock from Your profile.", [
-      { text: "Keep", style: "cancel" },
+      { text: "Cancel", style: "cancel" },
       {
         text: "Block", style: "destructive", onPress: async () => {
           try {
@@ -119,6 +120,41 @@ export default function ChatScreen() {
   }
 
   const title = otherName || "Conversation";
+
+  function onReport() {
+    if (!otherUid) return;
+    router.push({ pathname: "/report/[uid]", params: { uid: otherUid, name: otherName, conversationId: chatId } });
+  }
+
+  // Report and Block live in the header menu: always reachable, never in the way.
+  function onMenu() {
+    const report = `Report ${title}`, block = `Block ${title}`;
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: [report, block, "Cancel"], destructiveButtonIndex: 1, cancelButtonIndex: 2 },
+        index => { if (index === 0) onReport(); if (index === 1) onBlock(); },
+      );
+      return;
+    }
+    Alert.alert(title, undefined, [
+      { text: report, onPress: onReport },
+      { text: block, style: "destructive", onPress: onBlock },
+      { text: "Cancel", style: "cancel" },
+    ], { cancelable: true });
+  }
+
+  const headerRight = () => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`More options for ${title}`}
+      accessibilityHint={`Report or block ${title}`}
+      onPress={onMenu}
+      hitSlop={8}
+      style={{ minWidth: TOUCH_TARGET, minHeight: TOUCH_TARGET, alignItems: "center", justifyContent: "center" }}
+    >
+      <Text style={{ color: colors.green, fontSize: 24, fontWeight: "700" }}>⋯</Text>
+    </Pressable>
+  );
   const exchange = conversation?.languages
     ? `Your exchange: ${capitalise(conversation.languages.fromOffers)} ⇄ ${capitalise(conversation.languages.toOffers)}`
     : null;
@@ -138,6 +174,7 @@ export default function ChatScreen() {
     <SafeAreaView edges={["bottom"]} style={styles.screen}>
       <Stack.Screen options={{
         title,
+        headerRight,
         headerTitle: () => (
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, flexShrink: 1 }}>
             <Avatar name={otherName} photos={otherPhotos} size={32} />
@@ -146,14 +183,11 @@ export default function ChatScreen() {
         ),
       }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={headerHeight}>
-        <View style={{ paddingHorizontal: space.lg, paddingVertical: space.sm, gap: space.sm, borderBottomWidth: 1, borderColor: colors.line }}>
-          {exchange ? <Text style={styles.hint}>{exchange}</Text> : null}
-          <View style={styles.row}>
-            <Button label="Report" accessibilityLabel={`Report ${title}`}
-              onPress={() => router.push({ pathname: "/report/[uid]", params: { uid: otherUid, name: otherName, conversationId: chatId } })} />
-            <Button label="Block" accessibilityLabel={`Block ${title}`} onPress={onBlock} />
+        {exchange ? (
+          <View style={{ paddingHorizontal: space.lg, paddingVertical: space.sm, borderBottomWidth: 1, borderColor: colors.line }}>
+            <Text style={styles.hint}>{exchange}</Text>
           </View>
-        </View>
+        ) : null}
 
         <FlatList
           ref={list}
@@ -161,7 +195,12 @@ export default function ChatScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={{ padding: space.lg, gap: space.sm }}
           onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
-          ListEmptyComponent={<Body muted>No messages yet. Say hello and confirm where you’ll meet.</Body>}
+          ListEmptyComponent={
+            <View style={{ gap: space.md }}>
+              <SafetyCard />
+              <Body muted>No messages yet. Say hello and confirm where you’ll meet.</Body>
+            </View>
+          }
           renderItem={({ item }) => {
             const mine = item.fromUid === me;
             return (
@@ -185,7 +224,7 @@ export default function ChatScreen() {
             <TextInput
               value={text}
               onChangeText={setText}
-              placeholder="Message…"
+              placeholder={otherName ? `Message ${otherName}` : "Message…"}
               placeholderTextColor={colors.muted}
               accessibilityLabel={`Message ${title}`}
               maxLength={MAX_MESSAGE}

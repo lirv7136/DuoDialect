@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { api, ApiError } from "../../src/lib/api";
 import { candidateCache } from "../../src/lib/candidate-cache";
 import { getPublicProfile } from "../../src/lib/live";
+import { askForNotificationsInContext } from "../../src/lib/notification-prompt";
 import { deviceTimeZone } from "../../src/lib/time-zone";
 import { exchangeLanguages } from "../../src/domain/language-exchange";
 import { capitalise } from "../../src/domain/profile-form";
@@ -18,7 +19,9 @@ import {
   validateMeetingDraft,
   type Recurrence,
 } from "../../src/domain/schedule";
+import { meetingDateBounds } from "../../src/domain/date-bounds";
 import { useMyAccount } from "../../hooks/use-my-account";
+import { DateTimeField } from "../../components/date-time-field";
 import { Body, Button, Card, Chip, ChipRow, ErrorNotice, Field, Heading, Loading, Screen, styles } from "../../components/ui";
 
 type Target = { uid: string; name: string; area: string; theyOffer: string[]; youOffer: string[]; shared: string[] };
@@ -89,6 +92,7 @@ export default function NewPlan() {
       await api.createInvitation(input, requestKey);
       keys.settle();
       router.replace("/(tabs)/plans");
+      void askForNotificationsInContext({ kind: "invitation-sent", name: target.name });
     } catch (e) {
       setProblem(errorMessage(e));
       setDuplicate(e instanceof ApiError && e.reason === "invitation/duplicate-active");
@@ -102,6 +106,8 @@ export default function NewPlan() {
   if (!target) return <Loading label="Preparing your invitation" />;
 
   const suggestions = suggestMeetingTimes(target.shared.length ? target.shared : (me?.availability ?? []), new Date(), 4);
+  const { minimumDate, maximumDate } = meetingDateBounds();
+  const tomorrowSix = new Date(minimumDate.getFullYear(), minimumDate.getMonth(), minimumDate.getDate() + 1, 18, 0);
 
   return (
     <Screen edges={[]}>
@@ -143,10 +149,11 @@ export default function NewPlan() {
       ) : null}
       <View style={styles.row}>
         <View style={{ flexGrow: 1, flexBasis: 160 }}>
-          <Field label="Date" hint="YYYY-MM-DD" value={localDate} onChangeText={setLocalDate} maxLength={10} keyboardType="numbers-and-punctuation" />
+          <DateTimeField mode="date" label="Date" value={localDate} onChange={setLocalDate}
+            initial={tomorrowSix} minimumDate={minimumDate} maximumDate={maximumDate} />
         </View>
         <View style={{ flexGrow: 1, flexBasis: 120 }}>
-          <Field label="Time" hint="24-hour HH:mm" value={localTime} onChangeText={setLocalTime} maxLength={5} keyboardType="numbers-and-punctuation" />
+          <DateTimeField mode="time" label="Time" value={localTime} onChange={setLocalTime} initial={tomorrowSix} />
         </View>
       </View>
       <Text style={styles.hint}>{timeZone ? `Time zone: ${timeZone}` : "Time zone unavailable"}</Text>
@@ -156,7 +163,7 @@ export default function NewPlan() {
         <Chip role="radio" label="One meetup" selected={recurrence === "once"} onPress={() => setRecurrence("once")} />
         <Chip role="radio" label="Weekly practice" selected={recurrence === "weekly"} onPress={() => setRecurrence("weekly")} />
       </ChipRow>
-      {recurrence === "weekly" ? <Text style={styles.hint}>Same weekday and time from this date. It’s a shared intention: there are no reminders.</Text> : null}
+      {recurrence === "weekly" ? <Text style={styles.hint}>Weekly plans repeat on the same day and time. Message each other if a week doesn’t work.</Text> : null}
 
       <Field label="Public place" hint="Somewhere public, like a café or library." value={venue} onChangeText={setVenue} maxLength={MAX_VENUE} />
       <Field label="Note" value={note} onChangeText={setNote} maxLength={MAX_NOTE} multiline />

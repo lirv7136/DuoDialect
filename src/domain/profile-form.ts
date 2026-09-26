@@ -18,8 +18,6 @@ export const TEACHING_LEVELS: LanguageLevel[] = ["native", "fluent"];
 /** Levels offered for a language being practised. The backend accepts any level. */
 export const PRACTISING_LEVELS: LanguageLevel[] = ["beginner", "intermediate", "fluent"];
 
-export const SUGGESTED_LANGUAGES = ["English", "Japanese", "Spanish", "French", "Mandarin", "Korean"];
-
 export const LIMITS = {
   displayName: 40,
   bio: 400,

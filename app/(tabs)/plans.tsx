@@ -4,6 +4,8 @@ import { router } from "expo-router";
 import { api } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
 import { subscribeInvitations, type InvitationDoc } from "../../src/lib/live";
+import { askForNotificationsInContext } from "../../src/lib/notification-prompt";
+import { dismissSafetyTips, safetyTipsDismissed } from "../../src/lib/safety-tips";
 import { formatMeeting } from "../../src/domain/schedule";
 import { capitalise } from "../../src/domain/profile-form";
 import { errorMessage } from "../../src/domain/errors";
@@ -12,6 +14,7 @@ import { Body, Button, Card, EmptyState, ErrorNotice, Eyebrow, Heading, Loading,
 import { Avatar } from "../../components/avatar";
 import { usePeople } from "../../hooks/use-people";
 import { space } from "../../constants/theme";
+import { SafetyCard } from "../../components/safety-card";
 
 type Busy = Record<string, "accept" | "decline" | "cancel" | undefined>;
 
@@ -24,6 +27,10 @@ export default function Plans() {
   const inFlight = useRef(new Set<string>());
   // Name and photos for the other person on each invitation. A hidden profile reads as a neutral label.
   const people = usePeople((items ?? []).map(item => (item.fromUid === uid ? item.toUid : item.fromUid)));
+  // Unknown until read, so the tips never flash for someone who already dismissed them.
+  const [tipsDismissed, setTipsDismissed] = useState<boolean | null>(null);
+
+  useEffect(() => { void safetyTipsDismissed().then(setTipsDismissed); }, []);
 
   useEffect(() => {
     if (!uid) return;
@@ -41,8 +48,9 @@ export default function Plans() {
         await api.cancelInvitation(item.id);
       } else {
         const result = await api.respondToInvitation(item.id, action);
-        if (action === "accept" && result.conversationId) {
-          router.push({ pathname: "/chat/[chatId]", params: { chatId: result.conversationId } });
+        if (action === "accept") {
+          await askForNotificationsInContext({ kind: "invitation-accepted", name: people[item.fromUid]?.name });
+          if (result.conversationId) router.push({ pathname: "/chat/[chatId]", params: { chatId: result.conversationId } });
         }
       }
     } catch (e) {
@@ -129,7 +137,7 @@ export default function Plans() {
     <Screen>
       <Eyebrow>MAKE A LITTLE TIME FOR CONNECTION</Eyebrow>
       <Title>Good things on the calendar.</Title>
-      <Body muted>Your invitations and weekly language exchanges, in one place. Weekly plans are a shared intention: there are no reminders, and each week isn’t booked separately.</Body>
+      <Body muted>Your invitations and weekly language exchanges, in one place. Weekly plans repeat on the same day and time. Message each other if a week doesn’t work.</Body>
       <ErrorNotice message={error} />
 
       {all.length === 0 && !error ? (
@@ -140,6 +148,9 @@ export default function Plans() {
 
       {received.length ? <><Heading>{`Waiting for you (${received.length})`}</Heading>{received.map(card)}</> : null}
       {sent.length ? <><Heading>{`Sent (${sent.length})`}</Heading>{sent.map(card)}</> : null}
+      {confirmed.length && tipsDismissed === false ? (
+        <SafetyCard title="Your first meetup is confirmed. Meeting safely:" onDismiss={() => { setTipsDismissed(true); void dismissSafetyTips(); }} />
+      ) : null}
       {confirmed.length ? <><Heading>Confirmed</Heading>{confirmed.map(card)}</> : null}
       {closed.length ? <><Heading>Closed</Heading>{closed.map(card)}</> : null}
     </Screen>

@@ -2,6 +2,7 @@ import {
   createUserWithEmailAndPassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
@@ -14,6 +15,20 @@ export async function signUp(email: string, password: string) {
 
 export async function signIn(email: string, password: string) {
   return signInWithEmailAndPassword(auth, email.trim(), password);
+}
+
+/**
+ * Sends a reset link. Callers show the same confirmation whether or not an account
+ * exists, so this never reveals which emails are registered.
+ */
+export async function requestPasswordReset(email: string) {
+  try {
+    await sendPasswordResetEmail(auth, email.trim());
+  } catch (error) {
+    // An unknown email is not an error the person should see.
+    if ((error as { code?: string }).code === "auth/user-not-found") return;
+    throw error;
+  }
 }
 
 export async function logOut() {

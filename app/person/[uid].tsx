@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Text } from "react-native";
+import { Alert, Pressable, Text } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
@@ -14,6 +14,7 @@ import { useMyAccount } from "../../hooks/use-my-account";
 import { Body, Button, Card, ErrorNotice, Heading, Loading, Screen, Title, styles } from "../../components/ui";
 import { PhotoStrip } from "../../components/avatar";
 import { sanitizePhotos, type ProfilePhoto } from "../../src/domain/photos";
+import { colors, TOUCH_TARGET } from "../../constants/theme";
 
 type PersonView = {
   uid: string; displayName: string; area: string; bio: string; interests: string[];
@@ -52,7 +53,7 @@ export default function PersonScreen() {
       `Block ${person.displayName}?`,
       "Neither of you will be able to find, invite, message or see the other. Open invitations between you are cancelled. You can unblock from Your profile, but cancelled invitations stay closed.",
       [
-        { text: "Keep", style: "cancel" },
+        { text: "Cancel", style: "cancel" },
         {
           text: "Block", style: "destructive", onPress: async () => {
             if (blocking) return;
@@ -108,7 +109,18 @@ export default function PersonScreen() {
       ) : <Body muted>Your languages don’t currently make a two-way exchange with this person.</Body>}
       <Button label="Report a concern" accessibilityLabel={`Report ${person.displayName}`}
         onPress={() => router.push({ pathname: "/report/[uid]", params: { uid: person.uid, name: person.displayName } })} />
-      <Button variant="danger" label="Block" busy={blocking} accessibilityLabel={`Block ${person.displayName}`} onPress={onBlock} />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Block ${person.displayName}`}
+        accessibilityState={{ disabled: blocking, busy: blocking }}
+        disabled={blocking}
+        onPress={onBlock}
+        style={({ pressed }) => ({ minHeight: TOUCH_TARGET, alignItems: "center", justifyContent: "center", opacity: pressed || blocking ? 0.6 : 1 })}
+      >
+        <Text style={{ color: colors.danger, fontSize: 16, fontWeight: "600", textDecorationLine: "underline" }}>
+          {blocking ? "Blocking…" : `Block ${person.displayName}`}
+        </Text>
+      </Pressable>
     </Screen>
   );
 }

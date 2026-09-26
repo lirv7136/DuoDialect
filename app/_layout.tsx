@@ -32,6 +32,7 @@ export default function RootLayout() {
         <Stack.Screen name="account/edit" options={detail("Edit profile")} />
         <Stack.Screen name="account/blocked" options={detail("Blocked members")} />
         <Stack.Screen name="account/delete" options={detail("Delete account")} />
+        <Stack.Screen name="account/safety" options={detail("Meeting safely")} />
       </Stack>
     </>
   );
