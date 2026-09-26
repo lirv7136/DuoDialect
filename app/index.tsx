@@ -7,6 +7,7 @@ import { api } from "../src/lib/api";
 import { profileDestination } from "../src/domain/language-exchange";
 import { errorMessage } from "../src/domain/errors";
 import { forgetAccount, rememberAccount } from "../hooks/use-my-account";
+import { finishGate, resetGate } from "../src/lib/notification-routing";
 import { Button, Loading } from "../components/ui";
 import { colors } from "../constants/theme";
 
@@ -24,6 +25,7 @@ export default function Index() {
       try {
         if (!user) {
           forgetAccount();
+          resetGate();
           router.replace("/(auth)/login");
           return;
         }
@@ -32,7 +34,11 @@ export default function Index() {
         const result = await api.getMyAccount();
         if (currentRequest !== request || auth.currentUser?.uid !== user.uid) return;
         rememberAccount(result);
-        router.replace(profileDestination(result.profile));
+        const destination = profileDestination(result.profile);
+        router.replace(destination);
+        // A notification tapped while the app was launching opens once the person is in.
+        const tapped = finishGate();
+        if (tapped && destination === "/(tabs)/discover") router.push(tapped);
       } catch (e) {
         if (currentRequest === request) setError(errorMessage(e));
       } finally {

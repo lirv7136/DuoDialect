@@ -6,6 +6,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { auth } from "./firebase";
+import { resetGate } from "./notification-routing";
 
 export async function signUp(email: string, password: string) {
   return createUserWithEmailAndPassword(auth, email.trim(), password);
@@ -16,6 +17,7 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function logOut() {
+  resetGate();
   return signOut(auth);
 }
 

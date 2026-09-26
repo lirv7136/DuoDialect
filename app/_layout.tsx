@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { colors } from "../constants/theme";
+import { useNotificationRouting } from "../src/lib/notification-routing";
 
 export const unstable_settings = {
   initialRouteName: "index",
@@ -15,6 +16,7 @@ const detail = (title: string) => ({
 });
 
 export default function RootLayout() {
+  useNotificationRouting();
   return (
     <>
       <StatusBar style="dark" />
