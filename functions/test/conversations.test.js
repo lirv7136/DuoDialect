@@ -221,7 +221,7 @@ test("a message notification is prepared for the recipient through the stub tran
   await speaker.call("sendMessage", { conversationId, text: "See you Thursday", clientMessageId: "push-1" });
 
   const delivery = await waitFor(async () => {
-    const snap = await admin().collection("pushDeliveries").where("toUid", "==", learner.uid).get();
+    const snap = await admin().collection("pushDeliveries").where("toUid", "==", learner.uid).where("data.type", "==", "message").get();
     return snap.empty ? null : snap.docs[0];
   }, { label: "the stubbed push delivery" });
 
@@ -230,6 +230,42 @@ test("a message notification is prepared for the recipient through the stub tran
   assert.equal(delivery.get("body"), "See you Thursday");
   assert.equal(delivery.get("data").conversationId, conversationId);
   assert.equal(delivery.get("data").otherUid, speaker.uid);
+  assert.equal(delivery.get("data").type, "message");
+});
+
+test("the invitee is notified of a new plan, and the sender when it is accepted", async () => {
+  const suffix = ++pairSeq;
+  const speaker = await makeActor(`plan-speaker${suffix}`);
+  const learner = await makeActor(`plan-learner${suffix}`);
+  await speaker.call("upsertProfile", { ...CAST.alex, displayName: `Planner ${suffix}` });
+  await learner.call("upsertProfile", { ...CAST.aiko, displayName: `Invitee ${suffix}` });
+  for (const actor of [speaker, learner]) {
+    await actor.write(`pushTokens/${actor.uid}`, {
+      token: `ExponentPushToken[${actor.uid}]`, platform: "ios", updatedAt: serverTimestamp(),
+    });
+  }
+
+  const { invitation } = await speaker.call("createInvitation", {
+    toUid: learner.uid, intent: "platonic", requestKey: `plan-push-${suffix}`,
+    note: "Coffee?", meeting: futureMeeting(),
+  });
+  const invited = await waitFor(async () => {
+    const snap = await admin().collection("pushDeliveries").where("toUid", "==", learner.uid).get();
+    return snap.empty ? null : snap.docs[0];
+  }, { label: "the invitation notification" });
+  assert.equal(invited.get("title"), `Planner ${suffix}`);
+  assert.match(invited.get("body"), /^Suggested a language swap on /);
+  assert.equal(invited.get("data").type, "plan");
+  assert.equal(invited.get("data").invitationId, invitation.id);
+
+  const accepted = await learner.call("respondToInvitation", { invitationId: invitation.id, action: "accept" });
+  const heard = await waitFor(async () => {
+    const snap = await admin().collection("pushDeliveries").where("toUid", "==", speaker.uid).get();
+    return snap.empty ? null : snap.docs[0];
+  }, { label: "the acceptance notification" });
+  assert.equal(heard.get("title"), `Invitee ${suffix}`);
+  assert.match(heard.get("body"), /^Accepted your plan for .*Say hello!$/);
+  assert.equal(heard.get("data").conversationId, accepted.conversationId);
 });
 
 test("no notification is prepared when a block exists", async () => {
@@ -248,7 +284,7 @@ test("no notification is prepared when a block exists", async () => {
   });
 
   await new Promise((resolve) => setTimeout(resolve, 2500));
-  const snap = await admin().collection("pushDeliveries").where("toUid", "==", learner.uid).get();
+  const snap = await admin().collection("pushDeliveries").where("toUid", "==", learner.uid).where("data.type", "==", "message").get();
   assert.equal(snap.size, 0, "a blocked recipient must not be notified");
 });
 

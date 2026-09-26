@@ -11,7 +11,7 @@
  */
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2/options");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
@@ -25,6 +25,7 @@ const { setBlock, reportUser } = require("./lib/safety");
 const { requestAccountDeletion, assertNotSuspended } = require("./lib/accounts");
 const { assertModerator, listReports, getReportContext, actOnReport } = require("./lib/moderation");
 const { deliver } = require("./lib/notifier");
+const { invitationNotice, acceptedNotice } = require("./lib/notifications");
 const { refs } = require("./lib/refs");
 
 setGlobalOptions({ region: "australia-southeast1", maxInstances: 10 });
@@ -148,7 +149,46 @@ exports.onConversationMessageCreated = onDocumentCreated(
       toUid,
       title: String((fromProfile.exists && fromProfile.get("displayName")) || "New message"),
       body: text.length > 120 ? `${text.slice(0, 117)}...` : text,
-      data: { conversationId: event.params.conversationId, otherUid: fromUid },
+      data: { type: "message", conversationId: event.params.conversationId, otherUid: fromUid },
     });
   },
 );
+
+/**
+ * Plan notifications: the invitee hears about a new invitation, and the person who
+ * suggested it hears when it is accepted. Declines and cancellations stay quiet.
+ * Blocks are re-checked in both directions, as for messages.
+ */
+async function notifyAboutPlan(invitationId, invitation, { toUid, aboutUid, notice }) {
+  const r = refs(db);
+  const [blockOut, blockIn, aboutProfile] = await db.getAll(
+    r.block(aboutUid, toUid), r.block(toUid, aboutUid), r.profile(aboutUid),
+  );
+  if (blockOut.exists || blockIn.exists) {
+    logger.info("Push skipped: blocked", { invitationId });
+    return;
+  }
+  const name = aboutProfile.exists ? aboutProfile.get("displayName") : null;
+  await deliver(db, {
+    toUid,
+    ...notice(invitation, name),
+    data: { type: "plan", invitationId, otherUid: aboutUid, conversationId: invitation.conversationId || null },
+  });
+}
+
+exports.onInvitationCreated = onDocumentCreated("invitations/{invitationId}", async (event) => {
+  const invitation = event.data && event.data.data();
+  if (!invitation || invitation.status !== "pending" || !invitation.fromUid || !invitation.toUid) return;
+  await notifyAboutPlan(event.params.invitationId, invitation, {
+    toUid: invitation.toUid, aboutUid: invitation.fromUid, notice: invitationNotice,
+  });
+});
+
+exports.onInvitationUpdated = onDocumentUpdated("invitations/{invitationId}", async (event) => {
+  const before = event.data && event.data.before.data();
+  const after = event.data && event.data.after.data();
+  if (!before || !after || before.status === "accepted" || after.status !== "accepted") return;
+  await notifyAboutPlan(event.params.invitationId, after, {
+    toUid: after.fromUid, aboutUid: after.toUid, notice: acceptedNotice,
+  });
+});
