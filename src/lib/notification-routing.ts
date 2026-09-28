@@ -26,9 +26,14 @@ export function resetGate() {
   pending = null;
 }
 
+// The hook throws on web (there is no native module to ask), so web gets a stand-in. The
+// platform never changes at runtime, so the hook order is stable.
+const useLastResponse: () => Notifications.NotificationResponse | null | undefined =
+  Platform.OS === "web" ? () => undefined : Notifications.useLastNotificationResponse;
+
 /** Opens the screen a tapped notification points to. Mount once, in the root layout. */
 export function useNotificationRouting() {
-  const response = Notifications.useLastNotificationResponse();
+  const response = useLastResponse();
   const handled = useRef<string | null>(null);
 
   useEffect(() => {
