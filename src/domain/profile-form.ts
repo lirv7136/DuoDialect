@@ -179,3 +179,14 @@ export function formatLanguages(list: UserLang[] | undefined): string {
   if (!list?.length) return "—";
   return list.map(item => `${capitalise(item.lang)} · ${item.level}`).join(", ");
 }
+
+/**
+ * Adds one typed interest to the list, as the chip input does: trimmed, de-duplicated
+ * ignoring case, cut to the length limit, and ignored once the list is full.
+ */
+export function addInterest(list: readonly string[], raw: string): string[] {
+  const value = raw.replace(/[,\s]+/g, " ").trim().slice(0, LIMITS.interest).trim();
+  if (!value || list.length >= LIMITS.interests) return [...list];
+  if (list.some(item => item.toLocaleLowerCase("en") === value.toLocaleLowerCase("en"))) return [...list];
+  return [...list, value];
+}

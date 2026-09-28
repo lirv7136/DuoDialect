@@ -4,11 +4,13 @@ import type { LanguageLevel, UserLang } from "../src/domain/language-exchange";
 import { LIMITS, TEACHING_LEVELS, capitalise } from "../src/domain/profile-form";
 import { normalizeLanguage } from "../src/domain/language-exchange";
 import { LANGUAGES, POPULAR_LANGUAGES, displayLanguage, isListedLanguage, searchLanguages } from "../src/domain/languages";
-import { Button, Card, Chip, ChipRow, Field, Heading, styles } from "./ui";
+import { Button, Card, Chip, ChipRow, Field, Heading, IconButton, styles } from "./ui";
+import { Monogram } from "./exchange-strip";
+import { colors, space } from "../constants/theme";
 
 type Props = {
   title: string;
-  hint: string;
+  hint?: string;
   value: UserLang[];
   onChange: (next: UserLang[]) => void;
   /** Defaults to native and fluent: the only levels that can be offered to a partner. */
@@ -42,14 +44,20 @@ export function LanguageEditor({ title, hint, value, onChange, levels = TEACHING
   return (
     <View style={{ gap: 8 }}>
       <Text accessibilityRole="header" style={styles.label}>{title}</Text>
-      <Text style={styles.hint}>{hint}</Text>
+      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       {value.map((item, index) => {
         const name = item.lang.trim() ? displayLanguage(item.lang) : `Language ${index + 1}`;
         // A level saved before this list was narrowed stays visible so it can be changed.
         const choices = levels.includes(item.level) ? levels : [...levels, item.level];
         return (
-          <Card key={index}>
-            {isListedLanguage(item.lang) ? <Heading>{name}</Heading> : (
+          <Card key={index} style={{ gap: space.sm }}>
+            <View style={styles.row}>
+              <Monogram language={item.lang} filled={false} size={32} />
+              <View style={{ flex: 1 }}>{isListedLanguage(item.lang) ? <Heading>{name}</Heading> : null}</View>
+              <IconButton icon="close" label={`Remove ${name}`} color={colors.muted}
+                onPress={() => onChange(value.filter((_, i) => i !== index))} />
+            </View>
+            {isListedLanguage(item.lang) ? null : (
               <Field
                 label={`Language ${index + 1}`}
                 value={item.lang}
@@ -59,7 +67,6 @@ export function LanguageEditor({ title, hint, value, onChange, levels = TEACHING
                 placeholder="e.g. Xhosa"
               />
             )}
-            <Text style={styles.hint}>Level</Text>
             <ChipRow>
               {choices.map(level => (
                 <Chip
@@ -72,12 +79,6 @@ export function LanguageEditor({ title, hint, value, onChange, levels = TEACHING
                 />
               ))}
             </ChipRow>
-            <Button
-              variant="ghost"
-              label="Remove"
-              accessibilityLabel={`Remove ${name}`}
-              onPress={() => onChange(value.filter((_, i) => i !== index))}
-            />
           </Card>
         );
       })}
@@ -90,7 +91,7 @@ export function LanguageEditor({ title, hint, value, onChange, levels = TEACHING
             maxLength={LIMITS.language}
             autoCapitalize="words"
             autoCorrect={false}
-            placeholder="Search, e.g. Japanese"
+            placeholder="Search languages"
             returnKeyType="search"
           />
           {shown.length ? (
@@ -98,26 +99,27 @@ export function LanguageEditor({ title, hint, value, onChange, levels = TEACHING
               {shown.map(option => (
                 <Chip
                   key={option.name}
-                  label={`+ ${option.name}`}
+                  label={option.name}
+                  icon="add"
+                  role="button"
                   accessibilityLabel={`Add ${option.name}`}
-                  selected={false}
                   onPress={() => add(option.name)}
                 />
               ))}
             </ChipRow>
           ) : null}
           {typed && !exact && !alreadyListed ? (
-            <Button label={`Add “${typed}”`} hint="Adds a language that isn’t in the list" onPress={() => add(typed)} />
+            <Button icon="add" label={`Add “${typed}”`} hint="Adds a language that isn’t in the list" onPress={() => add(typed)} />
           ) : null}
-          {alreadyListed ? <Text style={styles.hint}>{`${displayLanguage(typed)} is already listed.`}</Text> : null}
+          {alreadyListed ? <Text style={styles.hint} accessibilityLiveRegion="polite">Already added.</Text> : null}
           {!typed ? (
             <Button
               variant="ghost"
-              label={browsing ? "Show fewer languages" : `Browse all ${LANGUAGES.length} languages`}
+              label={browsing ? "Fewer" : "Browse all"}
+              accessibilityLabel={browsing ? "Show fewer languages" : `Browse all ${LANGUAGES.length} languages`}
               onPress={() => setBrowsing(current => !current)}
             />
           ) : null}
-          {!typed ? <Text style={styles.hint}>Not listed? Type its name above to add it.</Text> : null}
         </>
       ) : <Text style={styles.hint}>{`Up to ${LIMITS.languages} languages.`}</Text>}
     </View>

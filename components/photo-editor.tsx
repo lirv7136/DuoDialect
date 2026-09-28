@@ -6,22 +6,30 @@
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import type { usePhotoEditor } from "../hooks/use-photo-editor";
 import { MAX_PHOTOS, slotStatusLabel } from "../src/domain/photos";
-import { Button, ErrorNotice, styles } from "./ui";
-import { PhotoTile } from "./avatar";
-import { colors, space, TOUCH_TARGET } from "../constants/theme";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { Button, ErrorNotice, styles, type IconName } from "./ui";
+import { InfoButton } from "./sheet";
+import { PhotoTile, bubbleShape } from "./avatar";
+import { colors, fonts, space, TOUCH_TARGET } from "../constants/theme";
 
 const TILE = 104;
 
-export function PhotoEditor({ editor }: { editor: ReturnType<typeof usePhotoEditor> }) {
+export function PhotoEditor({ editor, icon }: { editor: ReturnType<typeof usePhotoEditor>; icon?: IconName }) {
   const { slots, notice, saving, canAdd, add, remove, makeMain } = editor;
   const total = slots.length;
 
   return (
     <View style={{ gap: space.sm }}>
-      <Text accessibilityRole="header" style={styles.label}>Photos (optional)</Text>
-      <Text style={styles.hint}>
-        {`Up to ${MAX_PHOTOS}. A clear photo of you helps language partners recognise you when you meet. The first is your main photo. Each photo is checked automatically before anyone else can see it.`}
-      </Text>
+      <View style={[styles.row, { justifyContent: "space-between", flexWrap: "nowrap" }]}>
+        <View style={[styles.row, { gap: 0, flexShrink: 1 }]}>
+          {icon ? <Ionicons name={icon} size={16} color={colors.text} style={{ marginRight: space.xs }} /> : null}
+          <Text accessibilityRole="header" style={styles.label}>Photos</Text>
+          <InfoButton label="About photos" title="Photos"
+            body={`Optional, up to ${MAX_PHOTOS}. The first is your main photo. Each is checked automatically before anyone sees it.`} />
+        </View>
+        <Text style={styles.hint} accessibilityLabel={`${total} of ${MAX_PHOTOS} photos`}>{`${total}/${MAX_PHOTOS}`}</Text>
+      </View>
+      <Text style={styles.hint}>A clear photo helps partners find you.</Text>
 
       <View style={[styles.row, { alignItems: "flex-start" }]}>
         {slots.map((slot, index) => {
@@ -35,17 +43,17 @@ export function PhotoEditor({ editor }: { editor: ReturnType<typeof usePhotoEdit
                   <View
                     accessibilityLiveRegion="polite"
                     style={{
-                      position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: 12,
+                      position: "absolute", left: 0, right: 0, top: 0, bottom: 0, ...bubbleShape(TILE),
                       backgroundColor: "rgba(31, 58, 95, 0.6)", alignItems: "center", justifyContent: "center", gap: 4, padding: 4,
                     }}
                   >
                     <ActivityIndicator color={colors.onPrimary} />
-                    <Text style={{ color: colors.onPrimary, fontSize: 13, fontWeight: "700", textAlign: "center" }}>{status}</Text>
+                    <Text style={{ color: colors.onPrimary, fontSize: 13, fontFamily: fonts.bold, textAlign: "center" }}>{status}</Text>
                   </View>
                 ) : null}
                 {index === 0 && !status ? (
-                  <View style={{ position: "absolute", left: 6, top: 6, backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1 }}>
-                    <Text style={{ color: colors.onPrimary, fontSize: 12, fontWeight: "700" }}>Main</Text>
+                  <View style={{ position: "absolute", left: 8, top: 8, backgroundColor: colors.accent, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
+                    <Text style={{ color: colors.primary, fontSize: 12, fontFamily: fonts.bold }}>Main</Text>
                   </View>
                 ) : null}
               </View>
@@ -66,12 +74,12 @@ export function PhotoEditor({ editor }: { editor: ReturnType<typeof usePhotoEdit
             accessibilityHint="Opens your photo library"
             onPress={() => void add()}
             style={({ pressed }) => [{
-              width: TILE, height: TILE, minHeight: TOUCH_TARGET, borderRadius: 12, borderWidth: 1, borderStyle: "dashed",
+              width: TILE, height: TILE, minHeight: TOUCH_TARGET, ...bubbleShape(TILE), borderWidth: 1.5, borderStyle: "dashed",
               borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface,
             }, pressed && { opacity: 0.8 }]}
           >
-            <Text style={{ color: colors.primary, fontSize: 28, fontWeight: "700" }} allowFontScaling={false}>+</Text>
-            <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "700" }}>Add photo</Text>
+            <Ionicons name="camera-outline" size={28} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontSize: 14, fontFamily: fonts.bold }}>Add</Text>
           </Pressable>
         ) : null}
       </View>

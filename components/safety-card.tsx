@@ -1,27 +1,27 @@
 import { Text, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { SAFETY_FOOTNOTE, SAFETY_TIPS } from "../src/domain/safety-copy";
 import { Button, Card, Heading, styles } from "./ui";
 import { colors, space } from "../constants/theme";
 
-export const SAFETY_POINTS = [
-  "Meet somewhere public and busy, like a café or library.",
-  "Tell a friend where you’ll be and who you’re meeting.",
-  "You can leave any time, and it’s fine to say it isn’t working.",
-  "Never share your home address or money details.",
-] as const;
+export const SAFETY_POINTS = SAFETY_TIPS.map(tip => tip.text);
 
-/** Short guidance for meeting a language partner. Reused in Plans, chat and Profile. */
-export function SafetyCard({ onDismiss, title = "Meeting safely" }: { onDismiss?: () => void; title?: string }) {
+/** Four short habits for meeting a language partner. Reused in Plans, chat and Meeting safely. */
+export function SafetyCard({ onDismiss, title = "Meeting safely", footnote = true }: { onDismiss?: () => void; title?: string; footnote?: boolean }) {
   return (
-    <Card style={{ backgroundColor: colors.surfaceNavySoft }}>
+    <Card style={{ backgroundColor: colors.surfaceNavySoft, borderColor: colors.surfaceNavySoft }}>
       <Heading>{title}</Heading>
-      <View style={{ gap: space.xs }} accessibilityRole="list">
-        {SAFETY_POINTS.map(point => (
-          <Text key={point} style={styles.body}>{`•  ${point}`}</Text>
+      <View style={{ gap: space.sm }} accessibilityRole="list">
+        {SAFETY_TIPS.map(tip => (
+          <View key={tip.text} style={{ flexDirection: "row", gap: space.md, alignItems: "center" }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name={tip.icon} size={18} color={colors.primary} />
+            </View>
+            <Text style={[styles.body, { flexShrink: 1 }]}>{tip.text}</Text>
+          </View>
         ))}
       </View>
-      <Text style={styles.hint}>
-        If someone makes you uncomfortable, report or block them from their profile, or from the ⋯ menu in your chat.
-      </Text>
+      {footnote ? <Text style={styles.hint}>{SAFETY_FOOTNOTE}</Text> : null}
       {onDismiss ? <Button variant="ghost" label="Got it" accessibilityLabel="Dismiss meeting safely tips" onPress={onDismiss} /> : null}
     </Card>
   );

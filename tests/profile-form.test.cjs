@@ -72,3 +72,16 @@ test('stored profiles become well formed drafts; interests are parsed and de-dup
   assert.equal(d.bio, '');
   assert.equal(JSON.stringify(f.parseInterests(' Coffee, coffee ,Film,, ')), JSON.stringify(['Coffee', 'Film']));
 });
+
+test('the interest chip input trims, de-duplicates, caps length and stops at the limit', () => {
+  const same = (a, b) => assert.equal(JSON.stringify(a), JSON.stringify(b));
+  same(f.addInterest([], '  Coffee '), ['Coffee']);
+  same(f.addInterest(['Coffee'], 'coffee'), ['Coffee']);
+  same(f.addInterest(['Coffee'], '   '), ['Coffee']);
+  same(f.addInterest([], 'films,  hiking'), ['films hiking'], 'commas and runs of spaces collapse');
+  assert.equal(f.addInterest([], 'x'.repeat(40))[0].length, 24);
+  const full = Array.from({ length: 8 }, (_, i) => `i${i}`);
+  same(f.addInterest(full, 'one more'), full);
+  const list = ['a'];
+  assert.notEqual(f.addInterest(list, 'b'), list, 'returns a new array');
+});

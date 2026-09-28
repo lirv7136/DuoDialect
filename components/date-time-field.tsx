@@ -70,7 +70,8 @@ export function DateTimeField({ mode, label, value, onChange, initial, minimumDa
         accessibilityLabel={`${label}: ${shown ?? "not chosen"}`}
         hint={Platform.OS === "ios" && open ? "Closes the picker" : `Opens a ${mode} picker`}
         onPress={onPress}
-        style={{ justifyContent: "flex-start" }}
+        icon={mode === "date" ? "calendar-outline" : "time-outline"}
+        align="start"
       />
       {Platform.OS === "ios" && open ? (
         <View>

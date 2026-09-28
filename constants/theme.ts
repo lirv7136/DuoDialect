@@ -1,3 +1,5 @@
+import type { TextStyle } from "react-native";
+
 /**
  * Talkeven design tokens (docs/design/DESIGN-SPEC.md): navy, coral and cream, taken from
  * the app icon. Contrast ratios are against `background` (#f5f5ef).
@@ -61,8 +63,8 @@ export const type = {
   body: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 23, color: colors.text },
   label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, color: colors.text },
   caption: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, color: colors.muted },
-  numeric: { fontFamily: fonts.bold, fontVariant: ["tabular-nums" as const], color: colors.text },
-} as const;
+  numeric: { fontFamily: fonts.bold, fontVariant: ["tabular-nums"], color: colors.text },
+} satisfies Record<string, TextStyle>;
 
 /** Dynamic Type caps: text still grows, but big headings never push content off screen. */
 export const MAX_FONT_SCALE = { display: 1.6, body: 2, compact: 1.4 } as const;
