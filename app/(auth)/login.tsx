@@ -80,7 +80,7 @@ export default function Login() {
 
         <ErrorNotice message={error} />
         {notice ? (
-          <Card style={{ backgroundColor: colors.pale }}>
+          <Card style={{ backgroundColor: colors.surfaceNavySoft }}>
             <Body>{notice}</Body>
           </Card>
         ) : null}

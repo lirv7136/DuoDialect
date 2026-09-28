@@ -88,13 +88,13 @@ export default function Discover() {
   }, []);
 
   return (
-    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(false, null, true)} tintColor={colors.green} />}>
+    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(false, null, true)} tintColor={colors.primary} />}>
       <Eyebrow>LESS SCROLLING. MORE CONVERSATION.</Eyebrow>
       <Title>Your next conversation starts here.</Title>
       <Body muted>Meet someone who speaks your next language, and share yours in return.</Body>
 
       {profile ? (
-        <Card style={{ backgroundColor: colors.pale }}>
+        <Card style={{ backgroundColor: colors.surfaceNavySoft }}>
           <Text style={styles.body}>
             {`Your exchange: you share ${list(profile.offers) || "—"} and practise ${list(profile.seeks) || "—"}.`}
           </Text>

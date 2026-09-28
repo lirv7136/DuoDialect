@@ -152,7 +152,7 @@ export default function ChatScreen() {
       hitSlop={8}
       style={{ minWidth: TOUCH_TARGET, minHeight: TOUCH_TARGET, alignItems: "center", justifyContent: "center" }}
     >
-      <Text style={{ color: colors.green, fontSize: 24, fontWeight: "700" }}>⋯</Text>
+      <Text style={{ color: colors.primary, fontSize: 24, fontWeight: "700" }}>⋯</Text>
     </Pressable>
   );
   const exchange = conversation?.languages
@@ -209,8 +209,8 @@ export default function ChatScreen() {
                 accessibilityLabel={`${mine ? "You" : title}, ${clock(item.createdAt)}: ${item.text}`}
                 style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "85%" }}
               >
-                <View style={{ padding: space.md, borderRadius: 14, backgroundColor: mine ? colors.green : colors.paper, borderWidth: 1, borderColor: mine ? colors.green : colors.line }}>
-                  <Text style={{ color: mine ? colors.onGreen : colors.ink, fontSize: 16 }}>{item.text}</Text>
+                <View style={{ padding: space.md, borderRadius: 14, backgroundColor: mine ? colors.primary : colors.surface, borderWidth: 1, borderColor: mine ? colors.primary : colors.line }}>
+                  <Text style={{ color: mine ? colors.onPrimary : colors.text, fontSize: 16 }}>{item.text}</Text>
                 </View>
                 <Text style={[styles.hint, { alignSelf: mine ? "flex-end" : "flex-start", fontSize: 12 }]}>{clock(item.createdAt)}</Text>
               </View>

@@ -33,11 +33,11 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.green,
+        tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         // Each tab item gets 56pt: the 28pt icon, its label and padding. The default bar
         // left the label about 9pt and clipped it.
-        tabBarStyle: { backgroundColor: colors.paper, height: 64 + insets.bottom, paddingTop: 4, paddingBottom: insets.bottom + 4 },
+        tabBarStyle: { backgroundColor: colors.surface, height: 64 + insets.bottom, paddingTop: 4, paddingBottom: insets.bottom + 4 },
         tabBarLabelStyle: { fontSize: 12 },
       }}
     >

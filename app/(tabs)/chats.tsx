@@ -60,7 +60,7 @@ export default function Chats() {
             onPress={() => router.push({ pathname: "/chat/[chatId]", params: { chatId: row.conversationId, otherUid: row.otherUid } })}
             style={({ pressed }) => [
               {
-                backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: 16,
+                backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: 16,
                 minHeight: TOUCH_TARGET, flexDirection: "row", alignItems: "center", gap: space.md,
               },
               pressed && { opacity: 0.8 },
@@ -72,8 +72,8 @@ export default function Chats() {
                 <Text style={[styles.label, { flexShrink: 1 }]}>{name}</Text>
                 <View style={styles.row}>
                   {row.unread > 0 ? (
-                    <View style={{ backgroundColor: colors.green, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
-                      <Text style={{ color: colors.onGreen, fontWeight: "700" }}>{row.unread}</Text>
+                    <View style={{ backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
+                      <Text style={{ color: colors.onPrimary, fontWeight: "700" }}>{row.unread}</Text>
                     </View>
                   ) : null}
                   <Text style={styles.hint}>{relTime(row.lastAt)}</Text>

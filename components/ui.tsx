@@ -72,7 +72,7 @@ export function Button({ label, onPress, variant = "secondary", disabled, busy, 
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        variant === "primary" && { backgroundColor: colors.green, borderColor: colors.green },
+        variant === "primary" && { backgroundColor: colors.primary, borderColor: colors.primary },
         variant === "danger" && { backgroundColor: colors.danger, borderColor: colors.danger },
         variant === "ghost" && { borderColor: "transparent", backgroundColor: "transparent" },
         inactive && { opacity: 0.55 },
@@ -80,8 +80,8 @@ export function Button({ label, onPress, variant = "secondary", disabled, busy, 
         style,
       ]}
     >
-      {busy ? <ActivityIndicator color={filled ? colors.onGreen : colors.green} /> : null}
-      <Text style={[styles.buttonText, filled && { color: colors.onGreen }, variant === "ghost" && { color: colors.green }]}>
+      {busy ? <ActivityIndicator color={filled ? colors.onPrimary : colors.primary} /> : null}
+      <Text style={[styles.buttonText, filled && { color: colors.onPrimary }, variant === "ghost" && { color: colors.primary }]}>
         {busy && busyLabel ? busyLabel : label}
       </Text>
     </Pressable>
@@ -98,9 +98,9 @@ export function Chip({ label, selected, onPress, role = "checkbox", accessibilit
       accessibilityState={{ checked: selected }}
       onPress={onPress}
       hitSlop={4}
-      style={[styles.chip, selected && { backgroundColor: colors.green, borderColor: colors.green }]}
+      style={[styles.chip, selected && { backgroundColor: colors.primary, borderColor: colors.primary }]}
     >
-      <Text style={[styles.chipText, selected && { color: colors.onGreen }]}>{selected ? `✓ ${label}` : label}</Text>
+      <Text style={[styles.chipText, selected && { color: colors.onPrimary }]}>{selected ? `✓ ${label}` : label}</Text>
     </Pressable>
   );
 }
@@ -131,7 +131,7 @@ export function Card({ children, style }: { children: ReactNode; style?: ViewSty
 
 export function Pill({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" }) {
   return (
-    <View style={[styles.pill, tone === "good" && { backgroundColor: colors.pale }, tone === "warn" && { backgroundColor: "#f6e3d9" }]}>
+    <View style={[styles.pill, tone === "good" && { backgroundColor: colors.surfaceNavySoft }, tone === "warn" && { backgroundColor: colors.accentSoft }]}>
       <Text style={styles.pillText}>{label}</Text>
     </View>
   );
@@ -160,7 +160,7 @@ export function ErrorNotice({ message, onRetry }: { message: string | null; onRe
 export function Loading({ label }: { label: string }) {
   return (
     <View style={styles.loading}>
-      <ActivityIndicator color={colors.green} accessibilityLabel={label} />
+      <ActivityIndicator color={colors.primary} accessibilityLabel={label} />
       <Text style={styles.hint}>{label}</Text>
     </View>
   );
@@ -169,32 +169,32 @@ export function Loading({ label }: { label: string }) {
 export const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   scrollContent: { padding: space.lg, gap: space.md, paddingBottom: space.xl * 2 },
-  eyebrow: { color: colors.orange, fontSize: 12, fontWeight: "700", letterSpacing: 1.2 },
-  title: { color: colors.ink, fontSize: 28, fontWeight: "700" },
-  heading: { color: colors.ink, fontSize: 20, fontWeight: "700" },
-  body: { color: colors.ink, fontSize: 16, lineHeight: 22 },
-  label: { color: colors.ink, fontSize: 15, fontWeight: "700" },
+  eyebrow: { color: colors.accentInk, fontSize: 12, fontWeight: "700", letterSpacing: 1.2 },
+  title: { color: colors.text, fontSize: 28, fontWeight: "700" },
+  heading: { color: colors.text, fontSize: 20, fontWeight: "700" },
+  body: { color: colors.text, fontSize: 16, lineHeight: 22 },
+  label: { color: colors.text, fontSize: 15, fontWeight: "700" },
   hint: { color: colors.muted, fontSize: 14 },
   input: {
     minHeight: TOUCH_TARGET, borderWidth: 1, borderColor: colors.line, borderRadius: 10,
-    paddingHorizontal: space.md, paddingVertical: space.sm, fontSize: 16, color: colors.ink, backgroundColor: colors.paper,
+    paddingHorizontal: space.md, paddingVertical: space.sm, fontSize: 16, color: colors.text, backgroundColor: colors.surface,
   },
   button: {
     minHeight: TOUCH_TARGET, paddingHorizontal: space.lg, paddingVertical: space.sm, borderRadius: 10,
-    borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper,
+    borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface,
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm,
   },
-  buttonText: { color: colors.ink, fontSize: 16, fontWeight: "700", textAlign: "center", flexShrink: 1 },
+  buttonText: { color: colors.text, fontSize: 16, fontWeight: "700", textAlign: "center", flexShrink: 1 },
   chip: {
     minHeight: 44, paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: 22,
-    borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, justifyContent: "center",
+    borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, justifyContent: "center",
   },
-  chipText: { color: colors.ink, fontSize: 15 },
+  chipText: { color: colors.text, fontSize: 15 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
-  card: { backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: space.lg, gap: space.sm },
+  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: space.lg, gap: space.sm },
   pill: { alignSelf: "flex-start", backgroundColor: colors.line, borderRadius: 12, paddingHorizontal: space.sm, paddingVertical: 2 },
-  pillText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
-  error: { backgroundColor: "#f8e5df", borderRadius: 10, padding: space.md, gap: space.sm },
+  pillText: { color: colors.text, fontSize: 13, fontWeight: "700" },
+  error: { backgroundColor: colors.dangerSoft, borderRadius: 10, padding: space.md, gap: space.sm },
   errorText: { color: colors.danger, fontSize: 15 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.sm, padding: space.xl },
   row: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, alignItems: "center" },

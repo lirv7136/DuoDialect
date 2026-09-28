@@ -34,7 +34,7 @@ export default function Signup() {
   }
 
   const open = (url: string) => { void WebBrowser.openBrowserAsync(url); };
-  const link = { color: colors.green, fontWeight: "700" as const, textDecorationLine: "underline" as const };
+  const link = { color: colors.primary, fontWeight: "700" as const, textDecorationLine: "underline" as const };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>

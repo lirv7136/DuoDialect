@@ -18,11 +18,11 @@ function Initials({ name, size, label }: { name: string; size: number; label: st
       accessibilityRole="image"
       accessibilityLabel={label}
       style={{
-        width: size, height: size, borderRadius: size / 2, backgroundColor: colors.pale,
+        width: size, height: size, borderRadius: size / 2, backgroundColor: colors.surfaceNavySoft,
         borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center",
       }}
     >
-      <Text style={{ color: colors.green, fontWeight: "700", fontSize: Math.max(12, Math.round(size * 0.38)) }} allowFontScaling={false}>
+      <Text style={{ color: colors.primary, fontWeight: "700", fontSize: Math.max(12, Math.round(size * 0.38)) }} allowFontScaling={false}>
         {initialsFor(name)}
       </Text>
     </View>
@@ -37,7 +37,7 @@ function StoredImage({ path, label, width, height, radius, name }: {
     return radius >= width / 2
       ? <Initials name={name} size={width} label={label} />
       : <View accessible accessibilityRole="image" accessibilityLabel={label}
-          style={{ width, height, borderRadius: radius, backgroundColor: colors.pale }} />;
+          style={{ width, height, borderRadius: radius, backgroundColor: colors.surfaceNavySoft }} />;
   }
   return (
     <Image
@@ -49,7 +49,7 @@ function StoredImage({ path, label, width, height, radius, name }: {
       accessible
       accessibilityRole="image"
       accessibilityLabel={label}
-      style={{ width, height, borderRadius: radius, backgroundColor: colors.pale }}
+      style={{ width, height, borderRadius: radius, backgroundColor: colors.surfaceNavySoft }}
     />
   );
 }
@@ -81,9 +81,9 @@ export function PhotoTile({ localUri, path, label, size }: { localUri: string | 
   if (localUri) {
     return (
       <Image source={{ uri: localUri }} contentFit="cover" accessible accessibilityRole="image" accessibilityLabel={label}
-        style={{ width: size, height: size, borderRadius: 12, backgroundColor: colors.pale }} />
+        style={{ width: size, height: size, borderRadius: 12, backgroundColor: colors.surfaceNavySoft }} />
     );
   }
   if (path) return <StoredImage path={path} name="" label={label} width={size} height={size} radius={12} />;
-  return <View style={{ width: size, height: size, borderRadius: 12, backgroundColor: colors.pale }} />;
+  return <View style={{ width: size, height: size, borderRadius: 12, backgroundColor: colors.surfaceNavySoft }} />;
 }

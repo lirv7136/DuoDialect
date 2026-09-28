@@ -12,7 +12,7 @@ export const SAFETY_POINTS = [
 /** Short guidance for meeting a language partner. Reused in Plans, chat and Profile. */
 export function SafetyCard({ onDismiss, title = "Meeting safely" }: { onDismiss?: () => void; title?: string }) {
   return (
-    <Card style={{ backgroundColor: colors.pale }}>
+    <Card style={{ backgroundColor: colors.surfaceNavySoft }}>
       <Heading>{title}</Heading>
       <View style={{ gap: space.xs }} accessibilityRole="list">
         {SAFETY_POINTS.map(point => (

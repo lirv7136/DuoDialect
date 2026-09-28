@@ -36,16 +36,16 @@ export function PhotoEditor({ editor }: { editor: ReturnType<typeof usePhotoEdit
                     accessibilityLiveRegion="polite"
                     style={{
                       position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: 12,
-                      backgroundColor: "rgba(36, 59, 51, 0.6)", alignItems: "center", justifyContent: "center", gap: 4, padding: 4,
+                      backgroundColor: "rgba(31, 58, 95, 0.6)", alignItems: "center", justifyContent: "center", gap: 4, padding: 4,
                     }}
                   >
-                    <ActivityIndicator color={colors.onGreen} />
-                    <Text style={{ color: colors.onGreen, fontSize: 13, fontWeight: "700", textAlign: "center" }}>{status}</Text>
+                    <ActivityIndicator color={colors.onPrimary} />
+                    <Text style={{ color: colors.onPrimary, fontSize: 13, fontWeight: "700", textAlign: "center" }}>{status}</Text>
                   </View>
                 ) : null}
                 {index === 0 && !status ? (
-                  <View style={{ position: "absolute", left: 6, top: 6, backgroundColor: colors.green, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1 }}>
-                    <Text style={{ color: colors.onGreen, fontSize: 12, fontWeight: "700" }}>Main</Text>
+                  <View style={{ position: "absolute", left: 6, top: 6, backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1 }}>
+                    <Text style={{ color: colors.onPrimary, fontSize: 12, fontWeight: "700" }}>Main</Text>
                   </View>
                 ) : null}
               </View>
@@ -67,11 +67,11 @@ export function PhotoEditor({ editor }: { editor: ReturnType<typeof usePhotoEdit
             onPress={() => void add()}
             style={({ pressed }) => [{
               width: TILE, height: TILE, minHeight: TOUCH_TARGET, borderRadius: 12, borderWidth: 1, borderStyle: "dashed",
-              borderColor: colors.green, alignItems: "center", justifyContent: "center", backgroundColor: colors.paper,
+              borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface,
             }, pressed && { opacity: 0.8 }]}
           >
-            <Text style={{ color: colors.green, fontSize: 28, fontWeight: "700" }} allowFontScaling={false}>+</Text>
-            <Text style={{ color: colors.green, fontSize: 14, fontWeight: "700" }}>Add photo</Text>
+            <Text style={{ color: colors.primary, fontSize: 28, fontWeight: "700" }} allowFontScaling={false}>+</Text>
+            <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "700" }}>Add photo</Text>
           </Pressable>
         ) : null}
       </View>
