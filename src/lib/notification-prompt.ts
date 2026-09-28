@@ -55,8 +55,8 @@ export type PromptContext = { kind: "invitation-sent" | "invitation-accepted"; n
 function copyFor({ kind, name }: PromptContext) {
   const who = name || "your partner";
   return kind === "invitation-sent"
-    ? { title: "Know when they answer?", body: `Turn on notifications and we’ll tell you when ${who} replies to your invitation or sends a message.` }
-    : { title: "Don’t miss a message", body: `Turn on notifications so you see ${who}’s messages and any change of plan.` };
+    ? { title: `Get a ping when ${who} replies?`, body: undefined }
+    : { title: `Don’t miss ${who}’s messages.`, body: undefined };
 }
 
 /** Explains, then asks. Skipped if already on, declined on this install, or unsupported. */

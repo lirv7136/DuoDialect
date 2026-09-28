@@ -5,7 +5,8 @@ import { PRACTISING_LEVELS, draftFromProfile, validateLanguages } from "../../sr
 import { onboardingDraft } from "../../src/lib/onboarding-draft";
 import { useMyAccount } from "../../hooks/use-my-account";
 import { LanguageEditor } from "../../components/language-editor";
-import { Body, Button, ErrorNotice, Eyebrow, Loading, Screen, Title } from "../../components/ui";
+import { Body, Button, ErrorNotice, Loading, Screen, Title } from "../../components/ui";
+import { StepIndicator } from "../../components/step-indicator";
 
 /**
  * Step one of onboarding. Nothing is saved here: `upsertProfile` needs the name and the
@@ -37,19 +38,17 @@ export default function LanguagesOnboarding() {
 
   return (
     <Screen>
-      <Eyebrow>SOMETHING TO SHARE. SOMETHING TO LEARN.</Eyebrow>
-      <Title>Your side of the conversation.</Title>
-      <Body muted>Offer a language you speak fluently; you don’t need to be a native speaker. Partners are people who speak what you’re practising and are practising what you speak.</Body>
+      <StepIndicator step={1} total={2} />
+      <Title>Your languages</Title>
+      <Body muted>Share one you speak fluently. Practise one at any level.</Body>
       <LanguageEditor
         title="I can share"
-        hint="Only native or fluent languages can be offered to a partner. Proficiency is self-declared."
         value={speaks}
         onChange={setSpeaks}
         defaultLevel="fluent"
       />
       <LanguageEditor
         title="I’m practising"
-        hint="Any level is welcome."
         value={learns}
         onChange={setLearns}
         levels={PRACTISING_LEVELS}

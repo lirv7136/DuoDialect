@@ -33,25 +33,25 @@ const REASON_MESSAGES: Record<string, string> = {
   "conversation/not-found": "This conversation no longer exists.",
   "conversation/not-member": "You’re not part of this conversation.",
   "deletion/not-confirmed": "Type DELETE to confirm.",
-  "photo/not-found": "That photo is no longer available. Please add it again.",
-  "photo/not-screened": "That photo is still being checked. Please try again in a moment.",
+  "photo/not-found": "That photo is no longer available. Add it again.",
+  "photo/not-screened": "That photo is still being checked. Try again in a moment.",
 };
 
 const DATING_FALLBACK = "That isn’t available.";
 
 const CODE_MESSAGES: Record<string, string> = {
-  unauthenticated: "Your session has ended. Please log in again.",
+  unauthenticated: "Your session has ended. Log in again.",
   "permission-denied": "You don’t have permission to do that.",
   "not-found": "That no longer exists.",
   "already-exists": "That already exists.",
   "failed-precondition": "That can’t be done right now.",
-  "resource-exhausted": "Too many attempts. Please wait a moment and try again.",
+  "resource-exhausted": "Too many attempts. Wait a moment and try again.",
   unavailable: "We couldn’t reach the server. Check your connection and try again.",
-  "deadline-exceeded": "The server took too long to respond. Please try again.",
-  internal: "Something went wrong on our side. Please try again.",
+  "deadline-exceeded": "The server took too long to respond. Try again.",
+  internal: "Something went wrong on our side. Try again.",
 };
 
-const GENERIC = "Something went wrong. Please try again.";
+const GENERIC = "Something went wrong. Try again.";
 
 /** Normalises anything thrown by httpsCallable (or elsewhere) into a failure record. */
 export function toCallableFailure(error: unknown): CallableFailure {
@@ -85,7 +85,7 @@ export function describeFailure(failure: CallableFailure): string {
   }
   if (failure.code === "auth/too-many-requests") return CODE_MESSAGES["resource-exhausted"];
   if (failure.code === "auth/network-request-failed") return CODE_MESSAGES.unavailable;
-  if (failure.code === "auth/requires-recent-login") return "Please log in again, then retry.";
+  if (failure.code === "auth/requires-recent-login") return "Log in again, then retry.";
   return CODE_MESSAGES[failure.code] ?? GENERIC;
 }
 

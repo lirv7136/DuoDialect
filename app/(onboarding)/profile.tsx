@@ -18,8 +18,10 @@ import { PhotoEditor } from "../../components/photo-editor";
 import { AvailabilityPicker } from "../../components/availability-picker";
 import { DateTimeField } from "../../components/date-time-field";
 import { defaultBirthDate, earliestBirthDate, latestAdultBirthDate } from "../../src/domain/date-bounds";
-import { Body, Button, ErrorNotice, Eyebrow, Field, Loading, Screen, Title, styles } from "../../components/ui";
-import { APP_NAME } from "../../constants/brand";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { Button, Caption, ErrorNotice, Field, Loading, Screen, Title, styles } from "../../components/ui";
+import { StepIndicator } from "../../components/step-indicator";
+import { colors, space } from "../../constants/theme";
 
 /** Step two of onboarding: everything is saved here in one `upsertProfile` call. */
 export default function ProfileOnboarding() {
@@ -78,24 +80,31 @@ export default function ProfileOnboarding() {
 
   return (
     <Screen>
-      <Eyebrow>A LITTLE ABOUT YOU</Eyebrow>
+      <StepIndicator step={2} total={2} onBack={() => router.back()} />
       <Title>Nearly there.</Title>
-      <Body muted>{`Partners see your name, any photos you add, neighbourhood, bio, languages and the times you share. ${APP_NAME} is for adults aged 18 and over.`}</Body>
+      {/* What partners see is marked with an eye; what stays private, with a lock. */}
+      <View accessible accessibilityLabel="Fields with an eye are shown to partners. Fields with a lock are private." style={[styles.row, { gap: space.md }]}>
+        <Caption icon="eye-outline">Partners see</Caption>
+        <Caption icon="lock-closed-outline">Private</Caption>
+      </View>
 
-      <PhotoEditor editor={photos} />
+      <PhotoEditor editor={photos} icon="eye-outline" />
 
-      <Field label="First name" value={draft.displayName} onChangeText={displayName => patch({ displayName })}
+      <Field label="First name" icon="eye-outline" value={draft.displayName} onChangeText={displayName => patch({ displayName })}
         maxLength={LIMITS.displayName} autoComplete="given-name" autoCapitalize="words" />
-      <Field label="Neighbourhood (optional)" hint="Chosen by you. We never ask for your location."
+      <Field label="Neighbourhood (optional)" icon="location-outline" hint="We never use your location."
         value={draft.area} onChangeText={area => patch({ area })} maxLength={LIMITS.area} placeholder="e.g. Surry Hills" />
-      <Field label="Bio (optional)" value={draft.bio} onChangeText={bio => patch({ bio })} maxLength={LIMITS.bio} multiline
+      <Field label="Bio (optional)" icon="eye-outline" value={draft.bio} onChangeText={bio => patch({ bio })} maxLength={LIMITS.bio} multiline
         placeholder="What would you like to talk about?" />
       <AvailabilityPicker value={draft.availability} onChange={availability => patch({ availability })} />
 
       {firstSave ? (
-        <View style={{ gap: 12 }}>
-          <Text accessibilityRole="header" style={styles.label}>Private details</Text>
-          <Text style={styles.hint}>Never shown to other members. Your date of birth is self-declared and only used to confirm you’re 18 or over.</Text>
+        <View style={{ gap: space.sm }}>
+          <View style={[styles.row, { gap: space.xs }]}>
+            <Ionicons name="lock-closed-outline" size={16} color={colors.text} />
+            <Text accessibilityRole="header" style={styles.label}>Private</Text>
+          </View>
+          <Text style={styles.hint}>Never shown. Only used to confirm you’re 18+.</Text>
           <DateTimeField mode="date" dateStyle="long" label="Date of birth" value={birthDate} onChange={setBirthDate}
             initial={defaultBirthDate()} minimumDate={earliestBirthDate()} maximumDate={latestAdultBirthDate()}
             placeholder="1998-04-21" autoComplete="birthdate-full" />
@@ -103,8 +112,8 @@ export default function ProfileOnboarding() {
       ) : null}
 
       <ErrorNotice message={problem} />
-      <Button variant="primary" label="Save and start" busy={busy} busyLabel="Saving…" onPress={onSave} />
-      <Button variant="ghost" label="Back to languages" onPress={() => router.back()} />
+      <Button variant="primary" label="Start" accessibilityLabel="Save and start" busy={busy} busyLabel="Saving…" onPress={onSave} />
+      <Button variant="ghost" label="Back" accessibilityLabel="Back to languages" onPress={() => router.back()} />
     </Screen>
   );
 }

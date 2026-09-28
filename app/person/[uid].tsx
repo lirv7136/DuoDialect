@@ -1,20 +1,24 @@
 import { useEffect, useState } from "react";
-import { Alert, Pressable, Text } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { View } from "react-native";
+import { Stack, router, useLocalSearchParams } from "expo-router";
 import { api } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
 import { candidateCache } from "../../src/lib/candidate-cache";
 import { getPublicProfile } from "../../src/lib/live";
 import { rememberBlockedName } from "../../src/lib/blocked-names";
 import { exchangeLanguages } from "../../src/domain/language-exchange";
-import { capitalise } from "../../src/domain/profile-form";
 import { sharedSlots } from "../../src/domain/schedule";
 import { errorMessage } from "../../src/domain/errors";
 import { useMyAccount } from "../../hooks/use-my-account";
-import { Body, Button, Card, ErrorNotice, Heading, Loading, Screen, Title, styles } from "../../components/ui";
+import { APP_NAME } from "../../constants/brand";
+import { Body, Button, Caption, ChipRow, ErrorNotice, InfoChip, Loading, Screen, Title } from "../../components/ui";
+import { EmptyState } from "../../components/empty-state";
 import { PhotoStrip } from "../../components/avatar";
+import { ExchangeStrip } from "../../components/exchange-strip";
+import { SharedTimes } from "../../components/partner-card";
+import { confirmBlock, useSafetyMenu } from "../../components/safety-menu";
 import { sanitizePhotos, type ProfilePhoto } from "../../src/domain/photos";
-import { colors, TOUCH_TARGET } from "../../constants/theme";
+import { space } from "../../constants/theme";
 
 type PersonView = {
   uid: string; displayName: string; area: string; bio: string; interests: string[];
@@ -48,39 +52,37 @@ export default function PersonScreen() {
   }, [uid, me, meLoading, person]);
 
   function onBlock() {
-    if (!person) return;
-    Alert.alert(
-      `Block ${person.displayName}?`,
-      "Neither of you will be able to find, invite, message or see the other. Open invitations between you are cancelled. You can unblock from Your profile, but cancelled invitations stay closed.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Block", style: "destructive", onPress: async () => {
-            if (blocking) return;
-            setBlocking(true);
-            try {
-              await api.setBlock(person.uid, true);
-              const myUid = auth.currentUser?.uid;
-              if (myUid) await rememberBlockedName(myUid, person.uid, person.displayName);
-              candidateCache.remove(person.uid);
-              router.replace("/(tabs)/discover");
-            } catch (e) {
-              setError(errorMessage(e));
-            } finally {
-              setBlocking(false);
-            }
-          },
-        },
-      ],
-    );
+    if (!person || blocking) return;
+    confirmBlock(person.displayName, async () => {
+      setBlocking(true);
+      try {
+        await api.setBlock(person.uid, true);
+        const myUid = auth.currentUser?.uid;
+        if (myUid) await rememberBlockedName(myUid, person.uid, person.displayName);
+        candidateCache.remove(person.uid);
+        router.replace("/(tabs)/discover");
+      } catch (e) {
+        setError(errorMessage(e));
+      } finally {
+        setBlocking(false);
+      }
+    });
   }
+
+  function onReport() {
+    if (!person) return;
+    router.push({ pathname: "/report/[uid]", params: { uid: person.uid, name: person.displayName } });
+  }
+
+  // Report and Block live in the ⋯ header menu, as in chat.
+  const menu = useSafetyMenu({ name: person?.displayName ?? "", onReport, onBlock });
 
   if (missing) {
     return (
       <Screen edges={[]}>
-        <Heading>This profile isn’t available.</Heading>
-        <Body muted>They may have changed their profile or deleted their account.</Body>
-        <Button label="Back" onPress={() => router.back()} />
+        <EmptyState title="This profile isn’t available." body={`They may have left ${APP_NAME}.`}>
+          <Button label="Back" onPress={() => router.back()} />
+        </EmptyState>
       </Screen>
     );
   }
@@ -89,38 +91,30 @@ export default function PersonScreen() {
   const reciprocal = person.theyOffer.length > 0 && person.youOffer.length > 0;
 
   return (
-    <Screen edges={[]}>
+    <Screen edges={[]} footer={
+      <>
+        <ErrorNotice message={error} />
+        {reciprocal ? (
+          <Button variant="primary" label="Invite" accessibilityLabel={`Invite ${person.displayName} to meet`}
+            onPress={() => router.push({ pathname: "/plan/new", params: { toUid: person.uid } })} />
+        ) : <Caption center>Not a two-way exchange right now.</Caption>}
+      </>
+    }>
+      <Stack.Screen options={{ title: "", headerRight: menu.button }} />
+      {menu.menu}
       <PhotoStrip name={person.displayName} photos={person.photos} />
-      <Title>{`Meet ${person.displayName}.`}</Title>
-      {person.area ? <Text style={styles.hint}>{person.area}</Text> : null}
-      <Body muted>A platonic language exchange.</Body>
+      <View style={{ gap: space.xs }}>
+        <Title>{person.displayName}</Title>
+        {person.area ? <InfoChip icon="location-outline" label={person.area} tone="plain" /> : null}
+      </View>
+      <ExchangeStrip theyTeach={person.theyOffer} youTeach={person.youOffer} />
+      <SharedTimes slots={person.shared} max={6} />
       {person.bio ? <Body>{person.bio}</Body> : null}
-      <Card>
-        <Text style={styles.body}>{`They help you with: ${person.theyOffer.map(capitalise).join(", ") || "—"}`}</Text>
-        <Text style={styles.body}>{`You help them with: ${person.youOffer.map(capitalise).join(", ") || "—"}`}</Text>
-        <Text style={styles.hint}>{person.shared.length ? `Shared times: ${person.shared.join(", ")}.` : "No shared times listed."}</Text>
-        {person.interests.length ? <Text style={styles.hint}>{`Interests: ${person.interests.join(", ")}`}</Text> : null}
-        <Text style={styles.hint}>Fluency is self-declared and not tested.</Text>
-      </Card>
-      <ErrorNotice message={error} />
-      {reciprocal ? (
-        <Button variant="primary" label="Suggest a meetup" accessibilityLabel={`Suggest a meetup with ${person.displayName}`}
-          onPress={() => router.push({ pathname: "/plan/new", params: { toUid: person.uid } })} />
-      ) : <Body muted>Your languages don’t currently make a two-way exchange with this person.</Body>}
-      <Button label="Report a concern" accessibilityLabel={`Report ${person.displayName}`}
-        onPress={() => router.push({ pathname: "/report/[uid]", params: { uid: person.uid, name: person.displayName } })} />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Block ${person.displayName}`}
-        accessibilityState={{ disabled: blocking, busy: blocking }}
-        disabled={blocking}
-        onPress={onBlock}
-        style={({ pressed }) => ({ minHeight: TOUCH_TARGET, alignItems: "center", justifyContent: "center", opacity: pressed || blocking ? 0.6 : 1 })}
-      >
-        <Text style={{ color: colors.danger, fontSize: 16, fontWeight: "600", textDecorationLine: "underline" }}>
-          {blocking ? "Blocking…" : `Block ${person.displayName}`}
-        </Text>
-      </Pressable>
+      {person.interests.length ? (
+        <ChipRow>{person.interests.map(item => <InfoChip key={item} icon="sparkles-outline" label={item} tone="plain" />)}</ChipRow>
+      ) : null}
+      <Caption icon="information-circle-outline">Fluency is self-declared.</Caption>
+      {blocking ? <Caption>Blocking…</Caption> : null}
     </Screen>
   );
 }

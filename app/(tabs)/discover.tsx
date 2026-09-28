@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshControl, Share, Text, View } from "react-native";
+import { Pressable, RefreshControl, Share, Text, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, useFocusEffect } from "expo-router";
 import { api, type Candidate } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
@@ -7,15 +8,20 @@ import { candidateCache } from "../../src/lib/candidate-cache";
 import { subscribeInvitations } from "../../src/lib/live";
 import { useNotificationsEnabled } from "../../src/lib/notification-prompt";
 import { emptyDiscoverTitle, inviteMessage } from "../../src/domain/invite-copy";
-import { capitalise } from "../../src/domain/profile-form";
+import { languageCode } from "../../src/domain/display";
+import { displayLanguage } from "../../src/domain/languages";
+import { hasSeen, markSeen } from "../../src/lib/seen-once";
 import { errorMessage } from "../../src/domain/errors";
 import { useMyAccount } from "../../hooks/use-my-account";
-import { Body, Button, Card, EmptyState, ErrorNotice, Eyebrow, Heading, Loading, Pill, Screen, Title, styles } from "../../components/ui";
-import { Avatar } from "../../components/avatar";
-import { colors, space } from "../../constants/theme";
+import { Button, Caption, Display, ErrorNotice, Heading, Loading, Screen, styles } from "../../components/ui";
+import { EmptyState } from "../../components/empty-state";
+import { InfoButton } from "../../components/sheet";
+import { PartnerCard } from "../../components/partner-card";
+import { CARD_GAP, colors, fonts, radius, space } from "../../constants/theme";
 import { APP_NAME, LAUNCH_CITY, SITE_URL } from "../../constants/brand";
 
-const list = (values: string[]) => values.map(capitalise).join(", ");
+const PARTNERS_INFO = "discover.partners.v1";
+const codes = (values: string[]) => values.map(languageCode).join(" · ") || "?";
 
 export default function Discover() {
   const { profile } = useMyAccount();
@@ -30,6 +36,18 @@ export default function Discover() {
   const [pushProblem, setPushProblem] = useState<string | null>(null);
   const notifications = useNotificationsEnabled();
   const loadedOnce = useRef(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+
+  // How the two-way swap works is explained once, here, the first time Discover opens.
+  useEffect(() => {
+    let live = true;
+    void hasSeen(PARTNERS_INFO).then(seen => {
+      if (!live || seen) return;
+      setAboutOpen(true);
+      void markSeen(PARTNERS_INFO);
+    });
+    return () => { live = false; };
+  }, []);
 
   // `quiet` refreshes (pull to refresh, returning to the tab) keep the current list on screen.
   const load = useCallback(async (more: boolean, after: string | null, quiet = false) => {
@@ -65,10 +83,10 @@ export default function Discover() {
     setPushProblem(null);
     try {
       const result = await notifications.enable();
-      if (result === "denied") setPushProblem("Allow notifications for this app in your phone’s settings, then try again.");
-      if (result === "unavailable") setPushProblem("Notifications need the installed app on a phone.");
+      if (result === "denied") setPushProblem("Allow notifications in Settings, then try again.");
+      if (result === "unavailable") setPushProblem("Needs the phone app.");
     } catch {
-      setPushProblem("We couldn’t turn on notifications. Check your connection and try again.");
+      setPushProblem("Couldn’t turn on. Check your connection.");
     } finally {
       setEnablingPush(false);
     }
@@ -87,86 +105,75 @@ export default function Discover() {
       .map(item => (item.fromUid === uid ? item.toUid : item.fromUid)))), () => undefined);
   }, []);
 
+  const offers = profile?.offers ?? [], seeks = profile?.seeks ?? [];
+
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(false, null, true)} tintColor={colors.primary} />}>
-      <Eyebrow>LESS SCROLLING. MORE CONVERSATION.</Eyebrow>
-      <Title>Your next conversation starts here.</Title>
-      <Body muted>Meet someone who speaks your next language, and share yours in return.</Body>
+      <View style={[styles.row, { justifyContent: "space-between", flexWrap: "nowrap" }]}>
+        <Display>Discover</Display>
+        {profile ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Your exchange: you share ${offers.map(displayLanguage).join(", ") || "nothing yet"}, you practise ${seeks.map(displayLanguage).join(", ") || "nothing yet"}`}
+            accessibilityHint="Edit your languages"
+            onPress={() => router.push("/account/edit")}
+            hitSlop={4}
+            style={({ pressed }) => [{
+              minHeight: 40, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: space.md, borderRadius: radius.chip,
+              backgroundColor: colors.surfaceNavySoft, flexShrink: 1,
+            }, pressed && { opacity: 0.7 }]}
+          >
+            <Text numberOfLines={1} style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.primary, flexShrink: 1 }}>
+              {codes(offers)} <Text style={{ color: colors.accentInk }}>⇄</Text> {codes(seeks)}
+            </Text>
+            <Ionicons name="pencil" size={14} color={colors.primary} />
+          </Pressable>
+        ) : null}
+      </View>
 
-      {profile ? (
-        <Card style={{ backgroundColor: colors.surfaceNavySoft }}>
-          <Text style={styles.body}>
-            {`Your exchange: you share ${list(profile.offers) || "—"} and practise ${list(profile.seeks) || "—"}.`}
-          </Text>
-          <Button variant="ghost" label="Edit my languages" onPress={() => router.push("/account/edit")} />
-        </Card>
-      ) : null}
-
-      <Heading>Language partners</Heading>
-      <Body muted>Only people with a two-way exchange: they speak what you’re practising, and are practising what you speak.</Body>
+      <View style={[styles.row, { gap: 0, marginBottom: -space.xs }]}>
+        <Heading>Partners</Heading>
+        <InfoButton label="About partners" title="Partners" open={aboutOpen} onOpenChange={setAboutOpen}
+          body="They speak what you’re learning, and are learning what you speak." />
+      </View>
 
       {loading ? <Loading label="Finding language partners" /> : null}
       <ErrorNotice message={error} onRetry={() => void load(false, null)} />
 
       {!loading && !error && candidates.length === 0 ? (
         <EmptyState
-          title={cursor ? "Nobody in this batch fits your exchange." : emptyDiscoverTitle(profile?.offers ?? [], profile?.seeks ?? [], LAUNCH_CITY)}
-          body={cursor
-            ? "Look further, or add more times you can meet."
-            : "Check back soon, and turn on notifications so you don’t miss an invitation."}
+          art="search"
+          title={cursor ? "No partners in this batch." : emptyDiscoverTitle(offers, seeks, LAUNCH_CITY)}
+          body="We’ll let you know when someone joins."
         >
-          {cursor ? <Button variant="primary" label="Look further" busy={loadingMore} onPress={() => void load(true, cursor)} /> : null}
+          {cursor ? <Button variant="primary" label="Show more" busy={loadingMore} busyLabel="Looking…" onPress={() => void load(true, cursor)} /> : null}
           {notifications.enabled
-            ? <Text style={[styles.hint, { textAlign: "center" }]}>✓ Notifications on</Text>
-            : <Button variant={cursor ? "secondary" : "primary"} label="Turn on notifications" busy={enablingPush} busyLabel="Turning on…" onPress={() => void onEnableNotifications()} />}
+            ? <Caption icon="notifications" center>Notifications on</Caption>
+            : <Button variant={cursor ? "secondary" : "primary"} icon="notifications-outline" label="Notify me"
+                accessibilityLabel="Turn on notifications" busy={enablingPush} busyLabel="Turning on…" onPress={() => void onEnableNotifications()} />}
           <ErrorNotice message={pushProblem} />
-          <Button label="Invite a friend" hint="Share an invitation to join" onPress={onShare} />
-          <Button variant="ghost" label="Edit my languages or times" onPress={() => router.push("/account/edit")} />
-          <Button variant="ghost" label="Refresh" onPress={() => void load(false, null)} />
+          <Button icon="share-outline" label="Invite a friend" hint="Share an invitation to join" onPress={onShare} />
+          <Button variant="ghost" label="Edit profile" accessibilityLabel="Edit my languages or times" onPress={() => router.push("/account/edit")} />
         </EmptyState>
       ) : null}
 
-      {candidates.map(person => (
-        <Card key={person.uid}>
-          <Pill label="You can help each other" tone="good" />
-          <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-            <Avatar name={person.displayName} photos={person.photos} size={56} />
-            <View style={{ flexShrink: 1, gap: 2 }}>
-              <Heading>{person.displayName}</Heading>
-              {person.area ? <Text style={styles.hint}>{person.area}</Text> : null}
-            </View>
-          </View>
-          <View style={{ gap: 2 }}>
-            <Text style={styles.body}>{`Can help you with: ${list(person.exchange.theyOffer)}`}</Text>
-            <Text style={styles.body}>{`You can help with: ${list(person.exchange.youOffer)}`}</Text>
-          </View>
-          <Text style={styles.hint}>
-            {person.sharedAvailability.length ? `Shared times: ${person.sharedAvailability.join(", ")}` : "No shared times listed yet"}
-          </Text>
-          {person.bio ? <Text style={styles.body} numberOfLines={3}>{person.bio}</Text> : null}
-          <Text style={styles.hint}>Fluency is self-declared.</Text>
-          <View style={styles.row}>
-            <Button label="View profile" accessibilityLabel={`View ${person.displayName}’s profile`}
-              onPress={() => router.push({ pathname: "/person/[uid]", params: { uid: person.uid } })} />
-            {pendingWith.has(person.uid) ? (
-              <Button variant="ghost" label="Invitation open · see Plans" onPress={() => router.push("/(tabs)/plans")} />
-            ) : (
-              <Button variant="primary" label="Suggest a meetup" accessibilityLabel={`Suggest a meetup with ${person.displayName}`}
-                onPress={() => router.push({ pathname: "/plan/new", params: { toUid: person.uid } })} />
-            )}
-          </View>
-        </Card>
-      ))}
+      <View style={{ gap: CARD_GAP }}>
+        {candidates.map(person => (
+          <PartnerCard
+            key={person.uid}
+            person={person}
+            invited={pendingWith.has(person.uid)}
+            onOpen={() => router.push({ pathname: "/person/[uid]", params: { uid: person.uid } })}
+            onInvite={() => router.push({ pathname: "/plan/new", params: { toUid: person.uid } })}
+            onInvited={() => router.push("/(tabs)/plans")}
+          />
+        ))}
+      </View>
 
       {candidates.length > 0 && cursor ? (
-        <Button label="Show more partners" busy={loadingMore} busyLabel="Looking…" onPress={() => void load(true, cursor)} />
+        <Button label="Show more" accessibilityLabel="Show more partners" busy={loadingMore} busyLabel="Looking…" onPress={() => void load(true, cursor)} />
       ) : null}
-      {candidates.length > 0 && !cursor ? <Text style={styles.hint}>That’s everyone who fits your exchange right now.</Text> : null}
-
-      <Card>
-        <Text style={styles.label}>You bring a language. They bring another.</Text>
-        <Text style={styles.hint}>Try 20 minutes in each language. A coffee and a few mistakes are a great place to start.</Text>
-      </Card>
+      {candidates.length > 0 && !cursor ? <Caption center>That’s everyone for now.</Caption> : null}
     </Screen>
   );
 }

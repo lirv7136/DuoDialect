@@ -9,7 +9,7 @@ import { errorMessage } from "../src/domain/errors";
 import { forgetAccount, rememberAccount } from "../hooks/use-my-account";
 import { finishGate, resetGate } from "../src/lib/notification-routing";
 import { Button, Loading } from "../components/ui";
-import { colors } from "../constants/theme";
+import { colors, type } from "../constants/theme";
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
@@ -53,7 +53,7 @@ export default function Index() {
     <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 16, backgroundColor: colors.background }}>
       {loading ? <Loading label="Opening your profile" /> : null}
       {error ? <>
-        <Text accessibilityRole="alert" style={{ color: colors.text, fontSize: 16 }}>{`We couldn’t open your profile. ${error}`}</Text>
+        <Text accessibilityRole="alert" style={type.body}>{`We couldn’t open your profile. ${error}`}</Text>
         <Button label="Try again" onPress={() => setAttempt(value => value + 1)} />
       </> : null}
     </View>

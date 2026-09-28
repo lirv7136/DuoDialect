@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 import { api } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
 import { listMyBlocks } from "../../src/lib/live";
 import { forgetBlockedName, readBlockedNames } from "../../src/lib/blocked-names";
 import { errorMessage } from "../../src/domain/errors";
-import { Body, Button, Card, EmptyState, ErrorNotice, Loading, Screen, styles } from "../../components/ui";
+import { space } from "../../constants/theme";
+import { Button, Caption, Card, ErrorNotice, Loading, Screen, styles } from "../../components/ui";
+import { EmptyState } from "../../components/empty-state";
+import { Avatar } from "../../components/avatar";
 
 export default function BlockedMembers() {
   const uid = auth.currentUser?.uid ?? "";
@@ -50,15 +53,15 @@ export default function BlockedMembers() {
 
   return (
     <Screen edges={[]}>
-      <Body muted>People you block can’t find, invite or message you, and you won’t see them. Unblocking doesn’t restore invitations that were cancelled.</Body>
+      {blocked.length ? <Caption icon="information-circle-outline">Unblocking won’t restore cancelled invites.</Caption> : null}
       <ErrorNotice message={error} onRetry={() => void load()} />
-      {blocked.length === 0 ? <EmptyState title="You haven’t blocked anyone." body="You can block someone from their profile or from a conversation." /> : null}
+      {blocked.length === 0 ? <EmptyState title="No one blocked." /> : null}
       {blocked.map(otherUid => {
         const name = names[otherUid] ?? "A blocked member";
         return (
-          <Card key={otherUid}>
-            <Text style={styles.label}>{name}</Text>
-            {!names[otherUid] ? <Text style={styles.hint}>Blocked on another device, or before names were remembered.</Text> : null}
+          <Card key={otherUid} style={{ flexDirection: "row", alignItems: "center", paddingVertical: space.md }}>
+            <Avatar name={names[otherUid] ?? ""} size={40} />
+            <View style={{ flex: 1 }}><Text style={styles.label}>{name}</Text></View>
             <Button label="Unblock" accessibilityLabel={`Unblock ${name}`} busy={busy === otherUid} busyLabel="Unblocking…"
               disabled={busy !== null && busy !== otherUid} onPress={() => void unblock(otherUid)} />
           </Card>

@@ -69,5 +69,5 @@ test('Firebase Auth codes map to friendly sign in and sign up copy', () => {
   // Unknown codes never leak Firebase's raw message.
   const unknown = authErrorMessage(authError('auth/something-new'));
   assert.doesNotMatch(unknown, /Firebase/);
-  assert.equal(unknown, 'Something went wrong. Please try again.');
+  assert.equal(unknown, 'Something went wrong. Try again.');
 });

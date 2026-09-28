@@ -42,6 +42,6 @@ export async function logOut() {
  */
 export async function reauthenticate(password: string) {
   const user = auth.currentUser;
-  if (!user?.email) throw Object.assign(new Error("Please log in again."), { code: "auth/requires-recent-login" });
+  if (!user?.email) throw Object.assign(new Error("Log in again."), { code: "auth/requires-recent-login" });
   await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
 }

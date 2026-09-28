@@ -140,13 +140,13 @@ export type PhotoProblem = "rejected" | "failed" | "timeout" | "too-large" | "up
 export function photoProblemMessage(problem: PhotoProblem): string {
   switch (problem) {
     case "rejected":
-      return "We couldn’t use that photo. Profile photos help partners recognise you in person, so please choose a clear, everyday photo of yourself.";
+      return "We can’t use that photo. Try a clear, everyday one of you.";
     case "failed":
-      return "We couldn’t check that photo just now. Please try adding it again.";
+      return "Couldn’t check it. Try again.";
     case "timeout":
-      return "Checking that photo is taking longer than usual. Please try adding it again in a moment.";
+      return "Still checking. Try again in a moment.";
     case "too-large":
-      return "That photo is too large to upload. Please choose a different one.";
+      return "Too large. Pick another.";
     default:
       return "That photo didn’t upload. Check your connection and try again.";
   }

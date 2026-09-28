@@ -5,7 +5,7 @@ import {
   PRACTISING_LEVELS,
   buildUpsertPayload,
   draftFromProfile,
-  parseInterests,
+  addInterest,
   validateProfileDraft,
   type ProfileDraft,
 } from "../../src/domain/profile-form";
@@ -16,7 +16,8 @@ import { usePhotoEditor } from "../../hooks/use-photo-editor";
 import { PhotoEditor } from "../../components/photo-editor";
 import { LanguageEditor } from "../../components/language-editor";
 import { AvailabilityPicker } from "../../components/availability-picker";
-import { Body, Button, ErrorNotice, Field, Loading, Screen } from "../../components/ui";
+import { View } from "react-native";
+import { Button, Caption, Chip, ChipRow, ErrorNotice, Field, IconButton, Loading, Screen } from "../../components/ui";
 
 /**
  * Edits the whole public profile through `upsertProfile`, which replaces it in full.
@@ -27,7 +28,7 @@ export default function EditProfile() {
   const { profile, account, loading } = useMyAccount();
   const photos = usePhotoEditor({ initial: loading ? null : profile?.photos ?? [], autoSave: true });
   const [draft, setDraft] = useState<ProfileDraft | null>(null);
-  const [interestsRaw, setInterestsRaw] = useState("");
+  const [interestText, setInterestText] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const inFlight = useRef(false);
@@ -37,16 +38,31 @@ export default function EditProfile() {
     if (!profile || !account) { router.replace("/(onboarding)/languages?next=profile"); return; }
     const initial = draftFromProfile(profile);
     setDraft(initial);
-    setInterestsRaw(initial.interests.join(", "));
   }, [draft, loading, profile, account]);
 
   if (!draft) return <Loading label="Loading your profile" />;
 
   const patch = (value: Partial<ProfileDraft>) => setDraft(current => (current ? { ...current, ...value } : current));
 
+  function onInterestText(value: string) {
+    // A comma, as people used to type, adds what came before it.
+    if (!value.includes(",")) { setInterestText(value); return; }
+    const parts = value.split(",");
+    const rest = parts.pop() ?? "";
+    patch({ interests: parts.reduce((list, part) => addInterest(list, part), draft?.interests ?? []) });
+    setInterestText(rest.trimStart());
+  }
+
+  function commitInterest() {
+    if (!interestText.trim()) return;
+    patch({ interests: addInterest(draft?.interests ?? [], interestText) });
+    setInterestText("");
+  }
+
   async function onSave() {
     if (inFlight.current || !draft) return;
-    const next = { ...draft, interests: parseInterests(interestsRaw) };
+    // Text still in the interest box counts, so nothing typed is lost on Save.
+    const next = { ...draft, interests: addInterest(draft.interests, interestText) };
     const issue = validateProfileDraft(next, { firstSave: false });
     setProblem(issue);
     if (issue) return;
@@ -63,24 +79,43 @@ export default function EditProfile() {
     }
   }
 
+  const interestsFull = draft.interests.length >= LIMITS.interests;
+
   return (
-    <Screen edges={[]}>
+    <Screen edges={[]} footer={
+      <>
+        <ErrorNotice message={problem} />
+        <Button variant="primary" label="Save" accessibilityLabel="Save changes" busy={busy} busyLabel="Saving…" onPress={onSave} />
+      </>
+    }>
       <PhotoEditor editor={photos} />
       <Field label="First name" value={draft.displayName} onChangeText={displayName => patch({ displayName })}
         maxLength={LIMITS.displayName} autoCapitalize="words" />
-      <Field label="Neighbourhood (optional)" hint="Chosen by you. We never ask for your location."
+      <Field label="Neighbourhood (optional)" icon="location-outline" hint="We never use your location."
         value={draft.area} onChangeText={area => patch({ area })} maxLength={LIMITS.area} />
       <Field label="Bio (optional)" value={draft.bio} onChangeText={bio => patch({ bio })} maxLength={LIMITS.bio} multiline />
-      <LanguageEditor title="I can share" hint="Only native or fluent languages can be offered. Proficiency is self-declared."
+      <LanguageEditor title="I can share"
         value={draft.speaks} onChange={speaks => patch({ speaks })} defaultLevel="fluent" />
-      <LanguageEditor title="I’m practising" hint="Any level is welcome."
+      <LanguageEditor title="I’m practising"
         value={draft.learns} onChange={learns => patch({ learns })} levels={PRACTISING_LEVELS} defaultLevel="beginner" />
       <AvailabilityPicker value={draft.availability} onChange={availability => patch({ availability })} />
-      <Field label="Interests (optional)" hint={`Up to ${LIMITS.interests}, separated by commas.`} value={interestsRaw}
-        onChangeText={setInterestsRaw} placeholder="Coffee, films, hiking" />
-      <Body muted>Changing your languages doesn’t withdraw open invitations. One that no longer fits your exchange can’t be accepted.</Body>
-      <ErrorNotice message={problem} />
-      <Button variant="primary" label="Save changes" busy={busy} busyLabel="Saving…" onPress={onSave} />
+      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 4 }}>
+        <View style={{ flex: 1 }}>
+          <Field label={`Interests (optional) · ${draft.interests.length}/${LIMITS.interests}`} value={interestText}
+            onChangeText={onInterestText} onSubmitEditing={commitInterest} returnKeyType="done" blurOnSubmit={false}
+            maxLength={LIMITS.interest} editable={!interestsFull} placeholder={interestsFull ? "That’s the most" : "Coffee, films, hiking"} />
+        </View>
+        {interestText.trim() ? <IconButton icon="add-circle" label={`Add ${interestText.trim()}`} onPress={commitInterest} size={30} /> : null}
+      </View>
+      {draft.interests.length ? (
+        <ChipRow>
+          {draft.interests.map(item => (
+            <Chip key={item} role="button" icon="close" label={item} accessibilityLabel={`Remove ${item}`}
+              onPress={() => patch({ interests: draft.interests.filter(value => value !== item) })} />
+          ))}
+        </ChipRow>
+      ) : null}
+      <Caption icon="information-circle-outline">Open invites that no longer fit can’t be accepted.</Caption>
     </Screen>
   );
 }

@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform } from "react-native";
 import { router } from "expo-router";
-import { APP_NAME, APP_TAGLINE } from "../../constants/brand";
 import { requestPasswordReset, signIn } from "../../src/lib/auth";
 import { authErrorMessage } from "../../src/domain/errors";
-import { Body, Button, Card, ErrorNotice, Eyebrow, Field, Screen, Title } from "../../components/ui";
+import { Button, ErrorNotice, Field, Notice, Screen } from "../../components/ui";
+import { AuthHeader } from "../../components/auth-header";
 import { PasswordField } from "../../components/password-field";
 import { colors } from "../../constants/theme";
 
-const RESET_SENT = "If an account exists for that email, we’ve sent a reset link.";
+const RESET_SENT = "Check your email for a reset link.";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -38,7 +38,7 @@ export default function Login() {
     if (resetting) return;
     setError(null);
     setNotice(null);
-    if (!email.trim()) { setError("Enter your email above, then tap “Forgot password?” again."); return; }
+    if (!email.trim()) { setError("Enter your email first."); return; }
     setResetting(true);
     try {
       await requestPasswordReset(email);
@@ -51,14 +51,13 @@ export default function Login() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <Screen edges={["top", "bottom"]}>
-        <Eyebrow>{APP_TAGLINE.toLocaleUpperCase("en")}</Eyebrow>
-        <Title>{APP_NAME}</Title>
-        <Body muted>Log in to find a language partner.</Body>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.primary }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <Screen edges={["top", "bottom"]} navy>
+        <AuthHeader />
 
         <Field
           label="Email"
+          onDark
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
@@ -70,6 +69,7 @@ export default function Login() {
         />
         <PasswordField
           label="Password"
+          onDark
           value={password}
           onChangeText={setPassword}
           textContentType="password"
@@ -79,16 +79,12 @@ export default function Login() {
         />
 
         <ErrorNotice message={error} />
-        {notice ? (
-          <Card style={{ backgroundColor: colors.surfaceNavySoft }}>
-            <Body>{notice}</Body>
-          </Card>
-        ) : null}
+        <Notice message={notice} icon="mail-outline" />
 
-        <Button variant="primary" label="Log in" busy={busy} busyLabel="Logging in…" onPress={() => void onLogin()} />
-        <Button variant="ghost" label="Forgot password?" busy={resetting} busyLabel="Sending…"
+        <Button variant="primary" onDark label="Log in" busy={busy} busyLabel="Logging in…" onPress={() => void onLogin()} />
+        <Button variant="ghost" onDark label="Forgot password?" busy={resetting} busyLabel="Sending…"
           hint="Sends a reset link to the email above" onPress={() => void onForgot()} />
-        <Button variant="ghost" label={`New to ${APP_NAME}? Create an account`} onPress={() => router.push("/(auth)/signup")} />
+        <Button variant="secondary" onDark label="Create account" onPress={() => router.push("/(auth)/signup")} />
       </Screen>
     </KeyboardAvoidingView>
   );

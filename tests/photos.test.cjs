@@ -91,7 +91,7 @@ test('labels and messages: every image is named, and a rejection is kind', () =>
   assert.equal(p.initialsFor(''), '?');
 
   const rejected = p.photoProblemMessage('rejected');
-  assert.match(rejected, /couldn’t use that photo/);
+  assert.match(rejected, /can’t use that photo/);
   assert.doesNotMatch(rejected, /adult|violen|racy|explicit|inappropriate|nud/i, 'no accusatory detail');
   for (const problem of ['failed', 'timeout', 'too-large', 'upload']) {
     assert.ok(p.photoProblemMessage(problem).length > 10, problem);

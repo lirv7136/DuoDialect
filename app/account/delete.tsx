@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { Alert, Text } from "react-native";
+import { Alert, Text, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
 import { api } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
@@ -9,8 +10,11 @@ import { clearPhotoUrls } from "../../src/lib/photos";
 import { clearBlockedNames } from "../../src/lib/blocked-names";
 import { errorMessage } from "../../src/domain/errors";
 import { forgetAccount } from "../../hooks/use-my-account";
-import { Body, Button, Card, ErrorNotice, Field, Heading, Screen, styles } from "../../components/ui";
+import { Button, Caption, Card, ErrorNotice, Field, Screen, Title, styles } from "../../components/ui";
+import { colors, space } from "../../constants/theme";
 import { APP_NAME } from "../../constants/brand";
+
+const DELETED = ["Profile, photos, private details", "Invitations", "Blocks", "All chats and messages"];
 
 /**
  * Deletion is immediate and cannot be undone. The backend does not require a recent
@@ -37,7 +41,7 @@ export default function DeleteAccount() {
       await reauthenticate(password);
       const result = await api.requestAccountDeletion();
       if (result.status !== "completed") {
-        setProblem("Most of your data was deleted, but not everything finished. Tap Delete my account again to complete it.");
+        setProblem("Not quite finished. Tap Delete again.");
         return;
       }
       candidateCache.clear();
@@ -57,21 +61,26 @@ export default function DeleteAccount() {
 
   return (
     <Screen edges={[]}>
-      <Heading>Delete your account permanently?</Heading>
+      <Title>Delete your account?</Title>
       <Card>
-        <Text style={styles.label}>This removes, straight away and for good:</Text>
-        <Body>• your profile, photos and private details{"\n"}• every invitation you sent or received{"\n"}• your blocks{"\n"}• every conversation you’re part of, including all messages</Body>
-        <Text style={styles.label}>Conversations are deleted for both people.</Text>
-        <Body>The people you’ve chatted with will lose those conversations too.</Body>
-        <Text style={styles.label}>Safety reports are kept.</Text>
-        <Body>Reports filed by you or about you are retained for moderation after your account is gone.</Body>
+        <Text style={styles.label}>Deleted now, for good:</Text>
+        <View accessibilityRole="list" style={{ gap: space.sm }}>
+          {DELETED.map(item => (
+            <View key={item} style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
+              <Ionicons name="close-circle" size={20} color={colors.danger} />
+              <Text style={[styles.body, { flexShrink: 1 }]}>{item}</Text>
+            </View>
+          ))}
+        </View>
+        <Text style={styles.label}>Chats are deleted for both people.</Text>
+        <Caption icon="shield-checkmark-outline">Safety reports, by or about you, are kept for moderation.</Caption>
       </Card>
-      <Field label="Your password" hint="We ask again to make sure it’s really you." value={password} onChangeText={setPassword}
+      <Field label="Your password" value={password} onChangeText={setPassword}
         secureTextEntry autoComplete="current-password" autoCapitalize="none" />
       <Field label="Type DELETE to confirm" value={typed} onChangeText={setTyped} autoCapitalize="characters" autoCorrect={false} />
       <ErrorNotice message={problem} />
-      <Button variant="danger" label="Delete my account" busy={busy} busyLabel="Deleting…" disabled={!confirmed || !password} onPress={onDelete} />
-      <Button variant="ghost" label="Keep my account" onPress={() => router.back()} />
+      <Button variant="dangerFilled" label="Delete" accessibilityLabel="Delete my account" busy={busy} busyLabel="Deleting…" disabled={!confirmed || !password} onPress={onDelete} />
+      <Button variant="ghost" label="Keep account" onPress={() => router.back()} />
     </Screen>
   );
 }
