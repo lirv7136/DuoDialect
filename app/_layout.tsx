@@ -59,6 +59,7 @@ export default function RootLayout() {
         <Stack.Screen name="person/[uid]" options={detail("")} />
         <Stack.Screen name="plan/new" options={detail("New invite")} />
         <Stack.Screen name="report/[uid]" options={detail("Report")} />
+        <Stack.Screen name="check-in/[checkInId]" options={detail("Check in")} />
         <Stack.Screen name="account/edit" options={detail("Edit profile")} />
         <Stack.Screen name="account/blocked" options={detail("Blocked")} />
         <Stack.Screen name="account/delete" options={detail("Delete account")} />

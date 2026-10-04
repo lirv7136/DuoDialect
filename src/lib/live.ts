@@ -15,7 +15,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { Invitation, PublicProfile } from "./api";
+import type { CheckIn, Invitation, PublicProfile } from "./api";
 
 export type InboxItem = {
   conversationId: string;
@@ -74,6 +74,36 @@ export function subscribeInvitations(uid: string, next: Listener<InvitationDoc[]
       return { ...data, id: d.id, createdAt: toDate(data.createdAt) };
     })),
     fail,
+  );
+}
+
+export type CheckInDoc = Omit<CheckIn, "dueAt" | "expiresAt"> & { dueAt: Date | null; expiresAt: Date | null };
+
+function toCheckIn(id: string, data: Record<string, unknown>): CheckInDoc {
+  return {
+    ...(data as unknown as CheckIn),
+    id,
+    answer: (data.answer as CheckIn["answer"]) ?? null,
+    dueAt: toDate(data.dueAt),
+    expiresAt: toDate(data.expiresAt),
+  };
+}
+
+/** My open check-ins. The uid filter is required by the rules. */
+export function subscribeOpenCheckIns(uid: string, next: Listener<CheckInDoc[]>, fail: ErrorListener): Unsubscribe {
+  return onSnapshot(
+    query(collection(db, "checkIns"), where("uid", "==", uid), where("status", "==", "open"), orderBy("dueAt", "desc")),
+    snap => next(snap.docs.map(d => toCheckIn(d.id, d.data()))),
+    fail,
+  );
+}
+
+/** One of my check-ins; null when it is gone or not mine (the rules refuse the read). */
+export function subscribeCheckIn(checkInId: string, next: Listener<CheckInDoc | null>, fail: ErrorListener): Unsubscribe {
+  return onSnapshot(
+    doc(db, "checkIns", checkInId),
+    snap => next(snap.exists() ? toCheckIn(snap.id, snap.data()) : null),
+    error => ((error as { code?: string }).code === "permission-denied" ? next(null) : fail(error)),
   );
 }
 

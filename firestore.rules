@@ -145,6 +145,22 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Post meetup check-ins, one per person per meetup. Only the owner can read theirs:
+    // the other person never sees what was answered. A query must filter on uid equal to
+    // the caller, or it returns nothing. Answers go through the answerCheckIn callable.
+    match /checkIns/{checkInId} {
+      allow get, list: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    // "Stop asking me about this plan", and meetups both people confirmed. Server only.
+    match /checkInMutes/{muteId} {
+      allow read, write: if false;
+    }
+    match /confirmedMeetups/{meetupId} {
+      allow read, write: if false;
+    }
+
     // Collections the earlier Expo client wrote to directly. They are closed rather than
     // migrated, so stale client code fails loudly instead of reading half migrated state.
     // See docs/BACKEND-HANDOFF.md for the replacement for each one.

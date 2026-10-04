@@ -16,6 +16,7 @@ import type { LanguageLevel, UserLang } from "../domain/language-exchange";
 import type { UpsertProfilePayload } from "../domain/profile-form";
 import type { Recurrence } from "../domain/schedule";
 import type { ProfilePhoto } from "../domain/photos";
+import type { CheckInAnswer } from "../domain/check-in";
 
 export class ApiError extends Error {
   readonly code: string;
@@ -106,6 +107,21 @@ export type CreateInvitationInput = {
   meeting: Meeting;
 };
 
+/** One post meetup check-in, as answerCheckIn returns it. Only its owner ever sees it. */
+export type CheckIn = {
+  id: string;
+  invitationId: string;
+  otherUid: string;
+  conversationId: string | null;
+  occurrence: { localDate: string; localTime: string; timeZone: string; recurrence: Recurrence };
+  /** From the owner's side: what they offered, and what they practised. */
+  languages: { gave: string; received: string };
+  status: "open" | "answered";
+  answer: CheckInAnswer | null;
+  dueAt: string | null;
+  expiresAt: string | null;
+};
+
 export const REPORT_REASONS = [
   { value: "harassment", label: "Harassment" },
   { value: "spam", label: "Spam" },
@@ -171,6 +187,10 @@ export const api = {
 
   reportUser: (input: { reportedUid: string; reason: ReportReason; detail?: string; conversationId?: string }) =>
     call<typeof input, { reportId: string; status: "received" }>("reportUser", input),
+
+  /** Can be repeated to change the answer until the check-in expires. */
+  answerCheckIn: (checkInId: string, answer: CheckInAnswer) =>
+    call<{ checkInId: string } & CheckInAnswer, { checkIn: CheckIn; changed: boolean }>("answerCheckIn", { checkInId, ...answer }),
 
   requestAccountDeletion: () =>
     call<{ confirmation: "DELETE" }, { status: "completed" | "needs_retry"; deleted: Record<string, number>; retained: unknown }>(

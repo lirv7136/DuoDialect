@@ -18,6 +18,12 @@ test('a new invitation opens Plans; an accepted one opens the chat', () => {
     { pathname: '/chat/[chatId]', params: { chatId: 'conv_9', otherUid: 'u3' } });
 });
 
+test('a check-in opens that check-in, or Plans if it has no id', () => {
+  same(notificationTarget({ type: 'checkIn', checkInId: 'chk_1', invitationId: 'inv_1', otherUid: 'u2' }),
+    { pathname: '/check-in/[checkInId]', params: { checkInId: 'chk_1' } });
+  assert.equal(notificationTarget({ type: 'checkIn' }), '/(tabs)/plans');
+});
+
 test('anything else is ignored', () => {
   for (const data of [null, undefined, 'x', {}, { type: 'marketing' }, { conversationId: 3 }]) {
     assert.equal(notificationTarget(data), null);
