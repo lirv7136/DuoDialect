@@ -1,5 +1,5 @@
 {
-  "reviewedOn": "2026-09-26",
+  "reviewedOn": "2026-10-05",
   "target": "Talkeven 1.0 for iOS and Android (language partners, plans and chat; no groups, no dating)",
   "gates": [
     {
@@ -35,8 +35,8 @@
     {
       "id": "privacy-safety",
       "name": "Age controls, deletion, reporting and moderation",
-      "status": "pending",
-      "evidence": "Implemented: adult-only self-declared birth date, deletion cascade, reports and moderation queue with audit log. Pending: a named operator and response process, and publishing the privacy, deletion and child safety pages drafted in site/."
+      "status": "passed",
+      "evidence": "Implemented: adult-only self-declared birth date, deletion cascade, reports and moderation queue with audit log. Published and checked live on 2026-10-05: talkeven.com privacy (names Lachlan Irving as operator), support (hello@talkeven.com, reply within two business days), delete-account and child-safety pages. Still to confirm: a test email reaching hello@."
     },
     {
       "id": "signed-builds",

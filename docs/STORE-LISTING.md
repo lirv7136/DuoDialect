@@ -56,6 +56,8 @@ decide approval; this is a draft for review, not legal advice.
 
 **What's New** (1.0): `First release. Find a language partner, plan a meetup and chat.`
 
+**What's New** (1.1.0): `Check-ins: the morning after a meetup, Talkeven privately asks how it went. Your answer is only ever seen by you, and helps us suggest what's next. Plus a new Community guidelines page and small fixes.`
+
 **Age rating**: answer the questionnaire honestly. Relevant answers: unrestricted user
 generated content = **Yes** (free text chat and profiles); messaging between users =
 **Yes**; no violence, no mature themes in the app's own content. Because the service is
@@ -90,7 +92,7 @@ advertising, product personalisation or third-party purposes):
 | Contact Info → Name | First name shown to partners | Profile |
 | User Content → Emails or Text Messages | Chat messages | Conversations |
 | User Content → Photos or Videos | Optional profile photos (up to 3), shown to signed-in members to help partners recognise each other; screened automatically | Storage `profilePhotos/`, profile |
-| User Content → Other User Content | Bio, neighbourhood, interests, availability, meetup notes and venues, reports | Profile, plans, reports |
+| User Content → Other User Content | Bio, neighbourhood, interests, availability, meetup notes and venues, reports, post meetup check-in answers and confirmed meetups (from 1.1.0) | Profile, plans, reports, checkIns, confirmedMeetups |
 | Identifiers → User ID | Account ID | Firebase Auth |
 | Identifiers → Device ID | Expo push token, only if notifications are enabled | pushTokens |
 | Other Data | Date of birth (private, age check only), languages and levels | privateProfiles, profiles |
@@ -143,7 +145,7 @@ Google's form does not count as sharing).
 | Personal info → Other info (date of birth, languages) | Yes | App functionality (age check, matching) | Required |
 | Photos and videos → Photos | Yes | App functionality (profile photos), safety screening | Optional |
 | Messages → Other in-app messages | Yes | App functionality | Required to chat |
-| App activity → Other user-generated content (bio, plans, reports) | Yes | App functionality, safety | Partly optional |
+| App activity → Other user-generated content (bio, plans, reports, post meetup check-ins) | Yes | App functionality, safety | Partly optional |
 | Device or other IDs (push token) | Yes | App functionality (notifications) | Optional |
 
 Not collected: location, financial info, health, videos, audio, files, calendar,

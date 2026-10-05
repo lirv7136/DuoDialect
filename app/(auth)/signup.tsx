@@ -10,7 +10,7 @@ import { AuthHeader } from "../../components/auth-header";
 import { PasswordField } from "../../components/password-field";
 import { colors, fonts, type } from "../../constants/theme";
 
-const GUIDELINES_URL = "https://talkeven.com/child-safety/";
+const GUIDELINES_URL = "https://talkeven.com/guidelines/";
 const PRIVACY_URL = "https://talkeven.com/privacy/";
 
 export default function Signup() {

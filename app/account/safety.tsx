@@ -5,7 +5,7 @@ import { Button, Card, Heading, Screen, styles } from "../../components/ui";
 import { SafetyCard } from "../../components/safety-card";
 import { EMERGENCY_LINE } from "../../src/domain/safety-copy";
 
-const GUIDELINES_URL = "https://talkeven.com/child-safety/";
+const GUIDELINES_URL = "https://talkeven.com/guidelines/";
 const SUPPORT_URL = "https://talkeven.com/support/";
 
 export default function MeetingSafely() {

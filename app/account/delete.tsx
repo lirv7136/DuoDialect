@@ -14,7 +14,7 @@ import { Button, Caption, Card, ErrorNotice, Field, Screen, Title, styles } from
 import { colors, space } from "../../constants/theme";
 import { APP_NAME } from "../../constants/brand";
 
-const DELETED = ["Profile, photos, private details", "Invitations", "Blocks", "All chats and messages"];
+const DELETED = ["Profile, photos, private details", "Invitations and check-ins", "Blocks", "All chats and messages"];
 
 /**
  * Deletion is immediate and cannot be undone. The backend does not require a recent
