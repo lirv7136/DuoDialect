@@ -308,6 +308,28 @@ Environment:
   personal staging project is still needed before any real testing; nothing here should be
   deployed to a project holding real user data.
 
+## Post meetup check-ins (added 29 Sep)
+
+`lib/checkins.js`, the `answerCheckIn` callable and the hourly `sweepCheckIns` scheduled
+function. Covered by `test/checkins.test.js` (12 tests), which runs the sweep directly with
+an explicit clock because the emulator does not fire scheduled functions. See
+`answerCheckIn` in BACKEND-CONTRACT.md for behaviour.
+
+Before deploying:
+
+- Deploy the two new indexes in `firestore.indexes.json` (invitations by `status` and
+  `nextCheckInAt`; checkIns by `uid`, `status`, `dueAt`) before the functions, or the
+  first sweeps fail on a missing index.
+- The scheduler needs Cloud Scheduler enabled on the project; `firebase deploy` offers
+  to enable it.
+- Plans accepted before this deploy have no `nextCheckInAt`, so they never get a
+  check-in. That is acceptable at current volume; a one-off backfill can set it from
+  `meeting.localDate` with `initialSchedule` if wanted.
+- The client side is built: `app/check-in/[checkInId].tsx` (the questions, plus a report
+  link), a "How did it go?" card at the top of Plans (`components/check-in-card.tsx`), and
+  `type: "checkIn"` push routing. Builds released before it ignore a `checkIn` push
+  (`notificationTarget` returns null for unknown types), so the backend can ship first.
+
 ## Remaining work
 
 **Before this backend is usable in the app**

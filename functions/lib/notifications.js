@@ -43,4 +43,13 @@ function acceptedNotice(invitation, toName) {
   };
 }
 
-module.exports = { describeWhen, invitationNotice, acceptedNotice };
+/** Sent to each person the day after a meetup. Asks; never says what the other answered. */
+function checkInNotice(checkIn, otherName) {
+  const day = describeWhen({ localDate: checkIn.occurrence && checkIn.occurrence.localDate });
+  return {
+    title: "How did your swap go?",
+    body: `Did you meet ${displayName(otherName)} on ${day}? Tap to check in.`,
+  };
+}
+
+module.exports = { describeWhen, invitationNotice, acceptedNotice, checkInNotice };

@@ -20,6 +20,9 @@ const crypto = require("crypto");
  * deletionRequests/{uid}                      server only; deletion audit trail
  * moderationActions/{actionId}                server only; who did what, and why
  * photoScreening/{uid}_{photoId}              owner may get; server writes; screening verdict
+ * checkIns/{checkInId}                        owner reads; server writes; post meetup check-in
+ * checkInMutes/{muteId}                       server only; stop check-ins for one plan, one person
+ * confirmedMeetups/{meetupId}                 server only; both people said the meetup happened
  */
 const COLLECTIONS = {
   profiles: "profiles",
@@ -37,6 +40,9 @@ const COLLECTIONS = {
   deletionRequests: "deletionRequests",
   moderationActions: "moderationActions",
   photoScreening: "photoScreening",
+  checkIns: "checkIns",
+  checkInMutes: "checkInMutes",
+  confirmedMeetups: "confirmedMeetups",
 };
 
 function shortHash(...parts) {
@@ -119,6 +125,12 @@ function refs(db) {
     photoScreening: (uid, photoId) =>
       db.collection(COLLECTIONS.photoScreening).doc(photoScreeningId(uid, photoId)),
     photoScreenings: () => db.collection(COLLECTIONS.photoScreening),
+    checkIn: (id) => db.collection(COLLECTIONS.checkIns).doc(id),
+    checkIns: () => db.collection(COLLECTIONS.checkIns),
+    checkInMute: (id) => db.collection(COLLECTIONS.checkInMutes).doc(id),
+    checkInMutes: () => db.collection(COLLECTIONS.checkInMutes),
+    confirmedMeetup: (id) => db.collection(COLLECTIONS.confirmedMeetups).doc(id),
+    confirmedMeetups: () => db.collection(COLLECTIONS.confirmedMeetups),
   };
 }
 

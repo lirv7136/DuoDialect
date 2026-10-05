@@ -3,7 +3,8 @@ import { View } from "react-native";
 import { router } from "expo-router";
 import { api } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
-import { subscribeInvitations, type InvitationDoc } from "../../src/lib/live";
+import { subscribeInvitations, subscribeOpenCheckIns, type CheckInDoc, type InvitationDoc } from "../../src/lib/live";
+import { openCheckIns } from "../../src/domain/check-in";
 import { askForNotificationsInContext } from "../../src/lib/notification-prompt";
 import { dismissSafetyTips, safetyTipsDismissed } from "../../src/lib/safety-tips";
 import { formatLocalDate } from "../../src/domain/schedule";
@@ -19,6 +20,7 @@ import { usePeople } from "../../hooks/use-people";
 import { useMyAccount } from "../../hooks/use-my-account";
 import { CARD_GAP } from "../../constants/theme";
 import { SafetyCard } from "../../components/safety-card";
+import { CheckInCard } from "../../components/check-in-card";
 
 type Busy = Record<string, "accept" | "decline" | "cancel" | undefined>;
 type Segment = "upcoming" | "invites" | "past";
@@ -27,6 +29,8 @@ export default function Plans() {
   const uid = auth.currentUser?.uid ?? "";
   const { profile: me } = useMyAccount();
   const [items, setItems] = useState<InvitationDoc[] | null>(null);
+  // Open post meetup check-ins. A failure here only hides the prompts; Plans still works.
+  const [checkIns, setCheckIns] = useState<CheckInDoc[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Busy>({});
   const [cardErrors, setCardErrors] = useState<Record<string, string>>({});
@@ -37,7 +41,10 @@ export default function Plans() {
   const inFlight = useRef(new Set<string>());
   const lastStatus = useRef<Map<string, string> | null>(null);
   // Name and photos for the other person on each invitation. A hidden profile reads as a neutral label.
-  const people = usePeople((items ?? []).map(item => (item.fromUid === uid ? item.toUid : item.fromUid)));
+  const people = usePeople([
+    ...(items ?? []).map(item => (item.fromUid === uid ? item.toUid : item.fromUid)),
+    ...checkIns.map(item => item.otherUid),
+  ]);
   // Unknown until read, so the tips never flash for someone who already dismissed them.
   const [tipsDismissed, setTipsDismissed] = useState<boolean | null>(null);
   const { due: firstMeetupDue, markDone: celebrated } = useFirstMeetupCelebration(uid);
@@ -57,6 +64,11 @@ export default function Plans() {
       setItems(next);
       setError(null);
     }, e => setError(errorMessage(e)));
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) return;
+    return subscribeOpenCheckIns(uid, setCheckIns, () => setCheckIns([]));
   }, [uid]);
 
   // The first confirmed meetup gets one burst of bubble confetti, once per person.
@@ -138,6 +150,11 @@ export default function Plans() {
       <Screen>
         <Display>Plans</Display>
         <ErrorNotice message={error} />
+
+        {openCheckIns(checkIns).map(item => (
+          <CheckInCard key={item.id} item={item} person={people[item.otherUid]}
+            onOpen={() => router.push({ pathname: "/check-in/[checkInId]", params: { checkInId: item.id } })} />
+        ))}
 
         {all.length === 0 && !error ? (
           <EmptyState art="calendar" title="Nothing planned yet.">

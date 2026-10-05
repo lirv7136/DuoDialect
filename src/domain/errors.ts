@@ -30,6 +30,8 @@ const REASON_MESSAGES: Record<string, string> = {
   "invitation/not-recipient": "Only the person invited can answer this invitation.",
   "invitation/not-sender": "Only the person who sent this invitation can cancel it.",
   "invitation/not-found": "This invitation no longer exists.",
+  "checkin/not-found": "This check-in no longer exists.",
+  "checkin/expired": "This check-in has closed. Thanks anyway.",
   "conversation/not-found": "This conversation no longer exists.",
   "conversation/not-member": "You’re not part of this conversation.",
   "deletion/not-confirmed": "Type DELETE to confirm.",

@@ -13,6 +13,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2/options");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
@@ -29,6 +30,7 @@ const { deliver } = require("./lib/notifier");
 const { invitationNotice, acceptedNotice } = require("./lib/notifications");
 const { refs } = require("./lib/refs");
 const { setProfilePhotos, screenUpload } = require("./lib/photos");
+const { answerCheckIn, sweepCheckIns } = require("./lib/checkins");
 
 setGlobalOptions({ region: "australia-southeast1", maxInstances: 10 });
 
@@ -97,6 +99,9 @@ exports.setBlock = authenticated("setBlock", (database, uid, data) =>
 
 exports.reportUser = authenticated("reportUser", (database, uid, data) =>
   reportUser(database, uid, data));
+
+exports.answerCheckIn = authenticated("answerCheckIn", (database, uid, data, now) =>
+  answerCheckIn(database, uid, data, now));
 
 /**
  * Account deletion. Allowed while suspended, and given a long timeout because it walks
@@ -213,5 +218,19 @@ exports.onProfilePhotoUploaded = onObjectFinalized(
   { region: "australia-southeast1", memory: "512MiB", timeoutSeconds: 60 },
   async (event) => {
     await screenUpload(db, event.data);
+  },
+);
+
+/**
+ * Post meetup check-ins. Every hour, creates the check-ins that have come due (10:00
+ * local time the day after each accepted plan, weekly for weekly plans) and notifies
+ * each person privately. Idempotent, so an overlapping or repeated run is harmless.
+ * See lib/checkins.js.
+ */
+exports.sweepCheckIns = onSchedule(
+  { schedule: "every 60 minutes", timeZone: "Australia/Sydney", timeoutSeconds: 300 },
+  async () => {
+    const result = await sweepCheckIns(db, new Date());
+    logger.info("Check-in sweep finished", result);
   },
 );

@@ -25,6 +25,7 @@ const { deleteAllPhotosFor } = require("./photos");
  *   every invitation they are part of, and its duplicate lock
  *   every conversation they are part of, including all its messages
  *   both participants' inbox entries for those conversations
+ *   post meetup check-ins by or about them, their check-in mutes, and confirmed meetups
  *   the Firebase Auth user
  *
  * What is kept, deliberately:
@@ -66,7 +67,7 @@ async function requestAccountDeletion(db, uid, payload) {
   const progress = {
     invitations: 0, conversations: 0, inboxEntries: 0,
     blocksMade: 0, blocksReceived: 0, reportsRetained: 0,
-    photos: 0, photoScreenings: 0,
+    photos: 0, photoScreenings: 0, checkIns: 0, confirmedMeetups: 0,
   };
 
   await r.deletionRequest(uid).set({
@@ -114,6 +115,22 @@ async function requestAccountDeletion(db, uid, payload) {
       // recursiveDelete removes the messages subcollection as well as the document.
       await db.recursiveDelete(doc.ref);
     },
+  );
+
+  // 3b. Post meetup check-ins: their own, the other person's check-ins about them, their
+  //     mutes, and every meetup they confirmed. A check-in about someone who no longer
+  //     exists cannot be answered usefully.
+  for (const query of [
+    r.checkIns().where("uid", "==", uid),
+    r.checkIns().where("otherUid", "==", uid),
+    r.checkInMutes().where("uid", "==", uid),
+  ]) {
+    progress.checkIns += await deleteQueryDocs(db, query, async (doc) => { await doc.ref.delete(); });
+  }
+  progress.confirmedMeetups = await deleteQueryDocs(
+    db,
+    r.confirmedMeetups().where("participants", "array-contains", uid),
+    async (doc) => { await doc.ref.delete(); },
   );
 
   // 4. Any inbox entry left over, for a conversation already gone.

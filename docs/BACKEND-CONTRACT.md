@@ -41,6 +41,9 @@ Two rules are worth stating plainly, because the client must not try to work aro
 | `deletionRequests/{uid}` | nobody | server only | deletion audit trail, kept after the account is gone |
 | `moderationActions/{id}` | nobody | server only | what a moderator looked at and did |
 | `photoScreening/{uid}_{photoId}` | the owner only (`get`, including before it exists) | server only | the screening verdict for one uploaded photo |
+| `checkIns/{checkInId}` | the owner only | server only | one post meetup check-in, for one person, for one occurrence of a plan |
+| `checkInMutes/{muteId}` | nobody | server only | one person asked to stop being checked in about one plan |
+| `confirmedMeetups/{meetupId}` | nobody | server only | both people said this meetup happened |
 
 Storage holds one kind of object, `profilePhotos/{uid}/{photoId}.jpg`; see
 [Profile photos](#profile-photos).
@@ -81,6 +84,10 @@ query(collection(db, "userConversations", uid, "items"), orderBy("lastAt", "desc
 
 // One public profile.
 doc(db, "profiles", otherUid)
+
+// My check-ins. The uid filter is required. Optionally also:
+// where("status", "==", "open"), orderBy("dueAt", "desc")
+query(collection(db, "checkIns"), where("uid", "==", uid))
 ```
 
 `collection(db, "profiles")` cannot be listed at all. Discovery is `discoverCandidates`.
@@ -367,6 +374,52 @@ visibility but does not revive cancelled invitations.
 Returns `{ reportId, status: "received" }`. Reports are not readable by any client,
 including the reporter. There is no triage tooling yet.
 
+### `answerCheckIn`
+
+```ts
+{
+  checkInId: string,
+  happened: "yes" | "no",
+  meetAgain?: "yes" | "no" | null
+}
+```
+
+Returns `{ checkIn, changed }`, where `checkIn` is:
+
+```ts
+{
+  id, invitationId, otherUid, conversationId,
+  occurrence: { localDate, localTime, timeZone, recurrence },
+  languages: { gave, received },   // from the owner's side
+  status: "open" | "answered",
+  answer: { happened, meetAgain } | null,
+  dueAt, expiresAt                 // ISO strings
+}
+```
+
+**How check-ins come about.** Accepting a plan schedules its first check-in for 10:00
+local time (the plan's own time zone) on the day after the meeting. The `sweepCheckIns`
+scheduled function runs hourly and creates one check-in for each person, then sends each
+a push with `data: { type: "checkIn", checkInId, invitationId, otherUid }`. A weekly plan
+is asked about again each week; missed weeks are skipped rather than sent as a backlog.
+Nothing is created for a blocked pair, and the plan stops scheduling.
+
+**Answering.** Only the owner can answer; anyone else gets `not-found` with reason
+`checkin/not-found`. A check-in can be answered, and re-answered, for 7 days after it is
+due; after that `failed-precondition` with reason `checkin/expired`. `changed` is false
+when the answer repeats the stored one.
+
+- **Answers are private.** The other person never sees them, and nothing tells them.
+- `meetAgain: "no"` stops future check-ins about this plan **for the caller only**.
+  `"yes"` lifts that. Omitted or null leaves it as it was.
+- When **both** say `happened: "yes"`, and neither has blocked the other, the server
+  records a confirmed meetup. If either later answers `"no"`, the record is removed.
+  Confirmed meetups are not readable by clients yet; they are what the exchange balance
+  will be built on.
+- A weekly plan that nobody confirms for 3 occurrences in a row stops asking.
+- To report the other person from a check-in, call `reportUser` with the check-in's
+  `otherUid` and `conversationId`.
+
 ### `requestAccountDeletion`
 
 ```ts
@@ -375,12 +428,13 @@ including the reporter. There is no triage tooling yet.
 
 Returns `{ status, deleted, retained }`. `status` is `"completed"` or `"needs_retry"`.
 `deleted` counts what was removed: invitations, conversations, inbox entries, blocks made,
-blocks received, photos and photo screening records.
+blocks received, photos, photo screening records, check-ins (with mutes) and confirmed meetups.
 
 Deletes the caller's profile, private profile, push token, every profile photo in Storage
 and its screening record, blocks in both directions,
 every invitation they are part of, every conversation they are part of **including all
-its messages**, both participants' inbox entries for those conversations, and finally the
+its messages**, both participants' inbox entries for those conversations, every check-in
+by or about them with their check-in mutes, every confirmed meetup they are part of, and finally the
 Firebase Auth user. Reports filed by or about them are **kept** and flagged; see below.
 
 The operation is idempotent. Every step is a delete and the Auth user goes last, so a
@@ -499,10 +553,13 @@ no reason code.
   It does not test whether that claim is true.
 - **Recurrence is a stated intention, not a schedule.** `recurrence: "weekly"` is stored
   and returned. No future occurrences are materialised, none can be cancelled
-  individually, and nothing reschedules them.
+  individually, and nothing reschedules them. The only thing that follows the weekly
+  cadence is the post meetup check-in.
 - **There are no reminders.** Nothing notifies either person that a meeting is approaching.
-- **Notifications cover new messages only.** Invitations, acceptances, declines and
-  cancellations send nothing.
+- **Notifications cover messages, new invitations, acceptances and check-ins.** Declines
+  and cancellations send nothing.
+- **A confirmed meetup is two people's word, nothing more.** Nothing checks that anyone
+  was at the venue.
 - **Groups are not implemented.** Only two person invitations exist.
 - **Deletion of a conversation is mutual.** Deleting your account removes the shared
   thread from the other participant too. That is a deliberate product choice, not a
