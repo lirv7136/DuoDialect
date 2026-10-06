@@ -31,7 +31,9 @@ decide approval; this is a draft for review, not legal advice.
 > Find someone who speaks the language you're learning and wants to learn yours. Trade 20 minutes each way over coffee, and keep it going every week.
 
 **Keywords** (100 max, comma separated, no spaces wasted):
-`exchange,japanese,spanish,korean,english,tandem,conversation,practice,speaking,partner,sydney,local` (from 1.0.1; "language" is already in the name)
+`partner,practice,speaking,conversation,japanese,korean,spanish,chinese,mandarin,hindi,english,sydney` (from 1.1.0; 100 characters).
+
+1.0.1 used `exchange,japanese,spanish,korean,english,tandem,conversation,practice,speaking,partner,sydney,local`. Changed because "exchange" already appears in the name (wasted characters) and "tandem" is a competitor's app name, which Apple's keyword guidance and Guideline 2.3.7 warn against. Also add an English (U.K.) localisation: the Australian store also searches U.K. English metadata, which gives a second 100 character keyword field.
 
 **Description**:
 > Talkeven pairs you with someone who speaks the language you're learning and is learning yours. You help each other, evenly.

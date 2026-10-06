@@ -39,7 +39,7 @@ export function Screen({ children, scroll = true, edges = ["top"], refreshContro
   refreshControl?: ReactElement<RefreshControlProps>;
   /** Pinned below the scrolling content, above the home indicator: a sticky primary action. */
   footer?: ReactNode;
-  /** The full-bleed navy of the sign-in screens. */
+  /** The full-bleed deep water of the sign-in screens. */
   navy?: boolean;
 }) {
   const background = { backgroundColor: navy ? colors.primary : colors.background };
@@ -121,7 +121,7 @@ function buttonPalette(variant: Variant, onDark: boolean) {
   switch (variant) {
     case "primary": return { face: colors.primary, lip: colors.primaryPressed, text: colors.onPrimary, border: colors.primary };
     case "secondary": return { face: colors.surface, lip: "transparent", text: colors.primary, border: colors.primary };
-    case "dangerFilled": return { face: colors.danger, lip: "#8a1c16", text: "#ffffff", border: colors.danger };
+    case "dangerFilled": return { face: colors.danger, lip: colors.dangerPressed, text: "#ffffff", border: colors.danger };
     case "danger": return { face: "transparent", lip: "transparent", text: colors.danger, border: "transparent" };
     default: return { face: "transparent", lip: "transparent", text: colors.primary, border: "transparent" };
   }
@@ -142,13 +142,13 @@ type ButtonProps = {
   style?: StyleProp<ViewStyle>;
   /** Content alignment: centred, or from the start for field-like buttons. */
   align?: "center" | "start";
-  /** Cream-on-navy colours for the sign-in screens. */
+  /** Cream-on-deep-water colours for the sign-in screens. */
   onDark?: boolean;
 };
 
 /**
- * Primary is navy with a 3pt lip that collapses as the button sinks; secondary is a
- * navy outline; ghost is text and icon; danger is red text, and dangerFilled is kept
+ * Primary is deep water with a 3pt lip that collapses as the button sinks; secondary is a
+ * deep water outline; ghost is text and icon; danger is red text, and dangerFilled is kept
  * for the final step of a destructive confirmation.
  */
 export function Button({
@@ -218,7 +218,7 @@ export function IconButton({ icon, label, onPress, hint, color = colors.primary,
 
 /**
  * A selectable chip: 40pt tall with a 4pt hit slop (48pt to touch). Selected chips turn
- * soft navy with a navy border and a check, and give a small spring and selection tick.
+ * soft deep water with a deep water border and a check, and give a small spring and selection tick.
  */
 export function Chip({ label, selected = false, onPress, role = "checkbox", accessibilityLabel, icon }: {
   label: string; selected?: boolean; onPress: () => void; role?: "checkbox" | "radio" | "button"; accessibilityLabel?: string; icon?: IconName;
@@ -248,7 +248,7 @@ export function Chip({ label, selected = false, onPress, role = "checkbox", acce
   );
 }
 
-/** A non-interactive fact: soft fill, no border, a 16pt icon. */
+/** A non-interactive fact: soft fill, no border, a 16pt icon. The "coral" tone predates Ocean Pool and now renders aqua. */
 export function InfoChip({ label, icon, tone = "navy", accessibilityLabel }: {
   label: string; icon?: IconName; tone?: "navy" | "coral" | "plain"; accessibilityLabel?: string;
 }) {
@@ -286,7 +286,7 @@ export function StatusBadge({ status }: { status: PlanStatus }) {
   );
 }
 
-/** A coral count or dot. Navy text on coral is 4.5:1. */
+/** An aqua count or dot. Ink text on aqua is 4.53:1. */
 export function CountBadge({ count, label }: { count: number; label?: string }) {
   if (count <= 0) return null;
   return (
@@ -453,7 +453,7 @@ export const styles = StyleSheet.create({
   badge: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: radius.chip, paddingHorizontal: 10, paddingVertical: 4, alignSelf: "flex-start" },
   badgeText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 16 },
   count: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
-  countText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 14, color: colors.primary },
+  countText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 14, color: colors.onAccent },
   segmented: { flexDirection: "row", backgroundColor: colors.surfaceNavySoft, borderRadius: radius.chip, padding: 4, gap: 4 },
   segment: {
     flex: 1, minHeight: 40, borderRadius: radius.chip, flexDirection: "row", alignItems: "center", justifyContent: "center",

@@ -1,46 +1,64 @@
 import type { TextStyle } from "react-native";
 
 /**
- * Talkeven design tokens (docs/design/DESIGN-SPEC.md): navy, coral and cream, taken from
- * the app icon. Contrast ratios are against `background` (#f5f5ef).
+ * Talkeven design tokens (docs/design/DESIGN-SPEC.md): the "Ocean Pool" palette. Sydney's
+ * ocean rock pools are free, public and shared by strangers at the same level; the app
+ * icon is a split disc (deep ink half, cream half, ink divider) on pool aqua.
+ * Contrast ratios are WCAG 2, against `background` (#f3f5f0) unless stated.
  *
- * Coral (`accent`) is for fills, illustration, badges and dots only. It is 2.35:1 on
- * cream, so it is never used for text there; coral-coloured text uses `accentInk`.
+ * Aqua (`accent`) is for fills, badges, dots and the split bar only. It is 2.82:1 on the
+ * background and 2.79:1 against cream, so it is never text on light grounds and never
+ * carries cream text; text on aqua is `onAccent` ink (4.53:1) and aqua coloured text is
+ * `accentInk`. Cream sits on or beside the ink, never alone on aqua. No pink, ever.
+ * Token names predate the palette (`surfaceNavySoft`, the "coral" chip tone) and are kept
+ * so call sites stay stable.
  */
 export const colors = {
-  /** Primary button fill, headings, active tab, body text (10.5:1). */
-  primary: "#1f3a5f",
+  /** Deep water. Primary button fill, headings, active tab, the sign-in screens (10.75:1). */
+  primary: "#0f3d47",
   /** Pressed state and the 3pt bottom lip under primary buttons. */
-  primaryPressed: "#172b45",
-  /** Text and icons on navy. */
-  onPrimary: "#f5f5ef",
-  /** Fills, illustration, badges, dots. Never text on cream. */
-  accent: "#ff7a59",
-  /** Coral text and links (4.98:1). */
-  accentInk: "#b4462a",
-  /** Coral-tinted chip and badge background. */
-  accentSoft: "#fde6dd",
+  primaryPressed: "#0a2c34",
+  /** Cream. Text and icons on deep water (10.63:1). */
+  onPrimary: "#f5f3ec",
+  /** Pool aqua. Fills, illustration, badges, dots, the split bar. Never text on light grounds. */
+  accent: "#16a39f",
+  /** Text and icons on an aqua fill: the icon's deep ink (4.53:1). */
+  onAccent: "#0f2f3d",
+  /** Aqua text and links (5.76:1; 6.33:1 on surface; 5.18:1 on accentSoft). */
+  accentInk: "#0a6b69",
+  /** Aqua tinted chip and badge background. */
+  accentSoft: "#d3eeea",
+  /**
+   * Warm sandstone, for celebrations only (confetti): the rock shelf around the pool. It
+   * keeps the cool palette from feeling clinical. Decorative; never text or UI state.
+   */
+  celebrate: "#e0a96d",
   /** Cards. */
-  surface: "#fffefb",
+  surface: "#ffffff",
   /** Screens. */
-  background: "#f5f5ef",
-  /** Selected chips and soft navy fills. */
-  surfaceNavySoft: "#e3eaf3",
-  /** Body text. */
-  text: "#1f3a5f",
-  /** Metadata (5.2:1). */
-  muted: "#5b6878",
+  background: "#f3f5f0",
+  /** Selected chips and soft deep water fills (primary on it 9.60:1). */
+  surfaceNavySoft: "#e1e9ec",
+  /** Body text: deep ink (12.80:1; 14.05:1 on surface). */
+  text: "#0f2f3d",
+  /** Metadata (5.45:1; 5.99:1 on surface; 4.86:1 on surfaceNavySoft). */
+  muted: "#56666b",
   /** Hairlines. */
-  line: "#dedfd5",
-  success: "#2a7a55",
-  successSoft: "#e2f1e8",
-  /** Report, block, delete. */
+  line: "#dce2dd",
+  /** Leaf green, kept well apart from the aqua (4.93:1 on successSoft). */
+  success: "#2d7337",
+  successSoft: "#e4f0e1",
+  /** Report, block, delete (5.95:1; 5.32:1 on dangerSoft). */
   danger: "#b3261e",
   dangerSoft: "#f9e3e1",
-  /** The lip under a cream button on navy screens. */
-  onPrimaryPressed: "#c9cdc4",
+  /** The lip under a filled danger button. */
+  dangerPressed: "#8a1c16",
+  /** The lip under a cream button on deep water screens. */
+  onPrimaryPressed: "#d3cfc2",
   /** Scrim behind sheets. */
-  scrim: "rgba(23, 43, 69, 0.45)",
+  scrim: "rgba(10, 44, 52, 0.45)",
+  /** Darker veil over a photo while it uploads (cream text sits on it). */
+  scrimStrong: "rgba(10, 44, 52, 0.6)",
 } as const;
 
 /** Font family names, as registered with useFonts in app/_layout.tsx. */

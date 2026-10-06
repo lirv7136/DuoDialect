@@ -13,25 +13,26 @@ export type EmptyArt = "search" | "calendar" | "chat" | "none";
 
 function Bubbles({ art, size }: { art: Exclude<EmptyArt, "none">; size: number }) {
   const cream = colors.onPrimary;
+  const ink = colors.onAccent;
   return (
     <Svg width={size} height={size} viewBox="0 0 160 160" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      {/* Back bubble, navy, tail bottom left. */}
+      {/* Back bubble, deep water, tail bottom left. */}
       <Rect x={12} y={26} width={92} height={70} rx={32} fill={colors.primary} />
       <Path d="M30 86 L20 110 L52 94 Z" fill={colors.primary} />
-      {/* Front bubble, coral, tail bottom right. */}
+      {/* Front bubble, pool aqua, tail bottom right. */}
       <Rect x={56} y={58} width={92} height={70} rx={32} fill={colors.accent} />
       <Path d="M128 118 L142 140 L110 126 Z" fill={colors.accent} />
-      {/* The overlap, in the icon's pale peach: the back bubble clipped to the front one. */}
+      {/* The overlap, in pale aqua: the back bubble clipped to the front one. Objects on aqua are ink, never cream alone (2.79:1). */}
       <Defs>
         <ClipPath id="talkeven-front-bubble">
           <Rect x={56} y={58} width={92} height={70} rx={32} />
         </ClipPath>
       </Defs>
-      <Rect x={12} y={26} width={92} height={70} rx={32} fill="#ffd3c3" clipPath="url(#talkeven-front-bubble)" />
+      <Rect x={12} y={26} width={92} height={70} rx={32} fill={colors.accentSoft} clipPath="url(#talkeven-front-bubble)" />
       {art === "search" ? (
         <>
-          <Circle cx={100} cy={90} r={15} stroke={cream} strokeWidth={6} fill="none" />
-          <Line x1={111} y1={101} x2={124} y2={114} stroke={cream} strokeWidth={7} strokeLinecap="round" />
+          <Circle cx={100} cy={90} r={15} stroke={ink} strokeWidth={6} fill="none" />
+          <Line x1={111} y1={101} x2={124} y2={114} stroke={ink} strokeWidth={7} strokeLinecap="round" />
         </>
       ) : null}
       {art === "calendar" ? (
@@ -47,9 +48,9 @@ function Bubbles({ art, size }: { art: Exclude<EmptyArt, "none">; size: number }
       ) : null}
       {art === "chat" ? (
         <>
-          <Circle cx={86} cy={93} r={6} fill={cream} />
-          <Circle cx={103} cy={93} r={6} fill={cream} />
-          <Circle cx={120} cy={93} r={6} fill={cream} />
+          <Circle cx={86} cy={93} r={6} fill={ink} />
+          <Circle cx={103} cy={93} r={6} fill={ink} />
+          <Circle cx={120} cy={93} r={6} fill={ink} />
         </>
       ) : null}
     </Svg>

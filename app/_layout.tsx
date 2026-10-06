@@ -15,7 +15,7 @@ export const unstable_settings = {
   initialRouteName: "index",
 };
 
-// Keep the navy splash up until the fonts are ready, so text never re-flows on launch.
+// Keep the splash up until the fonts are ready, so text never re-flows on launch.
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 const detail = (title: string) => ({

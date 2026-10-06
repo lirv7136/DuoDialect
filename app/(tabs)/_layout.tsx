@@ -10,7 +10,7 @@ import { colors, fonts } from "../../constants/theme";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-/** Outline when inactive, filled when active, with a 32×4 coral pill above the active icon. */
+/** Outline when inactive, filled when active, with a 32×4 aqua pill above the active icon. */
 const icon = (active: IconName, inactive: IconName) => function TabIcon({ color, size, focused }: { color: string; size: number; focused: boolean }) {
   return (
     <View style={{ alignItems: "center" }}>
@@ -38,7 +38,7 @@ export default function TabsLayout() {
     return () => { stopInbox(); stopInvites(); };
   }, []);
 
-  const badgeStyle = { backgroundColor: colors.accent, color: colors.primary, fontFamily: fonts.bold, fontSize: 11 };
+  const badgeStyle = { backgroundColor: colors.accent, color: colors.onAccent, fontFamily: fonts.bold, fontSize: 11 };
 
   return (
     <Tabs

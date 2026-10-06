@@ -13,24 +13,67 @@ the navy-and-coral icon, and never reading as a dating app.
 6. Everything rounded; the speech-bubble shape is the motif (avatars, empty states, celebrations).
 7. Celebrate real-world outcomes only (accepted/confirmed meetups), never time in app.
 
-## Colour tokens (contrast vs cream #f5f5ef)
+## Colour tokens: Ocean Pool (5 Oct 2026)
+Sydney's ocean rock pools are free, public and shared by strangers at the same level. The
+icon is a split disc (deep ink half, cream half, ink divider) on pool aqua; the UI uses deep
+water for weight, aqua for energy and cream for warmth. Source: `constants/theme.ts`.
+Elsewhere in this spec, "navy" now means `primary` (deep water) and "coral" means `accent`
+(aqua); token names such as `surfaceNavySoft` and the `"coral"` chip tone are kept so code
+stays stable.
+
 | Role | Hex | Use |
 | --- | --- | --- |
-| primary | #1f3a5f | primary button fill, headings, active tab, body text (10.5:1) |
-| primaryPressed | #172b45 | pressed state, 3px button bottom lip |
-| onPrimary | #f5f5ef | text on navy |
-| accent | #ff7a59 | fills, illustration, badges, dots ONLY. Never text on cream (2.35:1) |
-| accentInk | #b4462a | coral text and links (4.98:1). NOT #c4502f, which fails AA |
-| accentSoft | #fde6dd | coral-tinted chip/badge background |
-| surface | #fffefb | cards |
-| background | #f5f5ef | screens |
-| surfaceNavySoft | #e3eaf3 | my chat bubble alternative, selected chips |
-| text | #1f3a5f | body text |
-| muted | #5b6878 | metadata (5.2:1) |
-| line | #dedfd5 | hairlines |
-| success | #2a7a55 on #e2f1e8 | Confirmed |
-| danger | #b3261e | report, block, delete |
-Drop forest green #315d49 and the old orange everywhere.
+| primary | #0f3d47 | deep water: primary button fill, headings, active tab, sign-in screens |
+| primaryPressed | #0a2c34 | pressed state, 3px button bottom lip |
+| onPrimary | #f5f3ec | cream: text and icons on deep water |
+| accent | #16a39f | pool aqua: fills, illustration, badges, dots, split bar ONLY. Never text on light grounds, never under cream text |
+| onAccent | #0f2f3d | ink text and icons on an aqua fill (badges, counts, ⇄, the split bar's second half) |
+| accentInk | #0a6b69 | aqua text and links |
+| accentSoft | #d3eeea | aqua tinted chip/badge background (Waiting, Your turn) |
+| celebrate | #e0a96d | warm sandstone, celebration confetti only; decorative, never text or state |
+| surface | #ffffff | cards |
+| background | #f3f5f0 | screens |
+| surfaceNavySoft | #e1e9ec | selected chips, soft deep water fills, avatar placeholders |
+| text | #0f2f3d | body text (deep ink) |
+| muted | #56666b | metadata |
+| line | #dce2dd | hairlines |
+| success | #2d7337 on #e4f0e1 | Confirmed (leaf green, kept apart from the aqua) |
+| danger | #b3261e on #f9e3e1 | report, block, delete; lip `dangerPressed` #8a1c16 |
+| onPrimaryPressed | #d3cfc2 | lip under a cream button on deep water |
+| scrim / scrimStrong | rgba(10,44,52,.45 / .6) | behind sheets / over an uploading photo |
+
+**Where the old coral went.** Fills, badges, dots, the tab pill and the unread dot are aqua
+with ink text. The ⇄ badge is aqua with an ink glyph. The 20′ | 20′ bar is deep water
+(cream text) | cream divider | aqua (ink text), the split disc laid flat. Empty states are a
+deep water bubble and an aqua bubble with a pale aqua overlap and ink objects. Confetti is
+deep water, aqua, cream and sandstone: the one warm colour, kept for real world
+celebrations so the cool palette never reads as clinical.
+
+**Rules.** Cream sits on or beside the ink, never alone on aqua (2.79:1). Never add pink.
+No crosses, plus signs or stark clinical layouts (teal reads as healthcare). Do not brighten
+the aqua or pair it with yellow (beach, kids).
+
+### Contrast (WCAG 2; text ≥ 4.5:1, large text and UI parts ≥ 3:1)
+| Foreground | Background | Ratio | Use |
+| --- | --- | --- | --- |
+| text #0f2f3d | background #f3f5f0 | 12.80 | body |
+| text | surface #ffffff | 14.05 | body on cards |
+| text | surfaceNavySoft #e1e9ec | 11.42 | chip labels |
+| primary #0f3d47 | background | 10.75 | headings, ghost buttons |
+| primary | surface | 11.81 | secondary buttons |
+| primary | surfaceNavySoft | 9.60 | info chips, selected chips |
+| onPrimary #f5f3ec | primary | 10.63 | primary buttons, sign-in, my chat bubble |
+| primary | onPrimary | 10.63 | cream button on sign-in, monograms |
+| accentInk #0a6b69 | background / surface | 5.76 / 6.33 | aqua text, ⇄ glyph |
+| accentInk | accentSoft #d3eeea | 5.18 | Waiting, Your turn badges |
+| onAccent #0f2f3d | accent #16a39f | 4.53 | counts, tab badge, Main, split bar |
+| muted #56666b | background / surface / surfaceNavySoft | 5.45 / 5.99 / 4.86 | metadata |
+| success #2d7337 | successSoft #e4f0e1 | 4.93 | Confirmed |
+| danger #b3261e | background / dangerSoft | 5.95 / 5.32 | destructive text, errors |
+| #ffffff | danger | 6.54 | filled danger button |
+| accent (non text) | surface / primary | 3.10 / 3.81 | dots, tab pill, logo tile on sign-in |
+| accent (non text) | background | 2.82 | decorative only; put state dots on cards |
+| onPrimary | accent | 2.79 | never: cream must sit beside the ink |
 
 ## Type
 - Display: Fraunces (`@expo-google-fonts/fraunces`), soft serif. UI: Plus Jakarta Sans (`@expo-google-fonts/plus-jakarta-sans`).

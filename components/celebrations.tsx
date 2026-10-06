@@ -19,7 +19,7 @@ type Person = { name: string; photos?: ProfilePhoto[] | null };
 
 const AVATAR = 88;
 
-/** Two avatar bubbles that slide in from either side and overlap, like the logo. */
+/** Two avatar bubbles that slide in from either side and overlap; theirs wears an aqua ring. */
 function MeetingBubbles({ me, them, visible }: { me: Person; them: Person; visible: boolean }) {
   const reduce = useReducedMotion();
   const together = useSharedValue(reduce ? 1 : 0);
@@ -76,7 +76,8 @@ const seeded = (index: number, salt: number) => {
   return x - Math.floor(x);
 };
 
-const PALETTE = [colors.primary, colors.accent, colors.onPrimary, colors.accent, colors.primary];
+/** Deep water, aqua, cream, and the warm sandstone that only celebrations use. */
+const PALETTE = [colors.primary, colors.accent, colors.celebrate, colors.onPrimary, colors.accent, colors.celebrate];
 
 function Particle({ index, progress }: { index: number; progress: SharedValue<number> }) {
   const shape = useMemo(() => ({
@@ -110,7 +111,7 @@ function Particle({ index, progress }: { index: number; progress: SharedValue<nu
 }
 
 /**
- * A single burst of navy, coral and cream speech bubbles from the centre of its parent.
+ * A single burst of deep water, aqua, sandstone and cream speech bubbles from the centre of its parent.
  * Built from Reanimated views rather than a confetti package; renders nothing under
  * reduced motion.
  */

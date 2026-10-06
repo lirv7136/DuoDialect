@@ -1,6 +1,6 @@
 /**
  * The language pair, which is the hero of every card: two monogram discs (JA, EN) joined
- * by a coral ⇄. Monograms stand in for flags, because a language isn't a country.
+ * by an aqua ⇄. Monograms stand in for flags, because a language isn't a country.
  */
 import { Text, View } from "react-native";
 import { displayLanguage } from "../src/domain/languages";
@@ -9,7 +9,7 @@ import { MAX_FONT_SCALE, colors, fonts, radius, space, type } from "../constants
 
 const names = (list: readonly string[]) => list.map(displayLanguage).filter(Boolean);
 
-/** A round language monogram. Filled navy for what you receive, outlined for what you give. */
+/** A round language monogram. Filled cream (on the deep water pill) for what you receive, outlined for what you give. */
 export function Monogram({ language, filled = true, size = 28 }: { language: string; filled?: boolean; size?: number }) {
   const code = languageCode(language);
   return (
@@ -28,12 +28,12 @@ export function Monogram({ language, filled = true, size = 28 }: { language: str
   );
 }
 
-/** The coral ⇄ badge between the two sides. */
+/** The aqua ⇄ badge between the two sides, with an ink glyph (4.53:1). */
 export function SwapBadge({ size = 24 }: { size?: number }) {
   return (
     <View importantForAccessibility="no-hide-descendants"
       style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", zIndex: 1 }}>
-      <Text allowFontScaling={false} style={{ fontFamily: fonts.bold, fontSize: size * 0.6, lineHeight: size * 0.8, color: colors.primary }}>⇄</Text>
+      <Text allowFontScaling={false} style={{ fontFamily: fonts.bold, fontSize: size * 0.6, lineHeight: size * 0.8, color: colors.onAccent }}>⇄</Text>
     </View>
   );
 }
@@ -82,7 +82,7 @@ function Side({ languages, caption, filled, compact }: { languages: string[]; ca
 }
 
 /**
- * `[Japanese] ⇄ [English]`: the left pill (navy) is what the partner teaches you, the
+ * `[Japanese] ⇄ [English]`: the left pill (deep water) is what the partner teaches you, the
  * right (outline) is what you teach. Captions default to "teaches you" and "you teach";
  * your own profile passes "you share" and "practising".
  */

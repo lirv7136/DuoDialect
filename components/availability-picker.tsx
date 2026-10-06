@@ -71,7 +71,7 @@ export function AvailabilityPicker({ value, onChange }: { value: string[]; onCha
   );
 }
 
-/** Read-only 7×3 dots for a profile: filled coral where the person is usually free. */
+/** Read-only 7×3 dots for a profile: filled aqua where the person is usually free. */
 export function AvailabilityDots({ value }: { value: readonly string[] | undefined }) {
   const grid = availabilityGrid(value);
   const summary = (value ?? []).join(", ") || "No times chosen";

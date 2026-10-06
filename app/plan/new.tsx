@@ -229,7 +229,11 @@ export default function NewPlan() {
 
 const HOME_ZONE = "Australia/Sydney";
 
-/** 20′ | 20′: the swap, as a bar. Their language first, as the invitation note used to say. */
+/**
+ * 20′ | 20′: the swap, as a bar. Their language first, as the invitation note used to say.
+ * Deep water half with cream text, a cream divider beside it, then an aqua half with ink
+ * text (4.53:1): the split disc, laid flat. Cream never sits alone on the aqua.
+ */
 function SplitBar({ first, second }: { first: string; second: string }) {
   return (
     <View accessible accessibilityLabel={`20 minutes in ${first}, then 20 minutes in ${second}`}
@@ -238,10 +242,10 @@ function SplitBar({ first, second }: { first: string; second: string }) {
         <Text style={[styles.label, { color: colors.onPrimary, fontFamily: fonts.bold }]}>20′</Text>
         <Text numberOfLines={1} style={[styles.hint, { color: colors.onPrimary, flexShrink: 1 }]}>{first}</Text>
       </View>
-      <View style={{ width: 3, backgroundColor: colors.accent }} />
-      <View style={{ flex: 1, backgroundColor: colors.accentSoft, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: space.sm }}>
-        <Text style={[styles.label, { color: colors.accentInk, fontFamily: fonts.bold }]}>20′</Text>
-        <Text numberOfLines={1} style={[styles.hint, { color: colors.accentInk, flexShrink: 1 }]}>{second}</Text>
+      <View style={{ width: 3, backgroundColor: colors.onPrimary }} />
+      <View style={{ flex: 1, backgroundColor: colors.accent, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: space.sm }}>
+        <Text style={[styles.label, { color: colors.onAccent, fontFamily: fonts.bold }]}>20′</Text>
+        <Text numberOfLines={1} style={[styles.hint, { color: colors.onAccent, flexShrink: 1 }]}>{second}</Text>
       </View>
     </View>
   );

@@ -44,7 +44,7 @@ export function PhotoEditor({ editor, icon }: { editor: ReturnType<typeof usePho
                     accessibilityLiveRegion="polite"
                     style={{
                       position: "absolute", left: 0, right: 0, top: 0, bottom: 0, ...bubbleShape(TILE),
-                      backgroundColor: "rgba(31, 58, 95, 0.6)", alignItems: "center", justifyContent: "center", gap: 4, padding: 4,
+                      backgroundColor: colors.scrimStrong, alignItems: "center", justifyContent: "center", gap: 4, padding: 4,
                     }}
                   >
                     <ActivityIndicator color={colors.onPrimary} />
@@ -53,7 +53,7 @@ export function PhotoEditor({ editor, icon }: { editor: ReturnType<typeof usePho
                 ) : null}
                 {index === 0 && !status ? (
                   <View style={{ position: "absolute", left: 8, top: 8, backgroundColor: colors.accent, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
-                    <Text style={{ color: colors.primary, fontSize: 12, fontFamily: fonts.bold }}>Main</Text>
+                    <Text style={{ color: colors.onAccent, fontSize: 12, fontFamily: fonts.bold }}>Main</Text>
                   </View>
                 ) : null}
               </View>

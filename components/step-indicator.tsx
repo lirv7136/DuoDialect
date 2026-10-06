@@ -1,5 +1,5 @@
 /**
- * Onboarding progress: a segmented navy bar, "1 of 2", and a back chevron. The current
+ * Onboarding progress: a segmented deep water bar, "1 of 2", and a back chevron. The current
  * segment fills with a spring (instantly under reduced motion).
  */
 import { useEffect } from "react";

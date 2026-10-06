@@ -4,7 +4,7 @@ import { APP_NAME, LAUNCH_CITY } from "../constants/brand";
 import { MAX_FONT_SCALE, colors, fonts, space, type } from "../constants/theme";
 import { Logo } from "./logo";
 
-/** The navy sign-in header: the drifting two-bubble mark, the wordmark and one line. */
+/** The deep water sign-in header: the split disc mark, the wordmark and one line. */
 export function AuthHeader({ title }: { title?: string }) {
   return (
     <View style={{ alignItems: "center", gap: space.sm, paddingTop: space.xl, paddingBottom: space.md }}>

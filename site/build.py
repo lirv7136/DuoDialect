@@ -16,6 +16,9 @@ GUIDELINES_UPDATED = "5 October 2026"
 
 ROOT = Path(__file__).parent
 OUT = ROOT / "dist"
+# Horizontal lockup, outlined by assets/brand/source/make_wordmark.py. Inlined so style.css can
+# recolour the type for dark mode; its role="img" and aria-label give the link the name "Talkeven".
+WORDMARK = (ROOT / "wordmark.svg").read_text(encoding="utf-8").strip()
 
 
 def page(path, title, description, body):
@@ -32,12 +35,16 @@ def page(path, title, description, body):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{description}">
+<meta name="theme-color" content="#f3f5f0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b2129" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="{depth}favicon.png">
+<link rel="preload" href="{depth}fonts/plus-jakarta-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{depth}fonts/fraunces-600-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{depth}style.css">
 </head>
 <body>
 <main>
-<header><img src="{depth}icon.svg" alt=""><a href="{depth or './'}">Talkeven</a></header>
+<header><a class="brand" href="{depth or './'}">{WORDMARK}</a></header>
 {draft}
 {body}
 <footer>
@@ -363,8 +370,9 @@ if __name__ == "__main__":
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir()
-    for name in ("style.css", "favicon.png", "icon.svg"):
+    for name in ("style.css", "favicon.png", "icon.svg", "wordmark.svg"):
         shutil.copy(ROOT / name, OUT / name)
+    shutil.copytree(ROOT / "fonts", OUT / "fonts")  # self-hosted, so pages make no request to Google
     page("", "Talkeven: swap languages, meet in person", "Find a language partner who is learning your language.", HOME)
     page("privacy", "Privacy policy · Talkeven", "What Talkeven collects and why.", PRIVACY)
     page("delete-account", "Delete your account · Talkeven", "How to delete your Talkeven account and data.", DELETE)
