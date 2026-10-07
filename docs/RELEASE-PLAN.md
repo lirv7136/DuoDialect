@@ -42,8 +42,10 @@ Checklist:
    - [x] privacy label: no change needed, Other User Content already covers check-in answers
    - [x] 6 screenshots from `docs/screenshots/ios-6.9/` on the 6.9 inch slot
    - [x] App Review notes rewritten for 1.1.0
-3. [ ] EAS production build of 1.1.0 (build 15; app code identical to 4bddd0d), then `eas submit`.
-4. [ ] Attach the build to 1.1.0 and Add for Review with the reviewer account and notes.
+3. [x] EAS production builds 14 (4bddd0d) and 15 (same app code) uploaded (2026-10-07).
+4. [x] Build 14 attached to 1.1.0 and submitted; Waiting for Review since 2026-10-07 20:00 AEDT.
+   Gotchas: Add for Review only creates a draft, so open it on the App Review page and click
+   Submit for Review; a new localisation needs its own Privacy Policy URL under App Privacy.
 
 The EU storefronts (27) stay off for now (decided 2026-10-07). Opening them needs Digital
 Services Act trader status, statements of reasons for moderation decisions, GDPR sections in
