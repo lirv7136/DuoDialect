@@ -1,9 +1,21 @@
 # Backend handoff
 
-19 September 2026, extended 20 September. Backend security foundation, the two person
-invitation to conversation flow, account deletion and a minimum moderation path. Everything is uncommitted, nothing is deployed, and no notification,
-email or invitation has been sent to anyone. Tests ran against local emulators with the
-demo project id `demo-duodialect`.
+19 September 2026, extended 20 September; status updated 7 October 2026.
+
+**Current status (7 Oct).** The backend is committed and deployed. Staging
+(`duodialect-staging`, Sydney) was deployed 30 Sep, and check-ins were verified live there
+2 to 4 Oct. Production (`duodialect`) has functions, rules and indexes, including the two
+check-in indexes, deployed 4 to 5 Oct; Cloud Scheduler for the hourly `sweepCheckIns` was
+enabled automatically and the sweep runs clean. There are 16+ callables plus
+`answerCheckIn`, and 115 emulator tests pass. Check-in code was committed in 7088a70 on
+`feat-checkins`, merged to `feat-server-push` through PR #1 (1d1be40). The `backend-access`
+release gate is passed. iOS 1.0.1 is live on this backend. What is genuinely left is under
+"Remaining work" at the end.
+
+The sections below record the original 19 to 20 September work. At that time everything was
+uncommitted and undeployed, groups and dating were still in scope (both have since been
+dropped from the product), and tests ran against local emulators with the demo project id
+`demo-duodialect`.
 
 The integration surface is in `docs/BACKEND-CONTRACT.md`. This document records what
 changed, what was actually verified, what the native client must change, and what remains.
@@ -237,8 +249,8 @@ One profile field change worth noting: the public profile uses `displayName`, no
 - **Recurrence is stored, not managed.** `recurrence: "weekly"` is recorded and returned.
   No occurrences are materialised, none can be cancelled individually, nothing reschedules
   them, and there are no reminders.
-- **Notifications cover new messages only.** Invitations, acceptances, declines and
-  cancellations send nothing.
+- **Notifications cover messages, new invitations, acceptances and check-ins** (since
+  extended; see the contract). Declines and cancellations send nothing.
 - **A profile change does not cancel pending invitations.** If somebody changes the
   languages that made an exchange reciprocal, the invitation stays pending and fails at
   acceptance with `language/not-reciprocal`. Blocks and dating consent do cascade. A
@@ -292,8 +304,8 @@ One profile field change worth noting: the public profile uses `displayName`, no
 | `reports` | `status`, `createdAt` desc | the moderator queue |
 | `users` (collection group) | `blockedUid` | clearing inbound blocks on deletion |
 
-The emulator does not enforce indexes, so these are declared for deployment and have not
-been exercised against a real Firestore. Deploy them with the rules before the callables.
+The emulator does not enforce indexes. They have since been deployed with the rules to
+staging and production, and the deployed queries run against them.
 
 Environment:
 
@@ -304,9 +316,9 @@ Environment:
   emulator suite.
 - `firebase.json` now points at `firestore.rules` and `firestore.indexes.json`, and pins
   emulator ports: auth 9099, firestore 8080, functions 5001, UI disabled.
-- `.firebaserc` still names the existing `duodialect` project. It was not changed. A
-  personal staging project is still needed before any real testing; nothing here should be
-  deployed to a project holding real user data.
+- `.firebaserc` names the production `duodialect` project as its only (default) alias, so
+  pass `--project duodialect-staging` explicitly for staging. Changes are verified on
+  staging before production.
 
 ## Post meetup check-ins (added 29 Sep)
 
@@ -315,16 +327,17 @@ function. Covered by `test/checkins.test.js` (12 tests), which runs the sweep di
 an explicit clock because the emulator does not fire scheduled functions. See
 `answerCheckIn` in BACKEND-CONTRACT.md for behaviour.
 
-Before deploying:
+Deploy steps (all done: staging 30 Sep, production 4 to 5 Oct):
 
-- Deploy the two new indexes in `firestore.indexes.json` (invitations by `status` and
+- [x] Deploy the two new indexes in `firestore.indexes.json` (invitations by `status` and
   `nextCheckInAt`; checkIns by `uid`, `status`, `dueAt`) before the functions, or the
   first sweeps fail on a missing index.
-- The scheduler needs Cloud Scheduler enabled on the project; `firebase deploy` offers
-  to enable it.
-- Plans accepted before this deploy have no `nextCheckInAt`, so they never get a
-  check-in. That is acceptable at current volume; a one-off backfill can set it from
-  `meeting.localDate` with `initialSchedule` if wanted.
+- [x] Enable Cloud Scheduler on the project for the hourly sweep. `firebase deploy`
+  enabled it automatically, and the sweep runs clean.
+- [x] Backfill of `nextCheckInAt` for plans accepted before the 4 Oct production deploy:
+  not needed. Production had no accepted invitations at the deploy (only 2 pending,
+  created 2026-10-06), so no plan missed a check-in. If one is ever needed, it can set
+  `nextCheckInAt` from `meeting.localDate` with `initialSchedule`.
 - The client side is built: `app/check-in/[checkInId].tsx` (the questions, plus a report
   link), a "How did it go?" card at the top of Plans (`components/check-in-card.tsx`), and
   `type: "checkIn"` push routing. Builds released before it ignore a `checkIn` push
@@ -332,73 +345,56 @@ Before deploying:
 
 ## Remaining work
 
-**Before this backend is usable in the app**
+Done since the original handoff: the native screens against the contract, client side
+idempotency keys, the in app deletion screen, the public deletion page
+(https://talkeven.com/delete-account/), the privacy policy (including the report retention
+exception), the store data declarations, a named operator and child safety contact on
+talkeven.com, notifications for invitations and acceptances, the staging project, and the
+deploys to staging and production. Groups were removed from the app in 1.0.1 and dating is
+out of scope, so neither is backend work now.
 
-1. Native screens against the contract, including the three modes, the invitation planner
-   and the conversation view. That is Codex's side.
-2. Onboarding that collects birth date and gender, and an explicit dating consent screen
-   that can be switched off again.
-3. Client side idempotency keys, persisted across retries.
+**App Check and rate limits**
 
-**Groups**
+App Check is not enforced: the callables verify the user but not the app instance. There is
+no rate limiting or abuse throttling; this matters most for `createInvitation`,
+`sendMessage` and `reportUser`, where a signed in account can call as fast as it likes and
+the report queue itself can be spammed.
 
-Not started. Small group meetups need a `groups` collection, capacity held in a
-transaction, a waiting or full state, host cancellation, participant departure, blocked
-members excluded from both the group and its listing, and language pair eligibility for
-the group as a whole. None of that exists; only two person invitations do.
+**Moderation operator tools**
 
-**Account deletion**
-
-The backend is done: `requestAccountDeletion` cascades over everything the account
-touched, retains safety reports as a disclosed exception, and removes the Auth user last
-so a retry is safe. Twelve tests cover it.
-
-Still needed, all outside the backend: the in app deletion screen with reauthentication
-and a confirmation that says the shared conversation goes too, the public web deletion
-page for people who have uninstalled, the privacy policy wording for the report retention
-exception, and the store data declarations that match it.
-
-**Moderation**
-
-There is now an operator role, a queue, a context read, a stop button and an audit trail
-that covers looking as well as acting. Grant the claim with
+There is an operator role, a queue, a context read, a stop button and an audit trail that
+covers looking as well as acting. Grant the claim with
 `node scripts/set-moderator.js <email> --project <id>`; the person must sign in again
 before it applies.
 
 Still needed: an operator screen, since there is no UI; a response to the reporter, who
-currently hears nothing; a designated safety contact and a published, written process,
-which is a store requirement and a duty, not code; rate limiting on reporting; and a
-decision on what a warning actually consists of, because `warn` presently only records
-that one was issued.
+currently hears nothing; and a decision on what a warning actually consists of, because
+`warn` presently only records that one was issued.
 
-**Push lifecycle**
+**Push token lifecycle**
 
 One token per account, and the token document is the only thing clients still write
 directly. Still needed: installation based tokens so two devices both work, revocation on
 logout and on account switch, cleanup driven by Expo receipts and `DeviceNotRegistered`,
-notifications for invitations and responses, and deep link navigation tests. Nothing
-currently prevents a notification reaching a device where a different account has since
-signed in.
+and deep link navigation tests. Nothing currently prevents a notification reaching a device
+where a different account has since signed in.
 
-**Production rollout**
+**Discovery scaling**
 
-1. Create a personal staging Firebase project. Do not reuse the existing project for
-   tests, and do not point tests at anything holding real data.
-2. Deploy rules and indexes first, then the functions, then verify the rules in the
-   console against the deployed project.
-3. Re-run the emulator suite against the deployed rules file as a regression gate in CI.
-4. Add App Check, and rate limits on `createInvitation`, `sendMessage` and `reportUser`.
-5. Grant yourself the moderator claim on staging and walk one report end to end before
-   any real user exists.
-6. Decide data retention, then write the privacy policy and the store data safety
-   declarations from what the backend actually stores, which is listed in the contract.
-7. The release gates `backend-access` and `live-exchange` in `docs/release-readiness.json`
-   are still pending. `backend-access` now has rules and an adversarial emulator suite
-   behind it and could be argued, but the gate as written also expects deployed rules to
-   have been inspected, which has not happened. `live-exchange` needs the native client
-   and a real two account run on a staging project. I did not edit that file; updating
-   release status is yours to decide.
+Discovery scans up to 60 public profiles per call and filters in memory, with no ranking.
+It needs a dedicated index and query well before a large member base.
 
-None of this makes the app store ready. Real device testing, signed builds, moderation
-operations, account deletion and store beta testing all remain separate release
-requirements, as recorded in `docs/RELEASE-PLAN.md`.
+**Single call deletion**
+
+`requestAccountDeletion` runs in one request (up to 500 documents per collection, 540
+second timeout). That is comfortable at current volumes and retries safely, but a very large
+account would need a queued worker rather than a callable.
+
+**Also open**
+
+- Run the emulator suite against the deployed rules file as a regression gate in CI.
+- Walk one report end to end on staging with the moderator claim, if not already done.
+
+None of this blocks the current iOS release. Android device testing, the signed AAB and the
+Google Play closed test remain separate release requirements, as recorded in
+`docs/RELEASE-PLAN.md`.

@@ -1,9 +1,10 @@
 # Talkeven: store listing and declarations
 
 Drafted 26 September 2026 for v1.0 (language partners, plans and chat; no groups, no
-dating). Every answer below was checked against the code at commit c4fc854. Re-check it
-if the app starts collecting anything new, and before each submission. Apple and Google
-decide approval; this is a draft for review, not legal advice.
+dating); updated 7 October 2026 for 1.1.0. iOS 1.0.1 is live on the App Store. Every
+answer below was rechecked for 1.1.0, including check-ins. Recheck it if the app starts
+collecting anything new, and before each submission. Apple and Google decide approval;
+this is a draft for review, not legal advice.
 
 ## Shared facts
 
@@ -33,7 +34,7 @@ decide approval; this is a draft for review, not legal advice.
 **Keywords** (100 max, comma separated, no spaces wasted):
 `partner,practice,speaking,conversation,japanese,korean,spanish,chinese,mandarin,hindi,english,sydney` (from 1.1.0; 100 characters).
 
-1.0.1 used `exchange,japanese,spanish,korean,english,tandem,conversation,practice,speaking,partner,sydney,local`. Changed because "exchange" already appears in the name (wasted characters) and "tandem" is a competitor's app name, which Apple's keyword guidance and Guideline 2.3.7 warn against. Also add an English (U.K.) localisation: the Australian store also searches U.K. English metadata, which gives a second 100 character keyword field.
+1.0.1 used `exchange,japanese,spanish,korean,english,tandem,conversation,practice,speaking,partner,sydney,local`. Changed because "exchange" already appears in the name (wasted characters) and "tandem" is a competitor's app name, which Apple's keyword guidance and Guideline 2.3.7 warn against. Also add an English (U.K.) localisation (below): the Australian store also searches U.K. English metadata, which gives a second 100 character keyword field.
 
 **Description**:
 > Talkeven pairs you with someone who speaks the language you're learning and is learning yours. You help each other, evenly.
@@ -58,7 +59,21 @@ decide approval; this is a draft for review, not legal advice.
 
 **What's New** (1.0): `First release. Find a language partner, plan a meetup and chat.`
 
-**What's New** (1.1.0): `Check-ins: the morning after a meetup, Talkeven privately asks how it went. Your answer is only ever seen by you, and helps us suggest what's next. Plus a new Community guidelines page and small fixes.`
+**What's New** (1.1.0): `New look: a fresh icon and calm ocean colours throughout. Check-ins: the morning after a meetup, Talkeven privately asks how it went. Your answer is only ever seen by you, and helps us suggest what's next. Plus a new Community guidelines page and small fixes.`
+
+### English (U.K.) localisation
+
+Add English (U.K.) as a second localisation in App Store Connect. The name, subtitle,
+promotional text, description and What's New are the same as English (Australia) above;
+only the keywords differ.
+
+**Keywords** (100 max):
+`french,german,italian,portuguese,vietnamese,cantonese,indonesian,thai,arabic,meetup,fluent,cafe` (95 characters)
+
+The Australian storefront searches the U.K. English keywords as well as the Australian
+ones, so this field extends the Australian keyword set rather than duplicating it. It
+repeats no word from the primary keywords or the app name, because a repeated word adds
+nothing to search.
 
 **Age rating**: answer the questionnaire honestly. Relevant answers: unrestricted user
 generated content = **Yes** (free text chat and profiles); messaging between users =
@@ -162,17 +177,23 @@ Apple needs 6.9" iPhone screenshots (1290 × 2796, or 1320 × 2868). Because v1 
 only, no iPad screenshots are required. Google needs at least 2 phone screenshots
 (portrait 1080 × 1920 or larger) plus a 1024 × 500 feature graphic.
 
-Suggested set, captured from staging with the test partner:
-1. Discover with a match ("You can help each other")
-2. Suggest a meetup (public place, weekly)
-3. Plans → Confirmed
-4. Chat in two scripts
-5. Language setup ("Your side of the conversation")
+The 1.1.0 set is in `docs/screenshots/ios-6.9/`, in this order:
+1. `1-discover.png`: Discover with a match
+2. `2-suggest-meetup.png`: suggest a meetup (public place, weekly)
+3. `3-plans-confirmed.png`: Plans → Confirmed
+4. `4-chat.png`: chat in two scripts
+5. `5-languages.png`: language setup
+6. `6-check-in.png`: the private post meetup check-in
 
 ## Still needed from Lachlan
 
-- Connect talkeven.com to the `talkeven` Cloudflare Pages project (the pages are live at
-  https://talkeven.pages.dev), and add the hello@ forwarding rule in Email Routing.
-- Reports are handled by Lachlan (the named operator and child safety contact on the
-  site); support replies within two business days, as the support page says.
-- Final review of this copy.
+talkeven.com is connected and live (checked 2026-10-05). hello@ routing is verified in
+Cloudflare: one enabled rule forwards to a verified Gmail destination, and the MX and SPF
+records are correct. Still open:
+
+- A test email to hello@talkeven.com arrived on 2026-10-07, so forwarding works end to end.
+- 1.1.0 metadata entered in App Store Connect on 2026-10-07 (both localisations, screenshots,
+  review notes); attach the 1.1.0 build, then Add for Review.
+
+Reports are handled by Lachlan (the named operator and child safety contact on the site);
+support replies within two business days, as the support page says.

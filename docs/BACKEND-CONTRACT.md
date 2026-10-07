@@ -1,7 +1,9 @@
 # DuoDialect backend contract
 
 Status: implemented and tested against the local emulator suite on 19 September 2026.
-Nothing here has been deployed. This document is the integration surface for the native
+Deployed to staging (`duodialect-staging`) on 30 Sep and to production (`duodialect`) on 4 to
+5 Oct 2026; iOS 1.0.1 runs against it. Dating and groups are out of the product, so the
+dating fields and errors below are unused by the app. This document is the integration surface for the native
 client; `docs/BACKEND-HANDOFF.md` records what changed and what is still missing.
 
 ## The shape of the system

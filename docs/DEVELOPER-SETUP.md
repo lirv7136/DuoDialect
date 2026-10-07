@@ -1,6 +1,8 @@
 # Developer portal tooling
 
-Prepared 20 September 2026 for DuoDialect's personal developer accounts.
+Prepared 20 September 2026 for DuoDialect's personal developer accounts. This is a record
+of that day. Current status (7 Oct): the app is Talkeven, iOS 1.0.1 is live, and the backend
+is deployed to staging and production; see `RELEASE-PLAN.md`.
 
 ## Available tools
 

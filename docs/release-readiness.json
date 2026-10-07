@@ -1,48 +1,48 @@
 {
-  "reviewedOn": "2026-10-05",
-  "target": "Talkeven 1.0 for iOS and Android (language partners, plans and chat; no groups, no dating)",
+  "reviewedOn": "2026-10-07",
+  "target": "Talkeven 1.1.0 for iOS and Android (language partners, plans, chat and private post meetup check-ins; no groups, no dating)",
   "gates": [
     {
       "id": "native-baseline",
       "name": "Native typecheck, lint, domain and notification adapter tests",
       "status": "passed",
-      "evidence": "npm run verify: typecheck, lint with zero warnings, 36 unit and 7 prototype tests (commit 6a0e27f)."
+      "evidence": "npm run verify: typecheck, lint with zero warnings, 36 unit and 7 prototype tests (commit 6a0e27f). Rerun on the 1.1.0 tree (4bddd0d) before the production build."
     },
     {
       "id": "native-bundles",
       "name": "iOS and Android JavaScript bundle export",
       "status": "passed",
-      "evidence": "npm run bundle:check, plus EAS iOS builds 4 to 6 and Android preview APKs built from the same tree."
+      "evidence": "npm run bundle:check, plus EAS iOS builds (latest: 13) and Android preview APKs built from the same tree."
     },
     {
       "id": "native-product",
       "name": "Native implementation of the v1 experience",
       "status": "passed",
-      "evidence": "Discover, suggest a meetup (once or weekly), plans, chat, profile editing, block, report and delete account on the server callables (fad8c43 onward). Groups and dating are out of scope for v1."
+      "evidence": "Discover, suggest a meetup (once or weekly), plans, chat, profile editing, block, report and delete account on the server callables (fad8c43 onward). 1.1.0 adds private post meetup check-ins (7088a70) and the Ocean Pool rebrand with a Community guidelines page (2aa01a2, 4bddd0d). Groups were removed in 1.0.1; dating is out of scope."
     },
     {
       "id": "backend-access",
       "name": "Server authorization, database rules and adversarial emulator tests",
       "status": "passed",
-      "evidence": "Default deny rules and 16 callables; 86 emulator tests; deployed to duodialect-staging (Sydney) with a live two-account smoke test on 2026-09-26."
+      "evidence": "Default deny rules, 16+ callables plus answerCheckIn; 115 emulator tests pass. Staging (duodialect-staging, Sydney) deployed 30 Sep, check-ins verified live there 2 to 4 Oct. Production (duodialect) functions, rules and indexes, including the two check-in indexes, deployed 4 to 5 Oct; Cloud Scheduler enabled for the hourly sweepCheckIns, which runs clean."
     },
     {
       "id": "live-exchange",
       "name": "Real account lifecycle, invitations, acceptance and chat",
       "status": "pending",
-      "evidence": "Staging, 2026-09-26: full flow verified in the web build, and on an iPhone 14 (TestFlight build 7) with invitations, acceptance, chat and notifications against demo partner accounts. Remaining: an Android device run."
+      "evidence": "Staging, 2026-09-26: full flow verified in the web build, and on an iPhone 14 (TestFlight build 7) with invitations, acceptance, chat and notifications against demo partner accounts. Check-ins verified live on staging 2 to 4 Oct. Remaining: an Android device run."
     },
     {
       "id": "privacy-safety",
       "name": "Age controls, deletion, reporting and moderation",
       "status": "passed",
-      "evidence": "Implemented: adult-only self-declared birth date, deletion cascade, reports and moderation queue with audit log. Published and checked live on 2026-10-05: talkeven.com privacy (names Lachlan Irving as operator), support (hello@talkeven.com, reply within two business days), delete-account and child-safety pages. Still to confirm: a test email reaching hello@."
+      "evidence": "Implemented: adult only self declared birth date, deletion cascade, reports and moderation queue with audit log. talkeven.com checked live on 2026-10-05: privacy (names Lachlan Irving as operator), support (hello@talkeven.com, reply within two business days), community guidelines, delete account and child safety pages. hello@ forwarding verified end to end on 2026-10-07 (Cloudflare routing, MX and SPF, and a test email arrived)."
     },
     {
       "id": "signed-builds",
       "name": "Installable signed iOS and Android builds meet current SDK requirements",
       "status": "pending",
-      "evidence": "iOS: production build 8 (duodialect backend) processed by App Store Connect and submitted. Android: signed preview APK only; no AAB yet."
+      "evidence": "iOS done: build 11 (1.0.1, approved and live) and build 13 (1.0.1, commit 7088a70, TestFlight only). The 1.1.0 production build has not been run yet. Android: signed preview APK only; no AAB yet (must target API 36 or later)."
     },
     {
       "id": "physical-devices",
@@ -54,19 +54,19 @@
       "id": "beta",
       "name": "TestFlight and Google Play closed test completed and defects resolved",
       "status": "pending",
-      "evidence": "TestFlight internal group 'Team' exists. Google Play app creation is blocked on Android device verification; the 12 tester, 14 day closed test applies (personal account created 2026-09-20)."
+      "evidence": "TestFlight internal group 'Team' exists; build 13 is in TestFlight. Google Play app creation is blocked on Android device verification in Play Console; the 12 tester, 14 day closed test applies (personal account created 2026-09-20)."
     },
     {
       "id": "listing",
       "name": "Accurate listing, policies, support, declarations and reviewer access",
-      "status": "passed",
-      "evidence": "iOS listing complete in App Store Connect (text, URLs at talkeven.com, 5 screenshots, 18+ age rating, published privacy labels, free, 148 territories excluding the EU, review account and notes)."
+      "status": "pending",
+      "evidence": "1.0.1 iOS listing complete and approved (text, URLs at talkeven.com, 5 screenshots, 18+ age rating, published privacy labels, free, all storefronts except the 27 EU regions, review account and notes). 1.1.0 entered in App Store Connect on 2026-10-07: new keywords and What's New (en-AU), an English (U.K.) localisation with its own keywords, 6 new screenshots on the 6.9 inch slot, and App Review notes for 1.1.0. The privacy label needed no change (Other User Content already covers check-in answers). Still pending: the Google Play listing."
     },
     {
       "id": "release-review",
       "name": "Final tested candidate approved for submission",
       "status": "pending",
-      "evidence": "iOS 1.0 (build 8) submitted for App Review on 2026-09-26; state WAITING_FOR_REVIEW. Production backend deployed to duodialect (Sydney) and smoke tested."
+      "evidence": "iOS 1.0 build 8 submitted 2026-09-26; App Review asked for information (Guideline 2.1). 1.0.1 build 11 resubmitted 2026-09-28 with a reply and screen recording, approved, and released on the App Store 2026-10-06 08:48 UTC. 1.1.0 has not been built or submitted yet. Google Play not submitted."
     }
   ]
 }
