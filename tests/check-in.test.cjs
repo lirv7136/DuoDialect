@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('./load-typescript.cjs');
-const { openCheckIns, canAnswer, thanksFor } = load('src/domain/check-in.ts');
+const { openCheckIns, canAnswer, thanksFor, nextWeek } = load('src/domain/check-in.ts');
 
 const now = new Date('2026-10-01T00:00:00Z');
 const at = iso => new Date(iso);
@@ -29,4 +29,10 @@ test('the thank you never scores anyone', () => {
   assert.equal(thanksFor({ happened: 'yes', meetAgain: 'yes' }, 'Aiko'), 'Nice one. Keep the swap going with Aiko.');
   assert.equal(thanksFor({ happened: 'yes', meetAgain: 'no' }, 'Aiko'), "Thanks. We won't ask about this plan again.");
   assert.equal(thanksFor({ happened: 'yes', meetAgain: null }, 'Aiko'), 'Thanks for checking in.');
+});
+
+test('next week is the same date seven days on, across month and year ends', () => {
+  assert.equal(nextWeek('2026-10-10'), '2026-10-17');
+  assert.equal(nextWeek('2026-10-28'), '2026-11-04');
+  assert.equal(nextWeek('2026-12-30'), '2027-01-06');
 });

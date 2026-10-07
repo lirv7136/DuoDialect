@@ -23,6 +23,7 @@ const crypto = require("crypto");
  * checkIns/{checkInId}                        owner reads; server writes; post meetup check-in
  * checkInMutes/{muteId}                       server only; stop check-ins for one plan, one person
  * confirmedMeetups/{meetupId}                 server only; both people said the meetup happened
+ * matchNotices/{noticeId}                     server only; one "a match joined" notice per recipient and newcomer
  */
 const COLLECTIONS = {
   profiles: "profiles",
@@ -43,6 +44,7 @@ const COLLECTIONS = {
   checkIns: "checkIns",
   checkInMutes: "checkInMutes",
   confirmedMeetups: "confirmedMeetups",
+  matchNotices: "matchNotices",
 };
 
 function shortHash(...parts) {
@@ -131,6 +133,8 @@ function refs(db) {
     checkInMutes: () => db.collection(COLLECTIONS.checkInMutes),
     confirmedMeetup: (id) => db.collection(COLLECTIONS.confirmedMeetups).doc(id),
     confirmedMeetups: () => db.collection(COLLECTIONS.confirmedMeetups),
+    matchNotice: (id) => db.collection(COLLECTIONS.matchNotices).doc(id),
+    matchNotices: () => db.collection(COLLECTIONS.matchNotices),
   };
 }
 

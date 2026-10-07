@@ -46,6 +46,8 @@ const LIMITS = {
   clientMessageId: 64,
   discoveryLimit: 20,
   discoveryScan: 60,
+  nearMissScan: 60,
+  nearMissLimit: 6,
   minAge: 18,
   maxAge: 120,
   photos: 3,

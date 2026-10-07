@@ -250,7 +250,7 @@ test("the invitee is notified of a new plan, and the sender when it is accepted"
     note: "Coffee?", meeting: futureMeeting(),
   });
   const invited = await waitFor(async () => {
-    const snap = await admin().collection("pushDeliveries").where("toUid", "==", learner.uid).get();
+    const snap = await admin().collection("pushDeliveries").where("toUid", "==", learner.uid).where("data.type", "==", "plan").get();
     return snap.empty ? null : snap.docs[0];
   }, { label: "the invitation notification" });
   assert.equal(invited.get("title"), `Planner ${suffix}`);
@@ -260,7 +260,7 @@ test("the invitee is notified of a new plan, and the sender when it is accepted"
 
   const accepted = await learner.call("respondToInvitation", { invitationId: invitation.id, action: "accept" });
   const heard = await waitFor(async () => {
-    const snap = await admin().collection("pushDeliveries").where("toUid", "==", speaker.uid).get();
+    const snap = await admin().collection("pushDeliveries").where("toUid", "==", speaker.uid).where("data.type", "==", "plan").get();
     return snap.empty ? null : snap.docs[0];
   }, { label: "the acceptance notification" });
   assert.equal(heard.get("title"), `Invitee ${suffix}`);

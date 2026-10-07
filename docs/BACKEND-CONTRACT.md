@@ -46,6 +46,7 @@ Two rules are worth stating plainly, because the client must not try to work aro
 | `checkIns/{checkInId}` | the owner only | server only | one post meetup check-in, for one person, for one occurrence of a plan |
 | `checkInMutes/{muteId}` | nobody | server only | one person asked to stop being checked in about one plan |
 | `confirmedMeetups/{meetupId}` | nobody | server only | both people said this meetup happened |
+| `matchNotices/{noticeId}` | nobody | server only | one "a match joined" notice per recipient and newcomer, so nobody is told twice |
 
 Storage holds one kind of object, `profilePhotos/{uid}/{photoId}.jpg`; see
 [Profile photos](#profile-photos).
@@ -180,13 +181,25 @@ Returns:
     sharedAvailability: string[]
   }[],
   nextCursor: string | null,
-  scanned: number
+  scanned: number,
+  // Only on an empty first page in platonic mode (1.1.1):
+  nearMisses?: {
+    uid, displayName, area, offers: string[], seeks: string[],
+    photos: { id: string, path: string }[],
+    reason: "language/not-reciprocal" | "language/insufficient-fluency"
+  }[],
+  learningYourLanguage?: number
 }
 ```
 
 Filtering happens entirely on the server: reciprocal languages, blocks in both directions
 and, in dating mode, both people's private preferences. Candidates carry no private field.
 `cursor` is the `uid` to page after. `nextCursor` is null when the scan is exhausted.
+
+When the first page is empty and the scan is exhausted, the response also explains itself:
+up to six `nearMisses`, people one step from a two way match with the reason, and
+`learningYourLanguage`, how many discoverable members want a language the caller offers.
+Both respect blocks in both directions and reveal nothing a candidate card would not.
 
 ### `setProfilePhotos`
 
@@ -392,6 +405,7 @@ Returns `{ checkIn, changed }`, where `checkIn` is:
 {
   id, invitationId, otherUid, conversationId,
   occurrence: { localDate, localTime, timeZone, recurrence },
+  venue: string | null,   // the plan's place, for "same time next week?" (1.1.1)
   languages: { gave, received },   // from the owner's side
   status: "open" | "answered",
   answer: { happened, meetAgain } | null,
@@ -558,7 +572,10 @@ no reason code.
   individually, and nothing reschedules them. The only thing that follows the weekly
   cadence is the post meetup check-in.
 - **There are no reminders.** Nothing notifies either person that a meeting is approaching.
-- **Notifications cover messages, new invitations, acceptances and check-ins.** Declines
+- **Notifications cover messages, new invitations, acceptances, check-ins, the evening
+  before reminder (`type: "plan"`, 18:00 local the day before each occurrence, sent by the
+  hourly `sweepReminders`) and "a match joined" (`type: "match"`, `otherUid`, sent once per
+  recipient when a reciprocal partner first becomes discoverable or changes languages).** Declines
   and cancellations send nothing.
 - **A confirmed meetup is two people's word, nothing more.** Nothing checks that anyone
   was at the venue.

@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "../../src/lib/api";
 import { subscribeCheckIn, type CheckInDoc } from "../../src/lib/live";
-import { canAnswer, thanksFor, type CheckInAnswer } from "../../src/domain/check-in";
+import { canAnswer, nextWeek, thanksFor, type CheckInAnswer } from "../../src/domain/check-in";
 import { formatLocalDate } from "../../src/domain/schedule";
 import { errorMessage } from "../../src/domain/errors";
 import { usePeople } from "../../hooks/use-people";
@@ -77,12 +77,31 @@ export default function CheckInScreen() {
   const open = canAnswer(item);
 
   if (step === "done" && answer) {
+    const keepGoing = answer.happened === "yes" && answer.meetAgain === "yes";
+    // A good one off meetup turns into next week's plan in one tap; the form does the rest.
+    const sameTimeNextWeek = () => router.replace({
+      pathname: "/plan/new",
+      params: {
+        toUid: item.otherUid,
+        date: nextWeek(item.occurrence.localDate),
+        time: item.occurrence.localTime,
+        ...(item.venue ? { venue: item.venue } : {}),
+        note: `Same time next week, ${who}?`,
+      },
+    });
     return (
       <Screen edges={[]}>
         <Title>Thanks.</Title>
         <Body>{thanksFor(answer, who)}</Body>
-        <Button variant="primary" label="Done" onPress={() => router.back()} />
-        {item.conversationId && answer.happened === "yes" && answer.meetAgain === "yes" ? (
+        {keepGoing && item.occurrence.recurrence === "once" ? (
+          <Button variant="primary" icon="repeat-outline" label="Same time next week?"
+            accessibilityLabel={`Suggest meeting ${who} again next week`} onPress={sameTimeNextWeek} />
+        ) : null}
+        {keepGoing && item.occurrence.recurrence === "weekly" ? (
+          <Caption center icon="repeat-outline">Your weekly plan continues. See you next week.</Caption>
+        ) : null}
+        <Button variant={keepGoing && item.occurrence.recurrence === "once" ? "secondary" : "primary"} label="Done" onPress={() => router.back()} />
+        {item.conversationId && keepGoing ? (
           <Button icon="chatbubbles-outline" label={`Message ${who}`}
             onPress={() => router.replace({ pathname: "/chat/[chatId]", params: { chatId: item.conversationId as string, otherUid: item.otherUid } })} />
         ) : null}

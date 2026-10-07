@@ -32,3 +32,9 @@ export function thanksFor(answer: CheckInAnswer, name: string): string {
   if (answer.meetAgain === "no") return "Thanks. We won't ask about this plan again.";
   return "Thanks for checking in.";
 }
+
+/** The same calendar date one week on, independent of time zone: "2026-10-10" → "2026-10-17". */
+export function nextWeek(localDate: string): string {
+  const [year, month, day] = localDate.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 7)).toISOString().slice(0, 10);
+}

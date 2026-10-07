@@ -16,3 +16,20 @@ test('the invite message asks for the complementary speaker', () => {
     'I’m swapping English ⇄ Japanese on Talkeven. Know a Japanese speaker who wants to practise English? https://talkeven.com');
   assert.match(copy.inviteMessage([], [], 'Talkeven', 'https://talkeven.com'), /Know someone who wants a language partner\? https:\/\/talkeven\.com$/);
 });
+
+test('the empty state counts who wants your language', () => {
+  assert.equal(copy.learningYourLanguageLine(0, ['english']), '');
+  assert.equal(copy.learningYourLanguageLine(1, ['english']), '1 person here is learning English.');
+  assert.equal(copy.learningYourLanguageLine(3, ['english', 'spanish']), '3 people here are learning English or Spanish.');
+});
+
+test('a near miss is explained from my side without blame', () => {
+  const me = { offers: ['english'], seeks: ['japanese'] };
+  assert.equal(copy.nearMissReason('language/insufficient-fluency', me, { offers: [], seeks: ['english'] }),
+    'You share a pair, but one of you isn’t fluent enough to teach it yet.');
+  assert.equal(copy.nearMissReason('language/not-reciprocal', me, { offers: ['korean'], seeks: ['english'] }),
+    'Wants English, but doesn’t speak Japanese.');
+  assert.equal(copy.nearMissReason('language/not-reciprocal', me, { offers: ['japanese'], seeks: ['french'] }),
+    'Speaks Japanese, but isn’t learning English.');
+  assert.equal(copy.nearMissReason('language/not-reciprocal', me, { offers: ['korean'], seeks: ['french'] }), 'Not a two way match yet.');
+});

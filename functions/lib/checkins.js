@@ -97,6 +97,7 @@ function serializeCheckIn(id, data) {
     otherUid: data.otherUid,
     conversationId: data.conversationId || null,
     occurrence: data.occurrence,
+    venue: data.venue || null,
     languages: data.languages,
     status: data.status,
     answer: data.answer || null,
@@ -146,7 +147,7 @@ async function processInvitation(db, invitationRef, now) {
     const [a, b] = participants;
     const [blockAB, blockBA] = await tx.getAll(r.block(a, b), r.block(b, a));
     if (blockAB.exists || blockBA.exists) {
-      tx.update(invitationRef, { nextCheckInAt: null, checkInsStopped: "blocked" });
+      tx.update(invitationRef, { nextCheckInAt: null, nextReminderAt: null, checkInsStopped: "blocked" });
       return [];
     }
 
@@ -155,7 +156,7 @@ async function processInvitation(db, invitationRef, now) {
 
     // A one-off plan whose check-in window passed before any sweep ran is left alone.
     if (occurrence.expiresAt.getTime() <= now.getTime()) {
-      tx.update(invitationRef, { nextCheckInAt: null, checkInsStopped: "missed" });
+      tx.update(invitationRef, { nextCheckInAt: null, nextReminderAt: null, checkInsStopped: "missed" });
       return [];
     }
 
@@ -167,7 +168,7 @@ async function processInvitation(db, invitationRef, now) {
       );
       quiet = confirmed ? 0 : quiet + 1;
       if (quiet >= MAX_QUIET_OCCURRENCES) {
-        tx.update(invitationRef, { nextCheckInAt: null, checkInsStopped: "inactive", checkInQuietCount: quiet });
+        tx.update(invitationRef, { nextCheckInAt: null, nextReminderAt: null, checkInsStopped: "inactive", checkInQuietCount: quiet });
         return [];
       }
     }
@@ -193,6 +194,8 @@ async function processInvitation(db, invitationRef, now) {
           timeZone: invitation.meeting.timeZone,
           recurrence: invitation.meeting.recurrence,
         },
+        // So "same time next week?" can prefill the place without another read.
+        venue: typeof invitation.meeting.venue === "string" ? invitation.meeting.venue : null,
         // From the owner's side: the language they offered, and the one they practised.
         languages: {
           gave: isSender ? invitation.languages.fromOffers : invitation.languages.toOffers,

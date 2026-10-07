@@ -43,7 +43,10 @@ const PLACES = [
 const placeFor = (noun: string, area: string) => (area ? `A ${noun} in ${area}` : `A ${noun}`).slice(0, MAX_VENUE);
 
 export default function NewPlan() {
-  const { toUid } = useLocalSearchParams<{ toUid: string }>();
+  // Optional prefill, used by "same time next week?" after a check-in.
+  const { toUid, date, time, venue: venueParam, note: noteParam } = useLocalSearchParams<{
+    toUid: string; date?: string; time?: string; venue?: string; note?: string;
+  }>();
   const { profile: me, loading: meLoading } = useMyAccount();
   const [target, setTarget] = useState<Target | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -75,6 +78,11 @@ export default function NewPlan() {
       if (first) { setLocalDate(first.localDate); setLocalTime(first.localTime); }
       if (value.area) setVenue(placeFor("café", value.area));
       setNote(`Hi ${value.name}! Fancy a coffee and a language swap?`);
+      // A prefilled plan keeps the last meetup's time and place; the form still validates it.
+      if (typeof date === "string" && date) setLocalDate(date);
+      if (typeof time === "string" && time) setLocalTime(time);
+      if (typeof venueParam === "string" && venueParam) setVenue(venueParam.slice(0, MAX_VENUE));
+      if (typeof noteParam === "string" && noteParam) setNote(noteParam.slice(0, MAX_NOTE));
     };
     if (cached) {
       apply({ uid: cached.uid, name: cached.displayName, area: cached.area, theyOffer: cached.exchange.theyOffer,
@@ -87,7 +95,7 @@ export default function NewPlan() {
       apply({ uid: profile.uid, name: profile.displayName, area: profile.area, theyOffer: exchange.theyCanHelpWith,
         youOffer: exchange.iCanHelpWith, shared: sharedSlots(me.availability, profile.availability), photos: sanitizePhotos(profile.photos) });
     }).catch(e => setLoadError(errorMessage(e)));
-  }, [toUid, me, meLoading, target]);
+  }, [toUid, date, time, venueParam, noteParam, me, meLoading, target]);
 
   async function onSend() {
     if (inFlight.current || !target) return;

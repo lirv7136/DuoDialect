@@ -161,6 +161,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // "A match joined" notices already sent. Server only.
+    match /matchNotices/{noticeId} {
+      allow read, write: if false;
+    }
+
     // Collections the earlier Expo client wrote to directly. They are closed rather than
     // migrated, so stale client code fails loudly instead of reading half migrated state.
     // See docs/BACKEND-HANDOFF.md for the replacement for each one.

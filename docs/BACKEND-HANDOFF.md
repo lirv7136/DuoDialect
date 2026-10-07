@@ -343,6 +343,30 @@ Deploy steps (all done: staging 30 Sep, production 4 to 5 Oct):
   `type: "checkIn"` push routing. Builds released before it ignore a `checkIn` push
   (`notificationTarget` returns null for unknown types), so the backend can ship first.
 
+## 1.1.1 additions (7 October)
+
+Four changes aimed at the empty Discover screen and flaky partners, all tested
+(127 emulator tests, up from 115):
+
+- **"A match joined" push.** `functions/lib/matches.js`, fired by the new
+  `onProfileWritten` trigger. When a profile first becomes usable, or its offered or
+  sought languages change, every member it now forms a reciprocal exchange with is told
+  once (`matchNotices/` records the send; blocks silence it). Bio and photo edits never
+  notify. Makes the empty state's "we'll let you know" true.
+- **Evening before reminder.** `functions/lib/reminders.js`, scheduled on acceptance
+  (`nextReminderAt`, 18:00 local the day before) and sent by the hourly `sweepReminders`.
+  Weekly plans roll forward; any `checkInsStopped` value clears the reminder. Needs the new
+  `(status, nextReminderAt)` index on invitations.
+- **Near misses.** `discoverCandidates` returns `nearMisses` and `learningYourLanguage` on
+  an empty first page (platonic only). Needs the new `(discoverable, seeks, uid)` index on
+  profiles.
+- **Same time next week.** Check-ins now carry `venue`, and the app offers to prefill a
+  plan one week on after "Yes, we met" and "Yes" to meeting again.
+
+Deploy order: indexes, then functions and rules. Nothing to backfill: plans accepted before
+the deploy simply get no reminder, and existing members are told about newcomers from the
+deploy onward.
+
 ## Remaining work
 
 Done since the original handoff: the native screens against the contract, client side

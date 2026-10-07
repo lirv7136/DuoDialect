@@ -2,7 +2,9 @@
 
 const { requireObject, requireEnum, requireInteger, requireString } = require("./validation");
 const { INTENTS, LIMITS } = require("./constants");
-const { REASON, reject, isUsableProfile, reciprocalExchange, datingEligibility, intersect } = require("./eligibility");
+const {
+  REASON, reject, isUsableProfile, reciprocalExchange, languageFailureReason, datingEligibility, intersect,
+} = require("./eligibility");
 const { refs } = require("./refs");
 const { publicPhotos } = require("./photos");
 
@@ -115,12 +117,78 @@ async function discoverCandidates(db, uid, payload = {}, now = new Date()) {
     ? page[page.length - 1].profile.uid
     : snap.size === LIMITS.discoveryScan ? lastScanned : null;
 
-  return {
+  const result = {
     mode,
     candidates: page.map((row) => publicCandidate(row.profile, row.exchange, me.availability)),
     nextCursor,
     scanned,
   };
+
+  // An empty first page explains itself: who is almost a match, and how many people here
+  // want what the caller offers. Only for platonic discovery, and only when the whole
+  // scan came up empty, so the extra reads happen when there is nothing else to show.
+  if (mode === "platonic" && !cursor && page.length === 0 && nextCursor === null) {
+    Object.assign(result, await nearMisses(db, uid, me, visible));
+  }
+  return result;
 }
 
-module.exports = { discoverCandidates, publicCandidate };
+/** What a near miss reveals: enough to see why, and nothing a candidate card would not. */
+function publicNearMiss(profile, reason) {
+  return {
+    uid: profile.uid,
+    displayName: profile.displayName,
+    area: profile.area || "",
+    offers: profile.offers || [],
+    seeks: profile.seeks || [],
+    photos: publicPhotos(profile.photos),
+    reason,
+  };
+}
+
+/**
+ * The people on either side of a one way match, with the reason it is one way, plus a
+ * count of members learning a language the caller offers. Blocks are respected in both
+ * directions, as for candidates. Bounded to one extra scan and one count.
+ */
+async function nearMisses(db, uid, me, alreadyVisible) {
+  const r = refs(db);
+  const offers = (me.offers || []).slice(0, 10);
+  if (offers.length === 0) return { nearMisses: [], learningYourLanguage: 0 };
+
+  const myBlocks = new Set((await r.blocksOf(uid).get()).docs.map((doc) => doc.id));
+
+  // People who want what the caller offers, but do not offer what the caller wants.
+  const wantMine = await r.profiles()
+    .where("discoverable", "==", true)
+    .where("seeks", "array-contains-any", offers)
+    .orderBy("uid")
+    .limit(LIMITS.nearMissScan)
+    .get();
+  const learningYourLanguage = wantMine.docs
+    .map((doc) => doc.data())
+    .filter((profile) => profile.uid && profile.uid !== uid && !myBlocks.has(profile.uid)).length;
+
+  const seen = new Set();
+  const pool = [];
+  for (const profile of [...alreadyVisible, ...wantMine.docs.map((doc) => doc.data())]) {
+    if (!profile.uid || profile.uid === uid || seen.has(profile.uid)) continue;
+    if (!isUsableProfile(profile) || myBlocks.has(profile.uid)) continue;
+    seen.add(profile.uid);
+    if (!reciprocalExchange(me, profile).reciprocal) pool.push(profile);
+  }
+
+  let rows = pool.slice(0, LIMITS.nearMissLimit * 2);
+  if (rows.length > 0) {
+    const inbound = await db.getAll(...rows.map((profile) => r.block(profile.uid, uid)));
+    rows = rows.filter((_, index) => !inbound[index].exists);
+  }
+
+  return {
+    nearMisses: rows.slice(0, LIMITS.nearMissLimit)
+      .map((profile) => publicNearMiss(profile, languageFailureReason(me, profile))),
+    learningYourLanguage,
+  };
+}
+
+module.exports = { discoverCandidates, publicCandidate, publicNearMiss };

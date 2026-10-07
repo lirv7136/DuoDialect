@@ -24,6 +24,11 @@ test('a check-in opens that check-in, or Plans if it has no id', () => {
   assert.equal(notificationTarget({ type: 'checkIn' }), '/(tabs)/plans');
 });
 
+test('a new partner opens their profile, or Discover without a uid', () => {
+  same(notificationTarget({ type: 'match', otherUid: 'u7' }), { pathname: '/person/[uid]', params: { uid: 'u7' } });
+  assert.equal(notificationTarget({ type: 'match' }), '/(tabs)/discover');
+});
+
 test('anything else is ignored', () => {
   for (const data of [null, undefined, 'x', {}, { type: 'marketing' }, { conversationId: 3 }]) {
     assert.equal(notificationTarget(data), null);

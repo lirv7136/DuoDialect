@@ -52,4 +52,34 @@ function checkInNotice(checkIn, otherName) {
   };
 }
 
-module.exports = { describeWhen, invitationNotice, acceptedNotice, checkInNotice };
+/** Sent the evening before a meetup. Names the partner and the time; the place stays in the app. */
+function reminderNotice(invitation, otherName) {
+  const time = invitation.meeting && typeof invitation.meeting.localTime === "string" ? invitation.meeting.localTime : "";
+  return {
+    title: `${displayName(otherName)} tomorrow`,
+    body: time
+      ? `Your language swap is tomorrow at ${time}. Open the plan for the place.`
+      : "Your language swap is tomorrow. Open the plan for the place.",
+  };
+}
+
+function capitalise(value) {
+  return typeof value === "string" && value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
+}
+
+/**
+ * Sent to an existing member when somebody who matches them joins or changes languages.
+ * `exchange` is from the recipient's side: what the newcomer offers them, what they offer back.
+ */
+function matchNotice(newcomerName, exchange) {
+  const theirs = capitalise(exchange && exchange.theyOffer && exchange.theyOffer[0]);
+  const mine = capitalise(exchange && exchange.youOffer && exchange.youOffer[0]);
+  return {
+    title: "A new language partner",
+    body: theirs && mine
+      ? `${displayName(newcomerName)} speaks ${theirs} and is learning ${mine}. Take a look.`
+      : `${displayName(newcomerName)} fits your exchange. Take a look.`,
+  };
+}
+
+module.exports = { describeWhen, invitationNotice, acceptedNotice, checkInNotice, reminderNotice, matchNotice };

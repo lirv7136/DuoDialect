@@ -13,6 +13,7 @@ const {
   refs, invitationId, invitationLockId, conversationId, participantsOf, pairKey,
 } = require("./refs");
 const { initialSchedule } = require("./checkins");
+const { firstReminder } = require("./reminders");
 
 /** Accepts a Firestore Timestamp, a Date, or null. */
 function toIso(value) {
@@ -322,6 +323,8 @@ async function respondToInvitation(db, callerUid, payload, now = new Date()) {
       updatedAt: FieldValue.serverTimestamp(),
       // The first post meetup check-in; see lib/checkins.js.
       ...initialSchedule(data.meeting),
+      // The evening before reminder; see lib/reminders.js.
+      ...firstReminder(data.meeting, now),
     });
     if (lock.exists && lock.get("invitationId") === id) tx.delete(lockRef);
 

@@ -61,6 +61,8 @@ this is a draft for review, not legal advice.
 
 **What's New** (1.1.0): `New look: a fresh icon and calm ocean colours throughout. Check-ins: the morning after a meetup, Talkeven privately asks how it went. Your answer is only ever seen by you, and helps us suggest what's next. Plus a new Community guidelines page and small fixes.`
 
+**What's New** (1.1.1): `You now hear when someone who fits your exchange joins, get a reminder the evening before each meetup, and can suggest the same time next week straight from a check-in. An empty Discover now shows who is almost a match.`
+
 ### English (U.K.) localisation
 
 Add English (U.K.) as a second localisation in App Store Connect. The name, subtitle,

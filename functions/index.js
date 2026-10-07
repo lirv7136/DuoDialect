@@ -11,7 +11,7 @@
  */
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2/options");
@@ -31,6 +31,8 @@ const { invitationNotice, acceptedNotice } = require("./lib/notifications");
 const { refs } = require("./lib/refs");
 const { setProfilePhotos, screenUpload } = require("./lib/photos");
 const { answerCheckIn, sweepCheckIns } = require("./lib/checkins");
+const { sweepReminders } = require("./lib/reminders");
+const { notifyNewMatches } = require("./lib/matches");
 
 setGlobalOptions({ region: "australia-southeast1", maxInstances: 10 });
 
@@ -204,6 +206,18 @@ exports.onInvitationUpdated = onDocumentUpdated("invitations/{invitationId}", as
 });
 
 /**
+ * "A match joined". When a profile first becomes usable, or its languages change, the
+ * members it now forms a reciprocal exchange with are told once each. Bounded and
+ * idempotent; see lib/matches.js. Deletion (no document after) notifies nobody.
+ */
+exports.onProfileWritten = onDocumentWritten("profiles/{uid}", async (event) => {
+  const before = event.data && event.data.before.exists ? event.data.before.data() : null;
+  const after = event.data && event.data.after.exists ? event.data.after.data() : null;
+  const result = await notifyNewMatches(db, { uid: event.params.uid, before, after });
+  if (result.candidates > 0) logger.info("Match notices", { uid: event.params.uid, ...result });
+});
+
+/**
  * Profile photo screening. Runs on every object written to the default bucket and ignores
  * anything outside profilePhotos/. Approved photos are marked readable; rejected ones are
  * deleted. The verdict is written to photoScreening/{uid}_{photoId} for the owner's app.
@@ -232,5 +246,18 @@ exports.sweepCheckIns = onSchedule(
   async () => {
     const result = await sweepCheckIns(db, new Date());
     logger.info("Check-in sweep finished", result);
+  },
+);
+
+/**
+ * Meetup reminders. Every hour, sends the reminders that have come due (18:00 local time
+ * the evening before each accepted plan, weekly for weekly plans). Idempotent. See
+ * lib/reminders.js.
+ */
+exports.sweepReminders = onSchedule(
+  { schedule: "every 60 minutes", timeZone: "Australia/Sydney", timeoutSeconds: 300 },
+  async () => {
+    const result = await sweepReminders(db, new Date());
+    logger.info("Reminder sweep finished", result);
   },
 );

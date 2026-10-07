@@ -74,7 +74,25 @@ export type Candidate = {
   sharedAvailability: string[];
 };
 
-export type DiscoverResult = { candidates: Candidate[]; nextCursor: string | null; scanned: number };
+/** Someone who is one step from matching. Why is a server reason code; see nearMissReason. */
+export type NearMiss = {
+  uid: string;
+  displayName: string;
+  area: string;
+  offers: string[];
+  seeks: string[];
+  photos: ProfilePhoto[];
+  reason: "language/not-reciprocal" | "language/insufficient-fluency";
+};
+
+export type DiscoverResult = {
+  candidates: Candidate[];
+  nextCursor: string | null;
+  scanned: number;
+  /** Only on an empty first page: who almost matches, and how many people want what you offer. */
+  nearMisses?: NearMiss[];
+  learningYourLanguage?: number;
+};
 
 export type InvitationStatus = "pending" | "accepted" | "declined" | "cancelled";
 
@@ -114,6 +132,8 @@ export type CheckIn = {
   otherUid: string;
   conversationId: string | null;
   occurrence: { localDate: string; localTime: string; timeZone: string; recurrence: Recurrence };
+  /** The plan's place, so "same time next week?" can prefill it. Older check-ins may lack it. */
+  venue?: string | null;
   /** From the owner's side: what they offered, and what they practised. */
   languages: { gave: string; received: string };
   status: "open" | "answered";

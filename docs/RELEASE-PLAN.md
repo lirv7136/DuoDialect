@@ -54,6 +54,21 @@ the privacy policy and likely an EU representative; revisit when an EU city is p
 Never cancel a submission that is in review. If something is wrong, reply to App Review in
 App Store Connect or wait for the outcome.
 
+## 1.1.1 (in progress, branch `fix-1.1.1`)
+
+The four fixes from `docs/GROWTH-NOTES-2026-10-07.md` that should ship before any marketing
+push, because marketing into an empty Discover wastes the users it wins:
+
+1. [x] Real "a match joined" push (`onProfileWritten`, `functions/lib/matches.js`).
+2. [x] "Same time next week?" after a good check-in (prefills `/plan/new`).
+3. [x] Meetup reminder the evening before (`sweepReminders`, `functions/lib/reminders.js`).
+4. [x] Near miss fallback and "N people here are learning English" on an empty Discover.
+
+Done on the branch: `app.json` 1.1.1, 127 emulator tests, 74 unit tests, typecheck and lint
+clean. Still to do: deploy indexes then functions and rules to staging and production (new
+indexes: profiles `(discoverable, seeks, uid)`, invitations `(status, nextReminderAt)`), a
+device run of the four flows, What's New, then build and submit after 1.1.0 is approved.
+
 ## Google Play
 
 Unchanged, and blocked on Android device verification in Play Console. After that:
