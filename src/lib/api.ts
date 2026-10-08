@@ -18,6 +18,7 @@ import type { Recurrence } from "../domain/schedule";
 import type { ProfilePhoto } from "../domain/photos";
 import type { CheckInAnswer } from "../domain/check-in";
 import type { CityId } from "../domain/cities";
+import type { CancelReason } from "../domain/cancel-plan";
 
 export class ApiError extends Error {
   readonly code: string;
@@ -124,7 +125,8 @@ export type Invitation = {
   meeting: Meeting & { startAt?: string | null };
   note: string;
   conversationId: string | null;
-  resolution: { by: string; reason: string } | null;
+  /** `detail` is the cancel reason chosen when a confirmed plan was cancelled, else absent or null. */
+  resolution: { by: string; reason: string; detail?: CancelReason | null } | null;
 };
 
 export type CreateInvitationInput = {
@@ -199,8 +201,14 @@ export const api = {
       "respondToInvitation", { invitationId, action },
     ),
 
-  cancelInvitation: (invitationId: string) =>
-    call<{ invitationId: string }, { invitation: Invitation; changed: boolean }>("cancelInvitation", { invitationId }),
+  /**
+   * Withdraws a pending invitation I sent, or cancels a confirmed plan from either side.
+   * `reason` only means something for a confirmed plan: it goes into the other person's push.
+   */
+  cancelInvitation: (invitationId: string, reason?: CancelReason) =>
+    call<{ invitationId: string; reason?: CancelReason }, { invitation: Invitation; changed: boolean }>(
+      "cancelInvitation", { invitationId, ...(reason ? { reason } : {}) },
+    ),
 
   /** `clientMessageId` must be reused for every retry of the same message. */
   sendMessage: (conversationId: string, text: string, clientMessageId: string) =>

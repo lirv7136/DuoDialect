@@ -5,6 +5,7 @@ import { auth } from "../../src/lib/firebase";
 import { subscribeInbox, subscribeInvitations, type InboxItem, type InvitationDoc } from "../../src/lib/live";
 import { errorMessage } from "../../src/domain/errors";
 import { dateBlock, isPastMeeting, nextOccurrence, relativeTime } from "../../src/domain/display";
+import { wasCancelledAfterAccept } from "../../src/domain/cancel-plan";
 import { Button, Display, ErrorNotice, InfoChip, Loading, Screen } from "../../components/ui";
 import { EmptyState } from "../../components/empty-state";
 import { Avatar } from "../../components/avatar";
@@ -12,20 +13,28 @@ import { MonogramPair } from "../../components/exchange-strip";
 import { usePeople } from "../../hooks/use-people";
 import { MAX_FONT_SCALE, colors, fonts, radius, space, type } from "../../constants/theme";
 
-type Plan = { languages: { mine: string; theirs: string } | null; next: string | null };
+type Plan = { languages: { mine: string; theirs: string } | null; next: string | null; cancelled: boolean };
 
-/** For each partner: our language pair, and the date of our next confirmed meetup. */
+/**
+ * For each partner: our language pair, the date of our next confirmed meetup, and
+ * whether the latest plan between us was confirmed and then cancelled, so the row can
+ * say so until something new is planned. Items arrive newest first.
+ */
 function plansByPartner(items: InvitationDoc[], uid: string): Record<string, Plan> {
   const out: Record<string, Plan> = {};
   for (const item of items) {
-    if (item.status !== "accepted") continue;
     const mine = item.fromUid === uid;
     const other = mine ? item.toUid : item.fromUid;
     const languages = item.languages ? { mine: mine ? item.languages.fromOffers : item.languages.toOffers, theirs: mine ? item.languages.toOffers : item.languages.fromOffers } : null;
-    const next = isPastMeeting(item.meeting) ? null : nextOccurrence(item.meeting.localDate, item.meeting.recurrence);
     const known = out[other];
-    if (!known) out[other] = { languages, next };
-    else if (next && (!known.next || next < known.next)) out[other] = { languages: known.languages ?? languages, next };
+    if (item.status !== "accepted") {
+      if (!known && wasCancelledAfterAccept(item)) out[other] = { languages, next: null, cancelled: true };
+      continue;
+    }
+    const next = isPastMeeting(item.meeting) ? null : nextOccurrence(item.meeting.localDate, item.meeting.recurrence);
+    if (!known) out[other] = { languages, next, cancelled: false };
+    else if (next && (!known.next || next < known.next)) out[other] = { languages: known.languages ?? languages, next, cancelled: false };
+    else if (known.cancelled) out[other] = { ...known, languages: known.languages ?? languages };
   }
   return out;
 }
@@ -66,7 +75,8 @@ export default function Chats() {
         const name = person?.name ?? "…";
         const preview = row.lastText || "Say hello 👋";
         const next = plan?.next ? dateBlock(plan.next) : null;
-        const label = `${name}. ${row.unread > 0 ? `${row.unread} unread. ` : ""}${preview}${next ? `. Next meetup ${next.weekday} ${next.day} ${next.month}` : ""}`;
+        const cancelled = !next && !!plan?.cancelled;
+        const label = `${name}. ${row.unread > 0 ? `${row.unread} unread. ` : ""}${preview}${next ? `. Next meetup ${next.weekday} ${next.day} ${next.month}` : cancelled ? ". Plan cancelled" : ""}`;
         const unread = row.unread > 0;
         return (
           <Pressable
@@ -95,6 +105,7 @@ export default function Chats() {
                 {unread ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent }} /> : null}
               </View>
               {next ? <View style={{ marginTop: 4 }}><InfoChip icon="calendar-outline" label={`${next.weekday} ${next.day} ${next.month}`} /></View> : null}
+              {cancelled ? <View style={{ marginTop: 4 }}><InfoChip icon="close-circle-outline" label="Plan cancelled" tone="plain" /></View> : null}
             </View>
           </Pressable>
         );

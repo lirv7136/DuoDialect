@@ -399,11 +399,30 @@ pair and intent, and an inbox entry for each participant.
 ### `cancelInvitation`
 
 ```ts
-{ invitationId: string }
+{ invitationId: string, reason?: "cant-make-it" | "reschedule" | "other" }
 ```
 
-Returns `{ invitation, changed }`. Only the sender may cancel, and only while pending.
-Cancelling releases the duplicate lock, so a new invitation can then be sent.
+Returns `{ invitation, changed }`. Repeating a cancel returns `changed: false`. Cancelling
+releases the duplicate lock, so a new invitation can then be sent. Two cases:
+
+- **Pending**: only the sender may cancel (`invitation/not-sender` otherwise). Quiet: the
+  recipient is not told. `resolution` is `{ by, reason: "cancelled" }` and `reason` in the
+  request is ignored.
+- **Accepted**: either participant may cancel; anyone else gets
+  `invitation/not-participant`. `reason` is optional and a fixed choice, never free text,
+  because it goes into a push. In one transaction the status becomes `cancelled` with
+  `resolution: { by, reason: "cancelled-after-accept", detail: <reason or null> }`,
+  `nextCheckInAt`, `nextCheckInOccurrence`, `nextReminderAt` and `nextReminderOccurrence`
+  are nulled and `checkInsStopped` is `"cancelled"`, so no further reminder or check-in
+  is sent. A weekly plan is cancelled as a whole series. Check-ins already created stay
+  and can still be answered. The conversation stays. The other participant is sent a
+  `type: "plan"` push titled with the canceller's display name: "Cancelled your plan for
+  Mon 28 Sep, 18:00." ("Cancelled your weekly plan from …" for a weekly plan), followed
+  by "Can't make it." or "Wants to reschedule." when that reason was given. A block in
+  either direction silences it.
+
+A cancelled plan cannot be accepted again (`invitation/not-pending`); a declined one
+cannot be cancelled.
 
 ### `sendMessage`
 
@@ -636,7 +655,8 @@ no reason code.
 | `invitation/duplicate-active` | `already-exists` | An open invitation already exists for this pair and intent. |
 | `invitation/not-pending` | `failed-precondition` | The invitation was already accepted, declined or cancelled. |
 | `invitation/not-recipient` | `permission-denied` | Only the recipient may accept or decline. |
-| `invitation/not-sender` | `permission-denied` | Only the sender may cancel. |
+| `invitation/not-sender` | `permission-denied` | Only the sender may cancel a pending invitation. |
+| `invitation/not-participant` | `permission-denied` | Only one of the two people in a plan may cancel it. |
 | `invitation/not-found` | `not-found` | No such invitation. |
 | `conversation/not-found` | `not-found` | No such conversation. |
 | `conversation/not-member` | `permission-denied` | The caller is not a participant. |
@@ -666,8 +686,9 @@ no reason code.
 - **Notifications cover messages, new invitations, acceptances, check-ins, the evening
   before reminder (`type: "plan"`, 18:00 local the day before each occurrence, sent by the
   hourly `sweepReminders`) and "a match joined" (`type: "match"`, `otherUid`, sent once per
-  recipient when a reciprocal partner first becomes discoverable or changes languages).** Declines
-  and cancellations send nothing.
+  recipient when a reciprocal partner first becomes discoverable or changes languages),
+  and a confirmed plan cancelled by either side (`type: "plan"`, to the other
+  participant).** Declines and withdrawn pending invitations send nothing.
 - **A confirmed meetup is two people's word, nothing more.** Nothing checks that anyone
   was at the venue. `meetupsConfirmed` is a count of that word, not a verification badge,
   and the UI must not present it as one.

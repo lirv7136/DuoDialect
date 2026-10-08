@@ -11,7 +11,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   clearEmulators, shutdown, makeActor, expectFailure, expectDenied, futureMeeting,
-  birthDateForAge, admin, where,
+  birthDateForAge, admin, where, waitFor, serverTimestamp,
 } = require("./helpers/env");
 const { castOf, CAST } = require("./helpers/actors");
 
@@ -34,7 +34,7 @@ async function freshPair() {
   const learner = await makeActor(`learner${suffix}`);
   await speaker.call("upsertProfile", { ...CAST.alex, displayName: `Speaker ${suffix}` });
   await learner.call("upsertProfile", { ...CAST.aiko, displayName: `Learner ${suffix}` });
-  return { speaker, learner };
+  return { speaker, learner, speakerName: `Speaker ${suffix}`, learnerName: `Learner ${suffix}` };
 }
 
 test.before(async () => {
@@ -262,6 +262,103 @@ test("cancelling releases the duplicate lock so a new invitation can be sent", a
   assert.equal(second.created, true);
   assert.equal(second.invitation.status, "pending");
   assert.notEqual(second.invitation.id, first.invitation.id);
+});
+
+/** A fresh pair with push tokens and an accepted plan, so cancellation pushes can be observed. */
+async function acceptedPlan(options = {}) {
+  const { speaker, learner, speakerName, learnerName } = await freshPair();
+  for (const actor of [speaker, learner]) {
+    await actor.write(`pushTokens/${actor.uid}`, {
+      token: `ExponentPushToken[${actor.uid}]`, platform: "ios", updatedAt: serverTimestamp(),
+    });
+  }
+  const { invitation } = await invite(speaker, learner.uid, options);
+  const accepted = await learner.call("respondToInvitation", { invitationId: invitation.id, action: "accept" });
+  return { speaker, learner, speakerName, learnerName, invitationId: invitation.id, conversationId: accepted.conversationId };
+}
+
+/** The stubbed cancellation push for one person, once the trigger has run. */
+function cancellationPushFor(uid, invitationId) {
+  return waitFor(async () => {
+    const snap = await admin().collection("pushDeliveries")
+      .where("toUid", "==", uid).where("data.type", "==", "plan").where("data.invitationId", "==", invitationId).get();
+    return snap.docs.find((doc) => /^Cancelled/.test(doc.get("body"))) || null;
+  }, { label: "the cancellation notification" });
+}
+
+test("either participant may cancel an accepted plan; the other is told, with the reason", async () => {
+  const plan = await acceptedPlan();
+
+  const cancelled = await plan.learner.call("cancelInvitation", { invitationId: plan.invitationId, reason: "cant-make-it" });
+  assert.equal(cancelled.changed, true);
+  assert.equal(cancelled.invitation.status, "cancelled");
+  assert.deepEqual(cancelled.invitation.resolution, { by: plan.learner.uid, reason: "cancelled-after-accept", detail: "cant-make-it" });
+
+  const stored = await admin().doc(`invitations/${plan.invitationId}`).get();
+  assert.equal(stored.get("status"), "cancelled");
+  assert.equal(stored.get("checkInsStopped"), "cancelled");
+  for (const field of ["nextCheckInAt", "nextCheckInOccurrence", "nextReminderAt", "nextReminderOccurrence"]) {
+    assert.equal(stored.get(field), null, `${field} must be cleared`);
+  }
+  // The conversation stays: cancelling a plan is not a block.
+  assert.equal(stored.get("conversationId"), plan.conversationId);
+  const conversation = await plan.speaker.read(`conversations/${plan.conversationId}`);
+  assert.equal(conversation.exists(), true);
+
+  const push = await cancellationPushFor(plan.speaker.uid, plan.invitationId);
+  assert.equal(push.get("title"), plan.learnerName);
+  assert.match(push.get("body"), /^Cancelled your plan for .*\. Can't make it\.$/);
+  assert.equal(push.get("data").otherUid, plan.learner.uid);
+  assert.equal(push.get("data").conversationId, plan.conversationId);
+});
+
+test("the sender may cancel too; repeating it changes nothing and the plan cannot be accepted again", async () => {
+  const plan = await acceptedPlan();
+
+  const cancelled = await plan.speaker.call("cancelInvitation", { invitationId: plan.invitationId });
+  assert.equal(cancelled.changed, true);
+  assert.deepEqual(cancelled.invitation.resolution, { by: plan.speaker.uid, reason: "cancelled-after-accept", detail: null });
+
+  const push = await cancellationPushFor(plan.learner.uid, plan.invitationId);
+  assert.equal(push.get("title"), plan.speakerName);
+  assert.match(push.get("body"), /^Cancelled your plan for [^.]+\.$/, "no reason given, so no reason phrase");
+
+  const again = await plan.speaker.call("cancelInvitation", { invitationId: plan.invitationId, reason: "other" });
+  assert.equal(again.changed, false);
+  const fromOtherSide = await plan.learner.call("cancelInvitation", { invitationId: plan.invitationId });
+  assert.equal(fromOtherSide.changed, false);
+
+  const error = await expectFailure(
+    plan.learner.call("respondToInvitation", { invitationId: plan.invitationId, action: "accept" }),
+    "failed-precondition",
+  );
+  assert.equal(error.details.reason, "invitation/not-pending");
+
+  // Only one cancellation push went out, and the pair can plan again afterwards.
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const pushes = await admin().collection("pushDeliveries")
+    .where("toUid", "==", plan.learner.uid).where("data.invitationId", "==", plan.invitationId).get();
+  assert.equal(pushes.docs.filter((doc) => /^Cancelled/.test(doc.get("body"))).length, 1);
+  const next = await invite(plan.speaker, plan.learner.uid);
+  assert.equal(next.created, true);
+});
+
+test("an outsider cannot cancel an accepted plan, and the reason must be one of the fixed choices", async () => {
+  const plan = await acceptedPlan();
+
+  const byOutsider = await expectFailure(
+    ren.call("cancelInvitation", { invitationId: plan.invitationId, reason: "other" }),
+    "permission-denied",
+  );
+  assert.equal(byOutsider.details.reason, "invitation/not-participant");
+
+  await expectFailure(
+    plan.learner.call("cancelInvitation", { invitationId: plan.invitationId, reason: "I met someone else" }),
+    "invalid-argument",
+  );
+
+  const stored = await admin().doc(`invitations/${plan.invitationId}`).get();
+  assert.equal(stored.get("status"), "accepted", "a refused cancel must not change state");
 });
 
 test("blocking cancels the pending invitation in both directions", async () => {

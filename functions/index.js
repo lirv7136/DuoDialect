@@ -27,7 +27,7 @@ const { setBlock, reportUser } = require("./lib/safety");
 const { requestAccountDeletion, assertNotSuspended } = require("./lib/accounts");
 const { assertModerator, listReports, getReportContext, actOnReport } = require("./lib/moderation");
 const { deliver } = require("./lib/notifier");
-const { invitationNotice, acceptedNotice } = require("./lib/notifications");
+const { invitationNotice, acceptedNotice, cancelledNotice } = require("./lib/notifications");
 const { refs } = require("./lib/refs");
 const { setProfilePhotos, screenUpload } = require("./lib/photos");
 const { answerCheckIn, sweepCheckIns } = require("./lib/checkins");
@@ -176,8 +176,9 @@ exports.onConversationMessageCreated = onDocumentCreated(
 );
 
 /**
- * Plan notifications: the invitee hears about a new invitation, and the person who
- * suggested it hears when it is accepted. Declines and cancellations stay quiet.
+ * Plan notifications: the invitee hears about a new invitation, the person who
+ * suggested it hears when it is accepted, and when an accepted plan is cancelled the
+ * other participant hears. Declines and withdrawn pending invitations stay quiet.
  * Blocks are re-checked in both directions, as for messages.
  */
 async function notifyAboutPlan(invitationId, invitation, { toUid, aboutUid, notice }) {
@@ -208,10 +209,20 @@ exports.onInvitationCreated = onDocumentCreated("invitations/{invitationId}", as
 exports.onInvitationUpdated = onDocumentUpdated("invitations/{invitationId}", async (event) => {
   const before = event.data && event.data.before.data();
   const after = event.data && event.data.after.data();
-  if (!before || !after || before.status === "accepted" || after.status !== "accepted") return;
-  await notifyAboutPlan(event.params.invitationId, after, {
-    toUid: after.fromUid, aboutUid: after.toUid, notice: acceptedNotice,
-  });
+  if (!before || !after || before.status === after.status) return;
+  if (after.status === "accepted") {
+    await notifyAboutPlan(event.params.invitationId, after, {
+      toUid: after.fromUid, aboutUid: after.toUid, notice: acceptedNotice,
+    });
+    return;
+  }
+  if (before.status === "accepted" && after.status === "cancelled") {
+    // Only cancelInvitation moves an accepted plan to cancelled, and it records who.
+    const by = after.resolution && after.resolution.by;
+    const toUid = (after.participants || []).find((uid) => uid !== by);
+    if (!by || !toUid) return;
+    await notifyAboutPlan(event.params.invitationId, after, { toUid, aboutUid: by, notice: cancelledNotice });
+  }
 });
 
 /**

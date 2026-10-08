@@ -23,6 +23,7 @@ const {
   sweepCheckIns, checkInTimeFor, addDays, checkInId, meetupId, ANSWER_WINDOW_MS, MAX_QUIET_OCCURRENCES,
 } = require("../lib/checkins");
 const { checkInNotice } = require("../lib/notifications");
+const { sweepReminders } = require("../lib/reminders");
 
 const HOUR = 60 * 60 * 1000;
 let pairSeq = 0;
@@ -306,6 +307,37 @@ test("a weekly plan nobody confirms stops asking", async () => {
   const invitation = await invitationDoc(plan.invitationId);
   assert.equal(invitation.nextCheckInAt, null);
   assert.equal(invitation.checkInsStopped, "inactive");
+});
+
+test("cancelling an accepted weekly plan ends the series: the open check-in stays, nothing more is asked or reminded", async () => {
+  const plan = await acceptedPlan({ recurrence: "weekly" });
+  await sweepWhenDue(plan.invitationId);
+  const mine = idFor(plan, plan.speaker);
+  assert.equal((await admin().doc(`checkIns/${mine}`).get()).exists, true);
+  const week2 = addDays(plan.meeting.localDate, 7);
+  const week2Due = (await invitationDoc(plan.invitationId)).nextCheckInAt.toMillis();
+
+  const cancelled = await plan.learner.call("cancelInvitation", { invitationId: plan.invitationId, reason: "reschedule" });
+  assert.equal(cancelled.invitation.status, "cancelled");
+  const invitation = await invitationDoc(plan.invitationId);
+  assert.equal(invitation.checkInsStopped, "cancelled");
+  assert.equal(invitation.nextCheckInAt, null);
+  assert.equal(invitation.nextCheckInOccurrence, null);
+  assert.equal(invitation.nextReminderAt, null);
+  assert.equal(invitation.nextReminderOccurrence, null);
+
+  // Week two never comes: no check-in, no reminder.
+  await sweepCheckIns(admin(), new Date(week2Due + HOUR));
+  await sweepReminders(admin(), new Date(week2Due + HOUR));
+  assert.equal((await admin().doc(`checkIns/${idFor(plan, plan.speaker, week2)}`).get()).exists, false);
+  assert.equal((await admin().doc(`checkIns/${idFor(plan, plan.learner, week2)}`).get()).exists, false);
+  const reminders = await admin().collection("pushDeliveries")
+    .where("data.type", "==", "plan").where("data.invitationId", "==", plan.invitationId).get();
+  assert.equal(reminders.docs.filter((doc) => /tomorrow$/.test(doc.get("title"))).length, 0);
+
+  // The check-in already open is left alone and can still be answered.
+  const answered = await plan.speaker.call("answerCheckIn", { checkInId: mine, happened: "yes" });
+  assert.equal(answered.changed, true);
 });
 
 test("a blocked pair gets no check-in, and no confirmation", async () => {

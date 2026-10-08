@@ -21,6 +21,9 @@ const INVITATION_STATUSES = ["pending", "accepted", "declined", "cancelled"];
 
 const RECURRENCE = ["once", "weekly"];
 
+/** Why an accepted plan was cancelled. A fixed set, never free text, because it is pushed to the other person. */
+const CANCEL_REASONS = ["cant-make-it", "reschedule", "other"];
+
 /**
  * The cities Talkeven runs in. Discovery, near misses and match notices never cross a
  * city, so a Melbourne member is not shown Sydney people. Ids are stable and lower case;
@@ -94,6 +97,7 @@ module.exports = {
   INTENTS,
   INVITATION_STATUSES,
   RECURRENCE,
+  CANCEL_REASONS,
   REPORT_REASONS,
   CITIES,
   CITY_IDS,

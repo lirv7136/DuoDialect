@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Share, View } from "react-native";
+import { ActionSheetIOS, Platform, Share, View } from "react-native";
 import { router } from "expo-router";
 import { api } from "../../src/lib/api";
+import { CANCEL_REASONS, CANCEL_REASON_PROMPT, cancelPlanConfirm, type CancelReason } from "../../src/domain/cancel-plan";
 import { auth } from "../../src/lib/firebase";
 import { subscribeInvitations, subscribeOpenCheckIns, type CheckInDoc, type InvitationDoc } from "../../src/lib/live";
 import { openCheckIns } from "../../src/domain/check-in";
@@ -12,8 +13,9 @@ import { planShareMessage } from "../../src/domain/share-plan";
 import { initialSegment, nextOccurrence, planSegments } from "../../src/domain/display";
 import { errorMessage } from "../../src/domain/errors";
 import { deviceTimeZone } from "../../src/lib/time-zone";
-import { Caption, Display, ErrorNotice, Heading, Loading, Screen, Segmented, Button } from "../../components/ui";
+import { Body, Caption, Display, ErrorNotice, Heading, Loading, Screen, Segmented, Button } from "../../components/ui";
 import { EmptyState } from "../../components/empty-state";
+import { Sheet } from "../../components/sheet";
 import { PlanCard } from "../../components/plan-card";
 import { AcceptedSheet, BubbleConfetti, useFirstMeetupCelebration } from "../../components/celebrations";
 import { confirmAction } from "../../components/safety-menu";
@@ -41,8 +43,12 @@ export default function Plans() {
   // The invitation that just became a plan, from either side, for the celebration sheet.
   const [accepted, setAccepted] = useState<InvitationDoc | null>(null);
   const [burst, setBurst] = useState(false);
+  // A confirmed plan waiting on its cancel reason (the bottom sheet, off iOS).
+  const [cancelling, setCancelling] = useState<InvitationDoc | null>(null);
   const inFlight = useRef(new Set<string>());
   const lastStatus = useRef<Map<string, string> | null>(null);
+  // Invitations already celebrated here, so no second snapshot or path can show the sheet twice.
+  const celebratedIds = useRef(new Set<string>());
   // Name and photos for the other person on each invitation. A hidden profile reads as a neutral label.
   const people = usePeople([
     ...(items ?? []).map(item => (item.fromUid === uid ? item.toUid : item.fromUid)),
@@ -54,6 +60,13 @@ export default function Plans() {
 
   useEffect(() => { void safetyTipsDismissed().then(setTipsDismissed); }, []);
 
+  // Shows the celebration once per invitation, whichever path noticed the acceptance first.
+  function celebrate(item: InvitationDoc) {
+    if (celebratedIds.current.has(item.id)) return;
+    celebratedIds.current.add(item.id);
+    setAccepted(item);
+  }
+
   useEffect(() => {
     if (!uid) return;
     return subscribeInvitations(uid, next => {
@@ -61,7 +74,7 @@ export default function Plans() {
       const before = lastStatus.current;
       if (before) {
         const justAccepted = next.find(item => item.fromUid === uid && item.status === "accepted" && before.get(item.id) === "pending");
-        if (justAccepted) setAccepted(justAccepted);
+        if (justAccepted) celebrate(justAccepted);
       }
       lastStatus.current = new Map(next.map(item => [item.id, item.status]));
       setItems(next);
@@ -84,17 +97,19 @@ export default function Plans() {
   }, [firstMeetupDue, hasConfirmed, celebrated]);
 
   // One action per invitation at a time; the callables are also idempotent on repeat.
-  async function run(item: InvitationDoc, action: "accept" | "decline" | "cancel") {
+  // "cancel" covers both withdrawing my pending invite and cancelling a confirmed plan;
+  // the reason only exists for the latter, and the backend tells the other person.
+  async function run(item: InvitationDoc, action: "accept" | "decline" | "cancel", reason?: CancelReason) {
     if (inFlight.current.has(item.id)) return;
     inFlight.current.add(item.id);
     setBusy(current => ({ ...current, [item.id]: action }));
     setCardErrors(current => ({ ...current, [item.id]: "" }));
     try {
       if (action === "cancel") {
-        await api.cancelInvitation(item.id);
+        await api.cancelInvitation(item.id, reason);
       } else {
         const result = await api.respondToInvitation(item.id, action);
-        if (action === "accept") setAccepted({ ...item, status: "accepted", conversationId: result.conversationId ?? item.conversationId });
+        if (action === "accept") celebrate({ ...item, status: "accepted", conversationId: result.conversationId ?? item.conversationId });
       }
     } catch (e) {
       setCardErrors(current => ({ ...current, [item.id]: errorMessage(e) }));
@@ -120,6 +135,24 @@ export default function Plans() {
     confirmAction(action === "decline"
       ? { title: "Decline?", body: `${name} will see you declined.`, confirm: "Decline", cancel: "Keep", onConfirm: () => void run(item, action) }
       : { title: "Cancel invite?", body: "You can send a new one later.", confirm: "Cancel invite", cancel: "Keep", onConfirm: () => void run(item, action) });
+  }
+
+  // Cancelling a confirmed plan: pick a reason (or none), then confirm that they will be told.
+  function confirmCancelPlan(item: InvitationDoc, reason: CancelReason | null) {
+    const name = people[otherOf(item)]?.name ?? "";
+    confirmAction({ ...cancelPlanConfirm(name, item.meeting.recurrence === "weekly"), onConfirm: () => void run(item, "cancel", reason ?? undefined) });
+  }
+
+  function cancelPlan(item: InvitationDoc) {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: CANCEL_REASON_PROMPT.title, message: CANCEL_REASON_PROMPT.body, options: [...CANCEL_REASONS.map(r => r.label), "Keep plan"], cancelButtonIndex: CANCEL_REASONS.length },
+        index => { if (index < CANCEL_REASONS.length) confirmCancelPlan(item, CANCEL_REASONS[index].value); },
+      );
+      return;
+    }
+    // Android alerts stop at three buttons, and web alerts have none, so the app's own sheet.
+    setCancelling(item);
   }
 
   // The safety tip "Tell a friend where you'll be" as one tap. Only what the card already shows goes out.
@@ -155,6 +188,7 @@ export default function Plans() {
       onAccept={() => void run(item, "accept")}
       onDecline={() => confirm(item, "decline")}
       onCancel={() => confirm(item, "cancel")}
+      onCancelPlan={() => cancelPlan(item)}
       onOpenChat={() => router.push({ pathname: "/chat/[chatId]", params: { chatId: item.conversationId as string } })}
       onShare={() => share(item)}
     />
@@ -209,6 +243,16 @@ export default function Plans() {
           </>
         )}
       </Screen>
+
+      <Sheet visible={!!cancelling} onClose={() => setCancelling(null)} title={CANCEL_REASON_PROMPT.title}>
+        <Body muted>{CANCEL_REASON_PROMPT.body}</Body>
+        {CANCEL_REASONS.map(reason => (
+          // The confirm waits for the sheet to close; an alert raised over a closing modal can be lost on Android.
+          <Button key={reason.value} label={reason.label}
+            onPress={() => { const item = cancelling; setCancelling(null); if (item) setTimeout(() => confirmCancelPlan(item, reason.value), 350); }} />
+        ))}
+        <Button variant="ghost" label="Keep plan" onPress={() => setCancelling(null)} />
+      </Sheet>
 
       {burst && !accepted ? <BubbleConfetti onDone={() => setBurst(false)} /> : null}
       <AcceptedSheet

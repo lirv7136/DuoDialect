@@ -1,7 +1,8 @@
 /**
  * A plan, Strava style: a date block on the left; the partner, the language pair and a
  * row of facts on the right; state as a badge; one action per state. A confirmed plan
- * that is still ahead also offers a ghost "Share with a friend", the safety tip made a tap.
+ * that is still ahead also offers a ghost "Share with a friend", the safety tip made a
+ * tap, and a quiet "Cancel plan", because plans change and someone may want out.
  */
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -35,7 +36,7 @@ export function DateBlock({ localDate, tone = "navy" }: { localDate: string; ton
 
 type Action = "accept" | "decline" | "cancel";
 
-export function PlanCard({ item, uid, person, busy, error, myZone, onAccept, onDecline, onCancel, onOpenChat, onShare }: {
+export function PlanCard({ item, uid, person, busy, error, myZone, onAccept, onDecline, onCancel, onCancelPlan, onOpenChat, onShare }: {
   item: InvitationDoc;
   uid: string;
   person?: { name: string; photos: ProfilePhoto[] };
@@ -44,7 +45,10 @@ export function PlanCard({ item, uid, person, busy, error, myZone, onAccept, onD
   myZone: string | null;
   onAccept: () => void;
   onDecline: () => void;
+  /** Withdraws an invitation I sent that is still waiting. */
   onCancel: () => void;
+  /** Cancels a confirmed plan, from either side. The other person is told. */
+  onCancelPlan?: () => void;
   onOpenChat: () => void;
   /** Opens the system share sheet with the plan's who, when and where for a friend. */
   onShare?: () => void;
@@ -58,6 +62,7 @@ export function PlanCard({ item, uid, person, busy, error, myZone, onAccept, onD
   const theyShare = mine ? item.languages?.toOffers : item.languages?.fromOffers;
   const weekly = item.meeting.recurrence === "weekly";
   const shownDate = item.status === "accepted" ? nextOccurrence(item.meeting.localDate, item.meeting.recurrence) : item.meeting.localDate;
+  const ahead = status === "confirmed" && !isPastMeeting(item.meeting);
 
   return (
     <Card style={closed && { opacity: 0.85 }}>
@@ -114,9 +119,14 @@ export function PlanCard({ item, uid, person, busy, error, myZone, onAccept, onD
       {status === "confirmed" && item.conversationId ? (
         <Button variant="primary" icon="chatbubbles-outline" label="Open chat" accessibilityLabel={`Open chat with ${name}`} onPress={onOpenChat} />
       ) : null}
-      {status === "confirmed" && onShare && !isPastMeeting(item.meeting) ? (
+      {ahead && onShare ? (
         <Button variant="ghost" icon="share-outline" label="Share with a friend"
           accessibilityLabel="Share this plan with a friend" hint="Opens the share sheet with who, when and where you’re meeting" onPress={onShare} />
+      ) : null}
+      {ahead && onCancelPlan ? (
+        <Button variant="ghost" label="Cancel plan" busy={busy === "cancel"} busyLabel="Cancelling…" disabled={!!busy}
+          accessibilityLabel={`Cancel plan with ${name}`} hint={weekly ? "Cancels every week. They will be told" : "They will be told"}
+          onPress={onCancelPlan} />
       ) : null}
     </Card>
   );

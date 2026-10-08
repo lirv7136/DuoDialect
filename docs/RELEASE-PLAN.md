@@ -98,6 +98,13 @@ Shipped on the branch, in commit order, with unit test counts rising from 74 to 
 - In app moderation screen (Profile → Moderation, moderators only): the report queue by
   status, each report's thread and photo paths, and claim, warn, suspend, remove photos,
   dismiss and reinstate behind a confirm that spells out the consequence.
+- Cancel a confirmed plan from either side (`cancelInvitation` with an optional fixed
+  reason: can't make it, reschedule, other). A quiet "Cancel plan" on the card asks for
+  the reason, then confirms that the partner will be told (a weekly plan goes as a whole
+  series). The other person gets a push naming who cancelled and the reason phrase;
+  reminders and future check-ins stop, open check-ins and the chat stay. Chats shows
+  "Plan cancelled" until something new is planned. Also: the acceptance celebration is
+  now keyed per invitation so it cannot show twice for one accept.
 
 1.1.2 adds native packages (`expo-apple-authentication`, `expo-crypto`,
 `expo-store-review`), so it needs a new native build, not an OTA update.

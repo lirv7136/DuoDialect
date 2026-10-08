@@ -43,6 +43,25 @@ function acceptedNotice(invitation, toName) {
   };
 }
 
+/** The fixed cancellation reasons as a phrase for the other person. "other" says nothing more. */
+const CANCEL_DETAIL_PHRASES = { "cant-make-it": "Can't make it.", reschedule: "Wants to reschedule." };
+
+/**
+ * Sent to the other participant when an accepted plan is cancelled. Names who
+ * cancelled and when the plan was; a weekly plan is cancelled as a whole series, so
+ * the wording says so. The reason, when one was given, is the chosen phrase only.
+ */
+function cancelledNotice(invitation, byName) {
+  const weekly = invitation.meeting && invitation.meeting.recurrence === "weekly";
+  const detail = invitation.resolution ? invitation.resolution.detail : null;
+  const phrase = CANCEL_DETAIL_PHRASES[detail];
+  const when = describeWhen(invitation.meeting);
+  return {
+    title: displayName(byName),
+    body: `${weekly ? `Cancelled your weekly plan from ${when}.` : `Cancelled your plan for ${when}.`}${phrase ? ` ${phrase}` : ""}`,
+  };
+}
+
 /** Sent to each person the day after a meetup. Asks; never says what the other answered. */
 function checkInNotice(checkIn, otherName) {
   const day = describeWhen({ localDate: checkIn.occurrence && checkIn.occurrence.localDate });
@@ -82,4 +101,4 @@ function matchNotice(newcomerName, exchange) {
   };
 }
 
-module.exports = { describeWhen, invitationNotice, acceptedNotice, checkInNotice, reminderNotice, matchNotice };
+module.exports = { describeWhen, invitationNotice, acceptedNotice, cancelledNotice, checkInNotice, reminderNotice, matchNotice };

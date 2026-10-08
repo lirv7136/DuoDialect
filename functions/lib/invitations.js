@@ -5,7 +5,7 @@ const { HttpsError } = require("firebase-functions/v2/https");
 const {
   requireUid, requireEnum, requireString, requireMeeting, optionalString, requireObject,
 } = require("./validation");
-const { INTENTS, LIMITS } = require("./constants");
+const { INTENTS, LIMITS, CANCEL_REASONS } = require("./constants");
 const {
   REASON, reject, assertPairEligible, reciprocalExchange, datingEligibility, loadPair,
 } = require("./eligibility");
@@ -339,10 +339,23 @@ async function respondToInvitation(db, callerUid, payload, now = new Date()) {
   });
 }
 
-/** Cancel a pending invitation. Only the sender may cancel; repeat calls are harmless. */
+/**
+ * Cancel an invitation. Repeat calls are harmless.
+ *
+ * A pending invitation may only be withdrawn by its sender, quietly. An accepted plan
+ * may be cancelled by either participant, because people get sick, plans change and
+ * someone may want out for safety reasons; the other person is told (see
+ * onInvitationUpdated). `reason` is an optional fixed choice, never free text, because
+ * it goes into that push. Cancelling an accepted plan stops its reminders and future
+ * check-ins (a weekly plan is cancelled as a whole series) and leaves check-ins already
+ * created, and the conversation, as they are.
+ */
 async function cancelInvitation(db, callerUid, payload) {
   const body = requireObject(payload, "request");
   const id = requireString(body.invitationId, "invitationId", 128);
+  const detail = body.reason === undefined || body.reason === null
+    ? null
+    : requireEnum(body.reason, "reason", CANCEL_REASONS);
   const r = refs(db);
 
   return db.runTransaction(async (tx) => {
@@ -352,27 +365,42 @@ async function cancelInvitation(db, callerUid, payload) {
       throw reject("not-found", REASON.invitationNotFound, "This invitation no longer exists.");
     }
     const data = snap.data();
-    if (data.fromUid !== callerUid) {
-      throw reject("permission-denied", REASON.invitationNotSender, "You cannot cancel this invitation.");
+    if (!(data.participants || []).includes(callerUid)) {
+      throw reject("permission-denied", REASON.invitationNotParticipant, "You cannot cancel this invitation.");
     }
     if (data.status === "cancelled") {
       return { invitation: serializeInvitation(id, data), changed: false };
     }
-    if (data.status !== "pending") {
+    if (data.status === "pending" && data.fromUid !== callerUid) {
+      throw reject("permission-denied", REASON.invitationNotSender, "You cannot cancel this invitation.");
+    }
+    if (data.status !== "pending" && data.status !== "accepted") {
       throw reject("failed-precondition", REASON.invitationNotPending, `This invitation is already ${data.status}.`);
     }
 
     const lockRef = r.invitationLock(invitationLockId(data.fromUid, data.toUid, data.intent));
     const lock = await tx.get(lockRef);
+    const resolution = data.status === "accepted"
+      ? { by: callerUid, reason: "cancelled-after-accept", detail }
+      : { by: callerUid, reason: "cancelled" };
     tx.update(inviteRef, {
       status: "cancelled",
-      resolution: { by: callerUid, reason: "cancelled" },
+      resolution,
       respondedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
+      // Nothing more is due for a plan that is off. The sweeps also check the status,
+      // so this is belt and braces rather than the only guard.
+      ...(data.status === "accepted" ? {
+        nextCheckInAt: null,
+        nextCheckInOccurrence: null,
+        nextReminderAt: null,
+        nextReminderOccurrence: null,
+        checkInsStopped: "cancelled",
+      } : {}),
     });
     if (lock.exists && lock.get("invitationId") === id) tx.delete(lockRef);
     return {
-      invitation: serializeInvitation(id, { ...data, status: "cancelled", resolution: { by: callerUid, reason: "cancelled" } }),
+      invitation: serializeInvitation(id, { ...data, status: "cancelled", resolution }),
       changed: true,
     };
   });

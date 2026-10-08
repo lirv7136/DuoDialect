@@ -27,6 +27,7 @@ const REASON = {
   invitationNotPending: "invitation/not-pending",
   invitationNotRecipient: "invitation/not-recipient",
   invitationNotSender: "invitation/not-sender",
+  invitationNotParticipant: "invitation/not-participant",
   invitationNotFound: "invitation/not-found",
   conversationNotMember: "conversation/not-member",
   conversationNotFound: "conversation/not-found",
