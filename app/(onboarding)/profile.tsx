@@ -10,6 +10,7 @@ import {
   type ProfileDraft,
 } from "../../src/domain/profile-form";
 import { errorMessage } from "../../src/domain/errors";
+import { SAVE_ANYWAY_LABEL, nudgeMessage, nudgesFor, type NudgeField } from "../../src/domain/onboarding-copy";
 import { api } from "../../src/lib/api";
 import { onboardingDraft } from "../../src/lib/onboarding-draft";
 import { rememberAccount, useMyAccount } from "../../hooks/use-my-account";
@@ -19,7 +20,7 @@ import { AvailabilityPicker } from "../../components/availability-picker";
 import { DateTimeField } from "../../components/date-time-field";
 import { defaultBirthDate, earliestBirthDate, latestAdultBirthDate } from "../../src/domain/date-bounds";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Button, Caption, ErrorNotice, Field, Loading, Screen, Title, styles } from "../../components/ui";
+import { Button, Caption, ErrorNotice, Field, Loading, Notice, Screen, Title, styles } from "../../components/ui";
 import { StepIndicator } from "../../components/step-indicator";
 import { colors, space } from "../../constants/theme";
 
@@ -31,6 +32,10 @@ export default function ProfileOnboarding() {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // Photo and times are optional, but the first tap with either empty says why they matter.
+  // Each field is nudged once; the next tap, or "Save anyway", goes through.
+  const [nudge, setNudge] = useState<string | null>(null);
+  const nudged = useRef(new Set<NudgeField>());
   const inFlight = useRef(false);
   // A profile that already exists keeps its private fields; the server only needs them once.
   const firstSave = !profile || !account;
@@ -40,25 +45,38 @@ export default function ProfileOnboarding() {
 
   useEffect(() => {
     if (ready || loading) return;
-    const languages = onboardingDraft.get();
-    const base = profile ? draftFromProfile(profile) : emptyProfileDraft();
-    if (!languages && !profile) {
-      router.replace("/(onboarding)/languages?next=profile");
-      return;
-    }
-    setDraft(languages ? { ...base, ...languages } : base);
-    setReady(true);
+    let active = true;
+    void onboardingDraft.load().then(languages => {
+      if (!active) return;
+      const base = profile ? draftFromProfile(profile) : emptyProfileDraft();
+      if (!languages && !profile) {
+        router.replace("/(onboarding)/languages?next=profile");
+        return;
+      }
+      setDraft(languages ? { ...base, ...languages } : base);
+      setReady(true);
+    });
+    return () => { active = false; };
   }, [ready, loading, profile]);
 
   const patch = (value: Partial<ProfileDraft>) => setDraft(current => ({ ...current, ...value }));
 
-  async function onSave() {
+  async function onSave(anyway = false) {
     if (inFlight.current) return;
     const options = { firstSave, private: { birthDate } };
     const issue = validateProfileDraft(draft, options)
       ?? (photos.pending ? "Your photo is still being checked. Wait a moment, or remove it and add photos later." : null);
     setProblem(issue);
     if (issue) return;
+    if (!anyway) {
+      const fields = nudgesFor({ hasPhoto: photos.slots.length > 0, availability: draft.availability }, nudged.current);
+      if (fields.length) {
+        for (const field of fields) nudged.current.add(field);
+        setNudge(nudgeMessage(fields));
+        return;
+      }
+    }
+    setNudge(null);
     inFlight.current = true;
     setBusy(true);
     try {
@@ -66,7 +84,7 @@ export default function ProfileOnboarding() {
       const saved = await api.upsertProfile(buildUpsertPayload(draft, options));
       const savedPhotos = await photos.save();
       rememberAccount(savedPhotos && saved.profile ? { ...saved, profile: { ...saved.profile, photos: savedPhotos } } : saved);
-      onboardingDraft.clear();
+      await onboardingDraft.clear();
       router.replace("/(tabs)/discover");
     } catch (e) {
       setProblem(errorMessage(e));
@@ -111,8 +129,10 @@ export default function ProfileOnboarding() {
         </View>
       ) : null}
 
+      <Notice message={nudge} icon="bulb-outline" tone="info"
+        action={<Button variant="ghost" label={SAVE_ANYWAY_LABEL} accessibilityLabel="Save without adding these" onPress={() => onSave(true)} />} />
       <ErrorNotice message={problem} />
-      <Button variant="primary" label="Start" accessibilityLabel="Save and start" busy={busy} busyLabel="Saving…" onPress={onSave} />
+      <Button variant="primary" label="Start" accessibilityLabel="Save and start" busy={busy} busyLabel="Saving…" onPress={() => onSave()} />
       <Button variant="ghost" label="Back" accessibilityLabel="Back to languages" onPress={() => router.back()} />
     </Screen>
   );

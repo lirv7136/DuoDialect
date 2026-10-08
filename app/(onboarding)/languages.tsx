@@ -9,8 +9,8 @@ import { Body, Button, ErrorNotice, Loading, Screen, Title } from "../../compone
 import { StepIndicator } from "../../components/step-indicator";
 
 /**
- * Step one of onboarding. Nothing is saved here: `upsertProfile` needs the name and the
- * languages together, so they are held until step two submits.
+ * Step one of onboarding. Nothing is saved to the profile here: `upsertProfile` needs the
+ * name and the languages together, so they are held as a draft until step two submits.
  */
 export default function LanguagesOnboarding() {
   const { profile, loading } = useMyAccount();
@@ -21,16 +21,21 @@ export default function LanguagesOnboarding() {
 
   useEffect(() => {
     if (ready || loading) return;
-    const saved = onboardingDraft.get() ?? (profile ? draftFromProfile(profile) : null);
-    if (saved) { setSpeaks(saved.speaks); setLearns(saved.learns); }
-    setReady(true);
+    let active = true;
+    void onboardingDraft.load().then(draft => {
+      if (!active) return;
+      const saved = draft ?? (profile ? draftFromProfile(profile) : null);
+      if (saved) { setSpeaks(saved.speaks); setLearns(saved.learns); }
+      setReady(true);
+    });
+    return () => { active = false; };
   }, [ready, loading, profile]);
 
   function onContinue() {
     const issue = validateLanguages(speaks, learns);
     setProblem(issue);
     if (issue) return;
-    onboardingDraft.set({ speaks, learns });
+    void onboardingDraft.set({ speaks, learns });
     router.push("/(onboarding)/profile");
   }
 

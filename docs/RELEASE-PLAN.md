@@ -64,7 +64,14 @@ push, because marketing into an empty Discover wastes the users it wins:
 3. [x] Meetup reminder the evening before (`sweepReminders`, `functions/lib/reminders.js`).
 4. [x] Near miss fallback and "N people here are learning English" on an empty Discover.
 
-Done on the branch: `app.json` 1.1.1, 127 emulator tests, 74 unit tests, typecheck and lint
+Two onboarding fixes from the product review, client only:
+
+5. [x] The language draft survives a backgrounded app: `src/lib/onboarding-draft.ts` writes
+   through to AsyncStorage keyed by uid, cleared on profile save and at sign out.
+6. [x] First save with no photo or no free times shows one inline nudge per field with a
+   "Save anyway" path (`src/domain/onboarding-copy.ts`). Neither field is required.
+
+Done on the branch: `app.json` 1.1.1, 127 emulator tests, 85 unit tests, typecheck and lint
 clean. Still to do: deploy indexes then functions and rules to staging and production (new
 indexes: profiles `(discoverable, seeks, uid)`, invitations `(status, nextReminderAt)`), a
 device run of the four flows, What's New, then build and submit after 1.1.0 is approved.

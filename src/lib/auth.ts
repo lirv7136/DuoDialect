@@ -8,6 +8,7 @@ import {
 } from "firebase/auth";
 import { auth } from "./firebase";
 import { resetGate } from "./notification-routing";
+import { onboardingDraft } from "./onboarding-draft";
 
 export async function signUp(email: string, password: string) {
   return createUserWithEmailAndPassword(auth, email.trim(), password);
@@ -33,6 +34,8 @@ export async function requestPasswordReset(email: string) {
 
 export async function logOut() {
   resetGate();
+  // An unfinished onboarding draft belongs to this account, so it leaves with it.
+  await onboardingDraft.clear();
   return signOut(auth);
 }
 

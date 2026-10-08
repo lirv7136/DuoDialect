@@ -402,13 +402,23 @@ export function ErrorNotice({ message, onRetry }: { message: string | null; onRe
   );
 }
 
-/** A short confirmation, such as "Check your email for a reset link." */
-export function Notice({ message, icon = "checkmark-circle" }: { message: string | null; icon?: IconName }) {
+/**
+ * A short confirmation, such as "Check your email for a reset link." The "info" tone is a
+ * soft deep water fill for a gentle nudge, with room for one ghost action below it.
+ */
+export function Notice({ message, icon = "checkmark-circle", tone = "success", action }: {
+  message: string | null; icon?: IconName; tone?: "success" | "info"; action?: ReactNode;
+}) {
   if (!message) return null;
+  const info = tone === "info";
   return (
-    <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}>
-      <Ionicons name={icon} size={20} color={colors.success} />
-      <Text style={[type.body, { flexShrink: 1 }]}>{message}</Text>
+    <View accessibilityRole="alert" accessibilityLiveRegion="polite"
+      style={[styles.notice, info && { backgroundColor: colors.surfaceNavySoft }]}>
+      <View style={[styles.row, { flexWrap: "nowrap", alignItems: "flex-start" }]}>
+        <Ionicons name={icon} size={20} color={info ? colors.primary : colors.success} />
+        <Text style={[type.body, { flexShrink: 1 }]}>{message}</Text>
+      </View>
+      {action}
     </View>
   );
 }
@@ -468,7 +478,7 @@ export const styles = StyleSheet.create({
   listRow: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.sm },
   error: { backgroundColor: colors.dangerSoft, borderRadius: radius.input, padding: space.md, gap: space.sm },
   errorText: { color: colors.danger, fontFamily: fonts.medium, fontSize: 15, lineHeight: 21, flexShrink: 1 },
-  notice: { backgroundColor: colors.successSoft, borderRadius: radius.input, padding: space.md, flexDirection: "row", gap: space.sm, alignItems: "flex-start" },
+  notice: { backgroundColor: colors.successSoft, borderRadius: radius.input, padding: space.md, gap: space.sm },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.sm, padding: space.xl, backgroundColor: colors.background },
   row: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, alignItems: "center" },
 });
