@@ -1,12 +1,13 @@
 /**
  * A plan, Strava style: a date block on the left; the partner, the language pair and a
- * row of facts on the right; state as a badge; one action per state.
+ * row of facts on the right; state as a badge; one action per state. A confirmed plan
+ * that is still ahead also offers a ghost "Share with a friend", the safety tip made a tap.
  */
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { InvitationDoc } from "../src/lib/live";
-import { dateBlock, nextOccurrence, planStatus } from "../src/domain/display";
+import { dateBlock, isPastMeeting, nextOccurrence, planStatus } from "../src/domain/display";
 import type { ProfilePhoto } from "../src/domain/photos";
 import { MAX_FONT_SCALE, colors, fonts, radius, space, type } from "../constants/theme";
 import { Avatar } from "./avatar";
@@ -34,7 +35,7 @@ export function DateBlock({ localDate, tone = "navy" }: { localDate: string; ton
 
 type Action = "accept" | "decline" | "cancel";
 
-export function PlanCard({ item, uid, person, busy, error, myZone, onAccept, onDecline, onCancel, onOpenChat }: {
+export function PlanCard({ item, uid, person, busy, error, myZone, onAccept, onDecline, onCancel, onOpenChat, onShare }: {
   item: InvitationDoc;
   uid: string;
   person?: { name: string; photos: ProfilePhoto[] };
@@ -45,6 +46,8 @@ export function PlanCard({ item, uid, person, busy, error, myZone, onAccept, onD
   onDecline: () => void;
   onCancel: () => void;
   onOpenChat: () => void;
+  /** Opens the system share sheet with the plan's who, when and where for a friend. */
+  onShare?: () => void;
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const mine = item.fromUid === uid;
@@ -110,6 +113,10 @@ export function PlanCard({ item, uid, person, busy, error, myZone, onAccept, onD
       ) : null}
       {status === "confirmed" && item.conversationId ? (
         <Button variant="primary" icon="chatbubbles-outline" label="Open chat" accessibilityLabel={`Open chat with ${name}`} onPress={onOpenChat} />
+      ) : null}
+      {status === "confirmed" && onShare && !isPastMeeting(item.meeting) ? (
+        <Button variant="ghost" icon="share-outline" label="Share with a friend"
+          accessibilityLabel="Share this plan with a friend" hint="Opens the share sheet with who, when and where you’re meeting" onPress={onShare} />
       ) : null}
     </Card>
   );

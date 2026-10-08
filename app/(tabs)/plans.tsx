@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { Share, View } from "react-native";
 import { router } from "expo-router";
 import { api } from "../../src/lib/api";
 import { auth } from "../../src/lib/firebase";
@@ -8,7 +8,8 @@ import { openCheckIns } from "../../src/domain/check-in";
 import { askForNotificationsInContext } from "../../src/lib/notification-prompt";
 import { dismissSafetyTips, safetyTipsDismissed } from "../../src/lib/safety-tips";
 import { formatLocalDate } from "../../src/domain/schedule";
-import { initialSegment, planSegments } from "../../src/domain/display";
+import { planShareMessage } from "../../src/domain/share-plan";
+import { initialSegment, nextOccurrence, planSegments } from "../../src/domain/display";
 import { errorMessage } from "../../src/domain/errors";
 import { deviceTimeZone } from "../../src/lib/time-zone";
 import { Caption, Display, ErrorNotice, Heading, Loading, Screen, Segmented, Button } from "../../components/ui";
@@ -19,6 +20,7 @@ import { confirmAction } from "../../components/safety-menu";
 import { usePeople } from "../../hooks/use-people";
 import { useMyAccount } from "../../hooks/use-my-account";
 import { CARD_GAP } from "../../constants/theme";
+import { APP_NAME } from "../../constants/brand";
 import { SafetyCard } from "../../components/safety-card";
 import { CheckInCard } from "../../components/check-in-card";
 
@@ -27,6 +29,7 @@ type Segment = "upcoming" | "invites" | "past";
 
 export default function Plans() {
   const uid = auth.currentUser?.uid ?? "";
+  const otherOf = (item: InvitationDoc) => (item.fromUid === uid ? item.toUid : item.fromUid);
   const { profile: me } = useMyAccount();
   const [items, setItems] = useState<InvitationDoc[] | null>(null);
   // Open post meetup check-ins. A failure here only hides the prompts; Plans still works.
@@ -119,13 +122,26 @@ export default function Plans() {
       : { title: "Cancel invite?", body: "You can send a new one later.", confirm: "Cancel invite", cancel: "Keep", onConfirm: () => void run(item, action) });
   }
 
+  // The safety tip "Tell a friend where you'll be" as one tap. Only what the card already shows goes out.
+  function share(item: InvitationDoc) {
+    const zone = deviceTimeZone();
+    const message = planShareMessage({
+      partnerName: people[otherOf(item)]?.name ?? "",
+      localDate: nextOccurrence(item.meeting.localDate, item.meeting.recurrence),
+      localTime: item.meeting.localTime,
+      recurrence: item.meeting.recurrence,
+      venue: item.meeting.venue,
+      timeZone: zone && item.meeting.timeZone !== zone ? item.meeting.timeZone : undefined,
+    }, APP_NAME);
+    void Share.share({ message }).catch(() => undefined);
+  }
+
   if (!items && !error) return <Loading label="Loading your plans" />;
 
   const all = items ?? [];
   const segments = planSegments(all, uid);
   const current = segment ?? initialSegment(segments);
   const myZone = deviceTimeZone();
-  const otherOf = (item: InvitationDoc) => (item.fromUid === uid ? item.toUid : item.fromUid);
 
   const card = (item: InvitationDoc) => (
     <PlanCard
@@ -140,6 +156,7 @@ export default function Plans() {
       onDecline={() => confirm(item, "decline")}
       onCancel={() => confirm(item, "cancel")}
       onOpenChat={() => router.push({ pathname: "/chat/[chatId]", params: { chatId: item.conversationId as string } })}
+      onShare={() => share(item)}
     />
   );
 

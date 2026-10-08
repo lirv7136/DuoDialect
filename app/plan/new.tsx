@@ -24,9 +24,12 @@ import {
   type Recurrence,
 } from "../../src/domain/schedule";
 import { meetingDateBounds } from "../../src/domain/date-bounds";
+import {
+  PLACE_TYPES, PRIVATE_VENUE_WARNING, PUBLIC_PLACE_HINT, areaChoices, looksPrivate, matchVenue, venueFor, type AreaChoice, type PlaceKey,
+} from "../../src/domain/venue";
 import { useMyAccount } from "../../hooks/use-my-account";
 import { DateTimeField } from "../../components/date-time-field";
-import { Button, Caption, Chip, ChipRow, ErrorNotice, Field, Loading, Screen, Segmented, Title, styles } from "../../components/ui";
+import { Button, Caption, Chip, ChipRow, ErrorNotice, Field, InfoChip, Loading, Screen, Segmented, Title, styles, type IconName } from "../../components/ui";
 import { Avatar } from "../../components/avatar";
 import { ExchangeStrip } from "../../components/exchange-strip";
 import { InfoButton } from "../../components/sheet";
@@ -34,13 +37,12 @@ import { MAX_FONT_SCALE, colors, fonts, radius, space, type } from "../../consta
 
 type Target = { uid: string; name: string; area: string; theyOffer: string[]; youOffer: string[]; shared: string[]; photos: ProfilePhoto[] };
 
-const PLACES = [
-  { label: "Café", icon: "cafe-outline", noun: "café" },
-  { label: "Library", icon: "library-outline", noun: "library" },
-  { label: "Park", icon: "leaf-outline", noun: "park" },
-] as const;
+const PLACE_ICONS: Record<PlaceKey, IconName> = {
+  cafe: "cafe-outline", library: "library-outline", park: "leaf-outline", campus: "school-outline", shopping: "cart-outline",
+};
 
-const placeFor = (noun: string, area: string) => (area ? `A ${noun} in ${area}` : `A ${noun}`).slice(0, MAX_VENUE);
+/** "other" reveals the free text field for a specific place, such as a café by name. */
+type Place = PlaceKey | "other" | null;
 
 export default function NewPlan() {
   // Optional prefill, used by "same time next week?" after a check-in.
@@ -55,7 +57,10 @@ export default function NewPlan() {
   const [localDate, setLocalDate] = useState("");
   const [localTime, setLocalTime] = useState("");
   const [recurrence, setRecurrence] = useState<Recurrence>("once");
-  const [venue, setVenue] = useState("");
+  // The venue is a place type plus whose neighbourhood, or free text under "Somewhere else".
+  const [place, setPlace] = useState<Place>(null);
+  const [areaKey, setAreaKey] = useState<AreaChoice["key"] | null>(null);
+  const [customVenue, setCustomVenue] = useState("");
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState(false);
@@ -76,12 +81,17 @@ export default function NewPlan() {
       setToOffers(value.theyOffer[0] ?? "");
       const first = suggestMeetingTimes(value.shared.length ? value.shared : (me?.availability ?? []))[0];
       if (first) { setLocalDate(first.localDate); setLocalTime(first.localTime); }
-      if (value.area) setVenue(placeFor("café", value.area));
+      const areas = areaChoices(value, me?.area ?? "");
+      setPlace("cafe");
+      setAreaKey(areas[0]?.key ?? null);
       setNote(`Hi ${value.name}! Fancy a coffee and a language swap?`);
       // A prefilled plan keeps the last meetup's time and place; the form still validates it.
       if (typeof date === "string" && date) setLocalDate(date);
       if (typeof time === "string" && time) setLocalTime(time);
-      if (typeof venueParam === "string" && venueParam) setVenue(venueParam.slice(0, MAX_VENUE));
+      if (typeof venueParam === "string" && venueParam) {
+        const known = matchVenue(venueParam, areas);
+        if (known) { setPlace(known.key); setAreaKey(known.areaKey); } else { setPlace("other"); setCustomVenue(venueParam.slice(0, MAX_VENUE)); }
+      }
       if (typeof noteParam === "string" && noteParam) setNote(noteParam.slice(0, MAX_NOTE));
     };
     if (cached) {
@@ -96,6 +106,10 @@ export default function NewPlan() {
         youOffer: exchange.iCanHelpWith, shared: sharedSlots(me.availability, profile.availability), photos: sanitizePhotos(profile.photos) });
     }).catch(e => setLoadError(errorMessage(e)));
   }, [toUid, date, time, venueParam, noteParam, me, meLoading, target]);
+
+  const areas = target ? areaChoices(target, me?.area ?? "") : [];
+  const chosenArea = areas.find(choice => choice.key === areaKey) ?? areas[0];
+  const venue = place === "other" ? customVenue : place ? venueFor(place, chosenArea?.area ?? "") : "";
 
   async function onSend() {
     if (inFlight.current || !target) return;
@@ -202,16 +216,32 @@ export default function NewPlan() {
         <InfoButton label="About weekly plans" title="Weekly" body="Same day and time each week." />
       </View>
 
-      <Field label="Place" icon="location-outline" placeholder="A café or library" value={venue} onChangeText={setVenue} maxLength={MAX_VENUE} />
+      <Text accessibilityRole="header" style={styles.label}>Where</Text>
+      <Caption icon="people-outline">{PUBLIC_PLACE_HINT}</Caption>
       <ChipRow>
-        {PLACES.map(place => {
-          const value = placeFor(place.noun, target.area);
-          return (
-            <Chip key={place.label} role="radio" icon={place.icon} label={place.label} accessibilityLabel={value}
-              selected={venue === value} onPress={() => setVenue(value)} />
-          );
-        })}
+        {PLACE_TYPES.map(option => (
+          <Chip key={option.key} role="radio" icon={PLACE_ICONS[option.key]} label={option.label}
+            selected={place === option.key} onPress={() => setPlace(option.key)} />
+        ))}
+        <Chip role="radio" icon="ellipsis-horizontal" label="Somewhere else" accessibilityLabel="Somewhere else, typed in"
+          selected={place === "other"} onPress={() => setPlace("other")} />
       </ChipRow>
+      {place && place !== "other" && areas.length > 1 ? (
+        <ChipRow>
+          {areas.map(choice => (
+            <Chip key={choice.key} role="radio" icon="location-outline" label={choice.label}
+              accessibilityLabel={choice.key === "mine" ? `In ${choice.area}, near you` : `In ${choice.area}, near ${target.name}`}
+              selected={chosenArea?.key === choice.key} onPress={() => setAreaKey(choice.key)} />
+          ))}
+        </ChipRow>
+      ) : null}
+      {place === "other" ? (
+        <>
+          <Field label="Place" icon="location-outline" placeholder="A café or library by name" value={customVenue}
+            onChangeText={setCustomVenue} maxLength={MAX_VENUE} autoFocus />
+          {looksPrivate(customVenue) ? <Caption icon="alert-circle-outline">{PRIVATE_VENUE_WARNING}</Caption> : null}
+        </>
+      ) : venue ? <InfoChip icon="location-outline" label={venue} tone="plain" accessibilityLabel={`Meeting at ${venue}`} /> : null}
 
       {noteOpen ? (
         <Field label="Note" value={note} onChangeText={setNote} maxLength={MAX_NOTE} multiline autoFocus />
