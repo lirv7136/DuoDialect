@@ -1,55 +1,41 @@
-<<<<<<< HEAD
-# DuoDialect
-Language Meetup
-=======
-# Welcome to your Expo app 👋
+# Talkeven
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Talkeven pairs adults who each speak the language the other is learning, so they can
+meet in person and help each other evenly. It is a platonic language exchange app:
+reciprocal matching only, a suggested meetup at a public place, chat once the plan is
+accepted, and a private check-in the morning after.
 
-## Get started
+- App Store (Australia): https://apps.apple.com/au/app/talkeven-language-exchange/id6816316060
+- Site, privacy policy and community guidelines: https://talkeven.com
+- Support: hello@talkeven.com
 
-1. Install dependencies
+## Layout
 
-   ```bash
-   npm install
-   ```
+| Path | What |
+|---|---|
+| `app/` | Expo Router screens (auth, onboarding, tabs, plan, chat, check-in, account) |
+| `components/`, `hooks/`, `constants/` | Shared UI, hooks, theme and brand |
+| `src/domain/` | Pure logic with unit tests in `tests/` |
+| `src/lib/` | Firebase, API wrappers, push, storage |
+| `functions/` | Cloud Functions backend; every invariant lives here, with emulator tests in `functions/test/` |
+| `firestore.rules`, `firestore.indexes.json` | Client access rules and indexes |
+| `site/` | The static site, built by `site/build.py` and deployed with `site/deploy.sh` |
+| `docs/` | Contract, handoff, release plan, store listing and growth notes |
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Running it
 
 ```bash
-npm run reset-project
+npm install
+npx expo start            # dev server; press i for the iOS simulator
+npm run verify            # typecheck, lint, unit tests, prototype tests
+cd functions && npm install && npm test   # emulator tests against demo-duodialect
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Firebase config comes from `.env` (gitignored). Production is the `duodialect` project and
+staging is `duodialect-staging`; deploy indexes before functions and rules.
 
-## Learn more
+## Where to start
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
->>>>>>> 1bbdcc2 (Initial DuoDialect MVP)
+`docs/RELEASE-PLAN.md` says what is shipped and what is next. `docs/BACKEND-CONTRACT.md`
+is the integration surface between the app and the backend, and `docs/BACKEND-HANDOFF.md`
+records what the backend does and does not do.
