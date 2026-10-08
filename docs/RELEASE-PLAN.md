@@ -78,7 +78,7 @@ device run of the four flows, What's New, then build and submit after 1.1.0 is a
 
 ## 1.1.2 (branch `feat-1.1.2`, local commits)
 
-Shipped on the branch, in commit order, with unit test counts rising from 74 to 122:
+Shipped on the branch, in commit order, with unit test counts rising from 74 to 130:
 
 - Onboarding draft survives a backgrounded app; one gentle nudge for a photo and free times.
 - Share a confirmed plan with a friend (safety message), and a public place picker.
@@ -91,6 +91,9 @@ Shipped on the branch, in commit order, with unit test counts rising from 74 to 
   `src/domain/cities.ts`): discovery, near misses, the learning count and the "a match
   joined" push never cross a city. Onboarding and Edit profile get a city picker, defaulting
   to Sydney; old apps that never send a city are treated as Sydney by the server.
+- In app moderation screen (Profile → Moderation, moderators only): the report queue by
+  status, each report's thread and photo paths, and claim, warn, suspend, remove photos,
+  dismiss and reinstate behind a confirm that spells out the consequence.
 
 1.1.2 adds native packages (`expo-apple-authentication`, `expo-crypto`,
 `expo-store-review`), so it needs a new native build, not an OTA update.

@@ -276,8 +276,8 @@ One profile field change worth noting: the public profile uses `displayName`, no
   calling.
 - **Deleting an account deletes the shared conversation** for the other participant too.
   Deliberate, and reversible in design if you would rather tombstone it.
-- **Moderation has no operator interface.** There are callables and an audit trail, but
-  no screen. Until one exists, a moderator has to drive it from a script or a console.
+- **Moderation's operator interface is the in app screen** (1.1.2, Profile → Moderation,
+  moderators only). Granting the claim is still a script and photos still open in the console.
 - **Moderation is entirely reactive.** No automated detection, no notification to either
   party, no appeals process, no rate limits on reporting, so the report queue itself can
   be spammed.
@@ -431,9 +431,13 @@ covers looking as well as acting. Grant the claim with
 `node scripts/set-moderator.js <email> --project <id>`; the person must sign in again
 before it applies.
 
-Still needed: an operator screen, since there is no UI; a response to the reporter, who
-currently hears nothing; and a decision on what a warning actually consists of, because
-`warn` presently only records that one was issued.
+Done in 1.1.2: an operator screen in the app (Profile → Moderation, shown only when the
+token carries the claim) with the queue by status, each report's parties, thread, photo
+paths and a confirmed action sheet that spells out each consequence (`app/account/moderation/`).
+
+Still needed: a response to the reporter, who currently hears nothing; and a decision on
+what a warning actually consists of, because `warn` presently only records that one was
+issued.
 
 **Push token lifecycle**
 

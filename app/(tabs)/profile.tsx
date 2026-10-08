@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Text, View } from "react-native";
 import { router } from "expo-router";
 import { logOut } from "../../src/lib/auth";
+import { isModerator } from "../../src/lib/moderation";
 import { useNotificationsEnabled } from "../../src/lib/notification-prompt";
 import { candidateCache } from "../../src/lib/candidate-cache";
 import { clearPhotoUrls } from "../../src/lib/photos";
@@ -18,6 +19,13 @@ export default function Profile() {
   const { profile, loading, error, reload } = useMyAccount();
   const [registeringPush, setRegisteringPush] = useState(false);
   const notifications = useNotificationsEnabled();
+  // Hidden by default and shown only once the token says moderator, so nobody else sees a flash of it.
+  const [moderator, setModerator] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void isModerator().then(value => { if (active) setModerator(value); });
+    return () => { active = false; };
+  }, []);
 
   async function onEnableNotifications() {
     if (registeringPush) return;
@@ -93,6 +101,12 @@ export default function Profile() {
         <Divider />
         <ListRow icon="ban-outline" label="Blocked" hint="People you’ve blocked" onPress={() => router.push("/account/blocked")} />
         <Divider />
+        {moderator ? (
+          <>
+            <ListRow icon="shield-outline" label="Moderation" hint="Reports waiting for review" onPress={() => router.push("/account/moderation")} />
+            <Divider />
+          </>
+        ) : null}
         <ListRow icon="log-out-outline" label="Log out" onPress={() => void onLogout()} />
       </View>
       <View style={{ backgroundColor: colors.surface, borderRadius: radius.card, borderWidth: 1, borderColor: colors.line, overflow: "hidden" }}>
