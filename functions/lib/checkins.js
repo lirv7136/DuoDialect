@@ -21,6 +21,7 @@ const { checkInNotice } = require("./notifications");
  *   checkIns/{checkInId}                     one per person per occurrence; owner reads
  *   checkInMutes/{muteId}                    server only; "stop asking me about this plan"
  *   confirmedMeetups/{meetupId}              server only; both people said it happened
+ *   profiles/{uid}.meetupsConfirmed          public count of those records, kept in step
  *
  * Scheduling is driven by sweepCheckIns, run hourly. Everything it does is keyed by
  * derived ids, so a sweep that runs twice, or overlaps another, creates nothing twice.
@@ -268,6 +269,19 @@ async function sweepCheckIns(db, now = new Date(), { limit = SWEEP_LIMIT } = {})
 }
 
 /**
+ * Moves a person's public `meetupsConfirmed` by one, inside the transaction that creates
+ * or removes the confirmed meetup record. The count is the one piece of evidence the app
+ * shows that somebody has actually met partners, so it must track the records exactly:
+ * a profile that is gone is left gone, and a count never drops below zero.
+ */
+function adjustMeetupsConfirmed(tx, profileSnap, delta) {
+  if (!profileSnap.exists) return;
+  const current = Number(profileSnap.get("meetupsConfirmed") || 0);
+  if (delta < 0 && current <= 0) return;
+  tx.update(profileSnap.ref, { meetupsConfirmed: FieldValue.increment(delta) });
+}
+
+/**
  * Answer a check-in. Only its owner can, and only until it expires; a changed mind
  * inside the window replaces the earlier answer.
  *
@@ -303,8 +317,11 @@ async function answerCheckIn(db, uid, payload, now = new Date()) {
 
     const otherId = checkInId(data.invitationId, data.occurrence.localDate, data.otherUid);
     const meetRef = r.confirmedMeetup(meetupId(data.invitationId, data.occurrence.localDate));
-    const [other, blockOut, blockIn] = await tx.getAll(
+    // The meetup record and both profiles are read up front so the public counts move
+    // only when the record actually appears or disappears, never on a repeated answer.
+    const [other, blockOut, blockIn, meet, myProfile, theirProfile] = await tx.getAll(
       r.checkIn(otherId), r.block(uid, data.otherUid), r.block(data.otherUid, uid),
+      meetRef, r.profile(uid), r.profile(data.otherUid),
     );
 
     if (changed) {
@@ -320,17 +337,22 @@ async function answerCheckIn(db, uid, payload, now = new Date()) {
 
     const bothSaidYes = happened === "yes" && other.exists && other.get("answer.happened") === "yes";
     if (bothSaidYes && !blockOut.exists && !blockIn.exists) {
-      tx.set(meetRef, {
-        invitationId: data.invitationId,
-        participants: [uid, data.otherUid].sort(),
-        localDate: data.occurrence.localDate,
-        timeZone: data.occurrence.timeZone,
-        // Keyed by uid: what each person offered in this meetup.
-        gave: { [uid]: data.languages.gave, [data.otherUid]: data.languages.received },
-        confirmedAt: FieldValue.serverTimestamp(),
-      });
-    } else if (happened === "no") {
+      // A repeated yes leaves an existing record, and its confirmedAt, as it is.
+      if (!meet.exists) {
+        tx.set(meetRef, {
+          invitationId: data.invitationId,
+          participants: [uid, data.otherUid].sort(),
+          localDate: data.occurrence.localDate,
+          timeZone: data.occurrence.timeZone,
+          // Keyed by uid: what each person offered in this meetup.
+          gave: { [uid]: data.languages.gave, [data.otherUid]: data.languages.received },
+          confirmedAt: FieldValue.serverTimestamp(),
+        });
+        for (const profile of [myProfile, theirProfile]) adjustMeetupsConfirmed(tx, profile, +1);
+      }
+    } else if (happened === "no" && meet.exists) {
       tx.delete(meetRef);
+      for (const profile of [myProfile, theirProfile]) adjustMeetupsConfirmed(tx, profile, -1);
     }
 
     return { checkIn: serializeCheckIn(id, { ...data, answer, status: "answered" }), changed };
@@ -351,4 +373,5 @@ module.exports = {
   serializeCheckIn,
   sweepCheckIns,
   answerCheckIn,
+  adjustMeetupsConfirmed,
 };

@@ -205,6 +205,79 @@ test("a meetup is confirmed only when both say it happened, and unconfirmed if e
   assert.equal((await meetRef.get()).exists, false);
 });
 
+/** The public meetup count on a profile, as the document holds it. */
+async function meetupsConfirmed(actor) {
+  return (await admin().doc(`profiles/${actor.uid}`).get()).get("meetupsConfirmed");
+}
+
+/** Pages through platonic discovery for `actor` until `uid` turns up, or the scan ends. */
+async function discoverUid(actor, uid) {
+  let cursor = null;
+  do {
+    const page = await actor.call("discoverCandidates", { limit: 20, cursor });
+    const found = page.candidates.find((candidate) => candidate.uid === uid);
+    if (found) return found;
+    cursor = page.nextCursor;
+  } while (cursor);
+  return null;
+}
+
+test("a confirmed meetup counts once for both people, comes off when either takes it back, and never double counts", async () => {
+  const plan = await acceptedPlan();
+  await sweepWhenDue(plan.invitationId);
+  assert.equal(await meetupsConfirmed(plan.speaker), undefined, "nothing counted before anyone answers");
+
+  await plan.speaker.call("answerCheckIn", { checkInId: idFor(plan, plan.speaker), happened: "yes" });
+  assert.equal(await meetupsConfirmed(plan.speaker), undefined, "one yes counts for nobody");
+
+  await plan.learner.call("answerCheckIn", { checkInId: idFor(plan, plan.learner), happened: "yes" });
+  assert.equal(await meetupsConfirmed(plan.speaker), 1);
+  assert.equal(await meetupsConfirmed(plan.learner), 1);
+
+  // Saying yes again, with or without a change of meetAgain, moves nothing.
+  await plan.learner.call("answerCheckIn", { checkInId: idFor(plan, plan.learner), happened: "yes" });
+  await plan.learner.call("answerCheckIn", { checkInId: idFor(plan, plan.learner), happened: "yes", meetAgain: "yes" });
+  await plan.speaker.call("answerCheckIn", { checkInId: idFor(plan, plan.speaker), happened: "yes", meetAgain: "no" });
+  assert.equal(await meetupsConfirmed(plan.speaker), 1);
+  assert.equal(await meetupsConfirmed(plan.learner), 1);
+
+  // A no takes it back for both; a second no has nothing left to take.
+  await plan.speaker.call("answerCheckIn", { checkInId: idFor(plan, plan.speaker), happened: "no" });
+  assert.equal(await meetupsConfirmed(plan.speaker), 0);
+  assert.equal(await meetupsConfirmed(plan.learner), 0);
+  await plan.learner.call("answerCheckIn", { checkInId: idFor(plan, plan.learner), happened: "no" });
+  assert.equal(await meetupsConfirmed(plan.speaker), 0);
+  assert.equal(await meetupsConfirmed(plan.learner), 0);
+
+  // Both back to yes: counted again, once.
+  await plan.learner.call("answerCheckIn", { checkInId: idFor(plan, plan.learner), happened: "yes" });
+  await plan.speaker.call("answerCheckIn", { checkInId: idFor(plan, plan.speaker), happened: "yes" });
+  await plan.speaker.call("answerCheckIn", { checkInId: idFor(plan, plan.speaker), happened: "yes" });
+  assert.equal(await meetupsConfirmed(plan.speaker), 1);
+  assert.equal(await meetupsConfirmed(plan.learner), 1);
+});
+
+test("the meetup count is public on candidates and the owner's account, and survives a profile save", async () => {
+  const plan = await acceptedPlan();
+  await sweepWhenDue(plan.invitationId);
+  await plan.speaker.call("answerCheckIn", { checkInId: idFor(plan, plan.speaker), happened: "yes" });
+  await plan.learner.call("answerCheckIn", { checkInId: idFor(plan, plan.learner), happened: "yes" });
+
+  const candidate = await discoverUid(plan.speaker, plan.learner.uid);
+  assert.ok(candidate, "the learner is a reciprocal match for the speaker");
+  assert.equal(candidate.meetupsConfirmed, 1);
+
+  const mine = await plan.speaker.call("getMyAccount", {});
+  assert.equal(mine.profile.meetupsConfirmed, 1);
+
+  // Saving the profile merges, so a count the client never sends is kept.
+  const saved = await plan.speaker.call("upsertProfile", { ...CAST.alex, displayName: "Speaker renamed", meetupsConfirmed: 99 });
+  assert.equal(saved.profile.meetupsConfirmed, 1, "the client cannot set the count");
+  assert.equal(await meetupsConfirmed(plan.speaker), 1);
+  assert.equal((await plan.learner.read(`profiles/${plan.speaker.uid}`)).get("meetupsConfirmed"), 1, "readable by other members");
+  assert.equal((await plan.speaker.call("getMyAccount", {})).profile.meetupsConfirmed, 1);
+});
+
 test("a weekly plan asks again each week, skips missed weeks, and honours one person's mute", async () => {
   const plan = await acceptedPlan({ recurrence: "weekly" });
   await sweepWhenDue(plan.invitationId);
@@ -261,6 +334,7 @@ test("account deletion removes check-ins by and about the person, mutes and conf
   await plan.learner.call("answerCheckIn", { checkInId: idFor(plan, plan.learner), happened: "yes" });
   const meetRef = admin().doc(`confirmedMeetups/${meetupId(plan.invitationId, plan.meeting.localDate)}`);
   assert.equal((await meetRef.get()).exists, true);
+  assert.equal(await meetupsConfirmed(plan.learner), 1);
 
   const result = await plan.speaker.call("requestAccountDeletion", { confirmation: "DELETE" });
   assert.equal(result.status, "completed");
@@ -272,4 +346,7 @@ test("account deletion removes check-ins by and about the person, mutes and conf
   assert.equal((await db.doc(`checkIns/${idFor(plan, plan.learner)}`).get()).exists, false);
   assert.equal((await db.collection("checkInMutes").where("uid", "==", plan.speaker.uid).get()).empty, true);
   assert.equal((await meetRef.get()).exists, false);
+  // The partner's public count no longer claims a meetup whose record is gone.
+  assert.equal(await meetupsConfirmed(plan.learner), 0);
+  assert.equal((await db.doc(`profiles/${plan.speaker.uid}`).get()).exists, false, "no stub profile is recreated");
 });

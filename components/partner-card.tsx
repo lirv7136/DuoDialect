@@ -8,6 +8,7 @@ import Animated from "react-native-reanimated";
 import type { Candidate } from "../src/lib/api";
 import { displayLanguage } from "../src/domain/languages";
 import { shortSlot } from "../src/domain/display";
+import { meetupsLabel } from "../src/domain/trust";
 import { MAX_FONT_SCALE, colors, fonts, space, type } from "../constants/theme";
 import { Avatar, CardPhoto } from "./avatar";
 import { ExchangeStrip } from "./exchange-strip";
@@ -28,14 +29,26 @@ export function SharedTimes({ slots, max = 2 }: { slots: string[]; max?: number 
   );
 }
 
+/**
+ * "Met 3 times": meetups both people confirmed. The only trust signal the product can
+ * honestly show, so it appears only once there is one and never claims verification.
+ */
+export function MetChip({ count }: { count: number | undefined }) {
+  const met = meetupsLabel(count);
+  if (!met) return null;
+  return <InfoChip icon="checkmark-done-outline" label={met.label} accessibilityLabel={met.accessibilityLabel} />;
+}
+
 export function PartnerCard({ person, invited, onOpen, onInvite, onInvited }: {
   person: Candidate; invited: boolean; onOpen: () => void; onInvite: () => void; onInvited: () => void;
 }) {
   const press = usePressFeedback();
   const hasPhoto = person.photos.length > 0;
+  const met = meetupsLabel(person.meetupsConfirmed);
   const spoken = [
     person.displayName,
     person.area,
+    met?.accessibilityLabel ?? "",
     `Teaches you ${list(person.exchange.theyOffer)}. You teach ${list(person.exchange.youOffer)}.`,
     person.sharedAvailability.length ? `Shared times: ${person.sharedAvailability.join(", ")}.` : "",
     person.bio,
@@ -60,7 +73,12 @@ export function PartnerCard({ person, invited, onOpen, onInvite, onInvited }: {
                 style={{ fontFamily: fonts.display, fontSize: 24, lineHeight: 30, color: colors.primary }}>
                 {person.displayName}
               </Text>
-              {person.area ? <InfoChip icon="location-outline" label={person.area} tone="plain" /> : null}
+              {person.area || met ? (
+                <ChipRow>
+                  {person.area ? <InfoChip icon="location-outline" label={person.area} tone="plain" /> : null}
+                  <MetChip count={person.meetupsConfirmed} />
+                </ChipRow>
+              ) : null}
             </View>
           </View>
           <ExchangeStrip theyTeach={person.exchange.theyOffer} youTeach={person.exchange.youOffer} />

@@ -15,14 +15,14 @@ import { Body, Button, Caption, ChipRow, ErrorNotice, InfoChip, Loading, Screen,
 import { EmptyState } from "../../components/empty-state";
 import { PhotoStrip } from "../../components/avatar";
 import { ExchangeStrip } from "../../components/exchange-strip";
-import { SharedTimes } from "../../components/partner-card";
+import { MetChip, SharedTimes } from "../../components/partner-card";
 import { confirmBlock, useSafetyMenu } from "../../components/safety-menu";
 import { sanitizePhotos, type ProfilePhoto } from "../../src/domain/photos";
 import { space } from "../../constants/theme";
 
 type PersonView = {
   uid: string; displayName: string; area: string; bio: string; interests: string[];
-  theyOffer: string[]; youOffer: string[]; shared: string[]; photos: ProfilePhoto[];
+  theyOffer: string[]; youOffer: string[]; shared: string[]; photos: ProfilePhoto[]; meetupsConfirmed: number;
 };
 
 export default function PersonScreen() {
@@ -39,7 +39,7 @@ export default function PersonScreen() {
     if (cached) {
       setPerson({ uid: cached.uid, displayName: cached.displayName, area: cached.area, bio: cached.bio, interests: cached.interests,
         theyOffer: cached.exchange.theyOffer, youOffer: cached.exchange.youOffer, shared: cached.sharedAvailability,
-        photos: sanitizePhotos(cached.photos) });
+        photos: sanitizePhotos(cached.photos), meetupsConfirmed: cached.meetupsConfirmed ?? 0 });
       return;
     }
     getPublicProfile(String(uid)).then(profile => {
@@ -47,7 +47,8 @@ export default function PersonScreen() {
       const exchange = me ? exchangeLanguages(me, profile) : { iCanHelpWith: [], theyCanHelpWith: [] };
       setPerson({ uid: profile.uid, displayName: profile.displayName, area: profile.area, bio: profile.bio,
         interests: profile.interests ?? [], theyOffer: exchange.theyCanHelpWith, youOffer: exchange.iCanHelpWith,
-        shared: sharedSlots(me?.availability, profile.availability), photos: sanitizePhotos(profile.photos) });
+        shared: sharedSlots(me?.availability, profile.availability), photos: sanitizePhotos(profile.photos),
+        meetupsConfirmed: profile.meetupsConfirmed ?? 0 });
     }).catch(e => setError(errorMessage(e)));
   }, [uid, me, meLoading, person]);
 
@@ -105,7 +106,12 @@ export default function PersonScreen() {
       <PhotoStrip name={person.displayName} photos={person.photos} />
       <View style={{ gap: space.xs }}>
         <Title>{person.displayName}</Title>
-        {person.area ? <InfoChip icon="location-outline" label={person.area} tone="plain" /> : null}
+        {person.area || person.meetupsConfirmed > 0 ? (
+          <ChipRow>
+            {person.area ? <InfoChip icon="location-outline" label={person.area} tone="plain" /> : null}
+            <MetChip count={person.meetupsConfirmed} />
+          </ChipRow>
+        ) : null}
       </View>
       <ExchangeStrip theyTeach={person.theyOffer} youTeach={person.youOffer} />
       <SharedTimes slots={person.shared} max={6} />

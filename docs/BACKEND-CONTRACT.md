@@ -28,7 +28,7 @@ Two rules are worth stating plainly, because the client must not try to work aro
 
 | Path | Who may read | Who may write | Holds |
 | --- | --- | --- | --- |
-| `profiles/{uid}` | any signed in member, one document at a time, unless blocked | server only | public profile: display name, bio, area, languages, availability, interests, derived `offers` and `seeks`, `photos` |
+| `profiles/{uid}` | any signed in member, one document at a time, unless blocked | server only | public profile: display name, bio, area, languages, availability, interests, derived `offers` and `seeks`, `photos`, `meetupsConfirmed` |
 | `privateProfiles/{uid}` | the owner only | server only | birth date, gender, dating preferences |
 | `blocks/{uid}/users/{otherUid}` | the owner only | server only | blocks the owner has made |
 | `invitations/{invitationId}` | its two participants | server only | one two person invitation and its state |
@@ -134,7 +134,9 @@ batch, so they cannot drift apart.
 Returns `{ profile, account }`. `profile` is the public document plus the derived `offers`
 and `seeks` arrays, and the current `photos`. `upsertProfile` never writes `photos` and
 ignores any `photos` field in the request: saving a profile cannot add, reorder or wipe
-photos. Only `setProfilePhotos` changes them. `account` is the caller's own private data, including `age` and
+photos. Only `setProfilePhotos` changes them. The same goes for `meetupsConfirmed`: the
+request may not set it, the save never touches it, and the returned `profile` carries the
+stored value. `account` is the caller's own private data, including `age` and
 `isAdultSelfDeclared`.
 
 Language names are lower cased and trimmed. At least one entry in `speaks` must be
@@ -148,7 +150,8 @@ The discovery query depends on them.
 
 No arguments. Returns `{ profile, account }` for the caller, or `{ profile: null,
 account: null }` if they have not completed onboarding. `profile.photos` is always an
-array, empty when there are none.
+array, empty when there are none, and `profile.meetupsConfirmed` is always an integer,
+0 until a meetup has been confirmed.
 
 ### `setDatingConsent`
 
@@ -177,6 +180,7 @@ Returns:
     availability: string[], interests: string[],
     photos: { id: string, path: string }[],   // up to 3, main first; [] when none
     fluencyAssurance: "self-declared",
+    meetupsConfirmed: number,                 // meetups both people said happened; 0 when none (1.1.1)
     exchange: { theyOffer: string[], youOffer: string[] },
     sharedAvailability: string[]
   }[],
@@ -432,6 +436,11 @@ when the answer repeats the stored one.
   records a confirmed meetup. If either later answers `"no"`, the record is removed.
   Confirmed meetups are not readable by clients yet; they are what the exchange balance
   will be built on.
+- **`meetupsConfirmed` tracks those records.** In the same transaction, both people's
+  public `profiles/{uid}.meetupsConfirmed` goes up by one when a record is created and
+  down by one when one is removed, never below zero. A repeated answer, or a change of
+  `meetAgain` alone, moves nothing. The count is per meetup, not per distinct partner: a
+  weekly plan confirmed three times with one person counts three.
 - A weekly plan that nobody confirms for 3 occurrences in a row stops asking.
 - To report the other person from a check-in, call `reportUser` with the check-in's
   `otherUid` and `conversationId`.
@@ -450,7 +459,8 @@ Deletes the caller's profile, private profile, push token, every profile photo i
 and its screening record, blocks in both directions,
 every invitation they are part of, every conversation they are part of **including all
 its messages**, both participants' inbox entries for those conversations, every check-in
-by or about them with their check-in mutes, every confirmed meetup they are part of, and finally the
+by or about them with their check-in mutes, every confirmed meetup they are part of (the
+other participant's `meetupsConfirmed` comes down with each one), and finally the
 Firebase Auth user. Reports filed by or about them are **kept** and flagged; see below.
 
 The operation is idempotent. Every step is a delete and the Auth user goes last, so a
@@ -578,7 +588,8 @@ no reason code.
   recipient when a reciprocal partner first becomes discoverable or changes languages).** Declines
   and cancellations send nothing.
 - **A confirmed meetup is two people's word, nothing more.** Nothing checks that anyone
-  was at the venue.
+  was at the venue. `meetupsConfirmed` is a count of that word, not a verification badge,
+  and the UI must not present it as one.
 - **Groups are not implemented.** Only two person invitations exist.
 - **Deletion of a conversation is mutual.** Deleting your account removes the shared
   thread from the other participant too. That is a deliberate product choice, not a

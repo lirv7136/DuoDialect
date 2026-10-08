@@ -46,6 +46,8 @@ export type PublicProfile = {
   photos?: ProfilePhoto[];
   discoverable?: boolean;
   fluencyAssurance?: "self-declared";
+  /** Meetups both people said happened. Server maintained; absent on older profiles. */
+  meetupsConfirmed?: number;
 };
 
 /** The caller's private record. Dating fields exist on the server but v1 never reads them. */
@@ -70,6 +72,8 @@ export type Candidate = {
   /** In order; the first is the main photo. Paths only, resolved through Storage. */
   photos: ProfilePhoto[];
   fluencyAssurance: "self-declared";
+  /** Meetups both people said happened. Honest evidence, not verification; 0 is never shown. */
+  meetupsConfirmed?: number;
   exchange: { theyOffer: string[]; youOffer: string[] };
   sharedAvailability: string[];
 };

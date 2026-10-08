@@ -180,8 +180,9 @@ test("discovery returns reciprocal partners only, and never private data", async
     assert.equal(candidate.dating, undefined);
     assert.deepEqual(Object.keys(candidate).sort(), [
       "area", "availability", "bio", "displayName", "exchange", "fluencyAssurance",
-      "interests", "offers", "photos", "seeks", "sharedAvailability", "uid",
+      "interests", "meetupsConfirmed", "offers", "photos", "seeks", "sharedAvailability", "uid",
     ]);
+    assert.equal(candidate.meetupsConfirmed, 0, "nobody here has confirmed a meetup");
   }
 
   const aikoRow = result.candidates.find((candidate) => candidate.uid === aiko.uid);

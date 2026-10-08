@@ -22,6 +22,8 @@ function publicCandidate(profile, exchange, myAvailability) {
     // { id, path } only. Clients fetch through the Storage SDK, gated by storage.rules.
     photos: publicPhotos(profile.photos),
     fluencyAssurance: profile.fluencyAssurance || "self-declared",
+    // Meetups both people said happened. Honest evidence, not verification.
+    meetupsConfirmed: Number(profile.meetupsConfirmed || 0),
     exchange: { theyOffer: exchange.bOffers, youOffer: exchange.aOffers },
     sharedAvailability: intersect(profile.availability || [], myAvailability || []),
   };

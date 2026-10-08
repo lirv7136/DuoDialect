@@ -7,6 +7,7 @@ const { requireObject, requireString } = require("./validation");
 const { REASON, reject } = require("./eligibility");
 const { refs, invitationLockId } = require("./refs");
 const { deleteAllPhotosFor } = require("./photos");
+const { adjustMeetupsConfirmed } = require("./checkins");
 
 /**
  * Account deletion.
@@ -26,6 +27,7 @@ const { deleteAllPhotosFor } = require("./photos");
  *   every conversation they are part of, including all its messages
  *   both participants' inbox entries for those conversations
  *   post meetup check-ins by or about them, their check-in mutes, and confirmed meetups
+ *   (the other participant's public meetup count comes down with each one)
  *   the Firebase Auth user
  *
  * What is kept, deliberately:
@@ -127,10 +129,22 @@ async function requestAccountDeletion(db, uid, payload) {
   ]) {
     progress.checkIns += await deleteQueryDocs(db, query, async (doc) => { await doc.ref.delete(); });
   }
+  //     Each confirmed meetup also counts towards the other person's public
+  //     `meetupsConfirmed`, so that count comes down with the record, in one transaction
+  //     per record. A retry after a partial failure finds the record gone and does nothing.
   progress.confirmedMeetups = await deleteQueryDocs(
     db,
     r.confirmedMeetups().where("participants", "array-contains", uid),
-    async (doc) => { await doc.ref.delete(); },
+    async (doc) => {
+      const otherUid = (doc.get("participants") || []).find((value) => value !== uid);
+      await db.runTransaction(async (tx) => {
+        // Every read before any write, as Firestore transactions require.
+        const [meet, other] = await tx.getAll(doc.ref, r.profile(otherUid || uid));
+        if (!meet.exists) return;
+        tx.delete(doc.ref);
+        if (otherUid) adjustMeetupsConfirmed(tx, other, -1);
+      });
+    },
   );
 
   // 4. Any inbox entry left over, for a conversation already gone.
