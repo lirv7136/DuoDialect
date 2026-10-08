@@ -72,9 +72,13 @@ Two onboarding fixes from the product review, client only:
    "Save anyway" path (`src/domain/onboarding-copy.ts`). Neither field is required.
 
 Done on the branch: `app.json` 1.1.1, 127 emulator tests, 85 unit tests, typecheck and lint
-clean. Still to do: deploy indexes then functions and rules to staging and production (new
-indexes: profiles `(discoverable, seeks, uid)`, invitations `(status, nextReminderAt)`), a
-device run of the four flows, What's New, then build and submit after 1.1.0 is approved.
+clean. Backend deployed to `duodialect-staging` on 2026-10-07 (indexes, then functions and
+rules). Staging smoke test 2026-10-08 (web build in automated Chrome): near misses, the
+learning count line, the match push (logged with 3 recipients and no repeat on a bio edit),
+"Same time next week?" prefill and the evening before reminder schedule all behaved as
+designed. Noticed: a confirmed plan cannot be cancelled (fixed in 1.1.2), and the "You're
+meeting" celebration rendered twice on Plans after a second accept. Still to do: production
+deploy after 1.1.0 is approved, a device run, What's New, then build and submit.
 
 ## 1.1.2 (branch `feat-1.1.2`, local commits)
 
