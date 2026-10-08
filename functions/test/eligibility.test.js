@@ -179,7 +179,7 @@ test("discovery returns reciprocal partners only, and never private data", async
     assert.equal(candidate.gender, undefined);
     assert.equal(candidate.dating, undefined);
     assert.deepEqual(Object.keys(candidate).sort(), [
-      "area", "availability", "bio", "displayName", "exchange", "fluencyAssurance",
+      "area", "availability", "bio", "city", "displayName", "exchange", "fluencyAssurance",
       "interests", "meetupsConfirmed", "offers", "photos", "seeks", "sharedAvailability", "uid",
     ]);
     assert.equal(candidate.meetupsConfirmed, 0, "nobody here has confirmed a meetup");
@@ -241,6 +241,7 @@ test("a blocked member cannot be invited in either direction", async () => {
 function welshProfile(name, extra = {}) {
   return {
     displayName: name,
+    city: "sydney",
     speaks: [{ lang: "icelandic", level: "native" }],
     learns: [{ lang: "welsh", level: "beginner" }],
     birthDate: birthDateForAge(30),
@@ -264,6 +265,7 @@ test("paging past a full page returns every eligible person exactly once", async
   const seeker = await makeActor("pager");
   await seeker.call("upsertProfile", {
     displayName: "Pager",
+    city: "sydney",
     speaks: [{ lang: "welsh", level: "native" }],
     learns: [{ lang: "icelandic", level: "beginner" }],
     birthDate: birthDateForAge(30),

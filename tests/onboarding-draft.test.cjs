@@ -5,7 +5,7 @@ const same = (actual, expected, message) => assert.equal(JSON.stringify(actual),
 const load = require('./load-typescript.cjs');
 const exchange = load('src/domain/language-exchange.ts');
 const schedule = load('src/domain/schedule.ts');
-const profileForm = load('src/domain/profile-form.ts', { './language-exchange': exchange, './schedule': schedule });
+const profileForm = load('src/domain/profile-form.ts', { './language-exchange': exchange, './schedule': schedule, './cities': load('src/domain/cities.ts') });
 
 // Each fixture is a fresh app launch: new module memory over the same (or a new) install storage.
 function launch({ uid = 'alice', storage = new Map(), broken = false } = {}) {

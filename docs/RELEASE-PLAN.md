@@ -78,7 +78,7 @@ device run of the four flows, What's New, then build and submit after 1.1.0 is a
 
 ## 1.1.2 (branch `feat-1.1.2`, local commits)
 
-Shipped on the branch, in commit order, with unit test counts rising from 74 to 119:
+Shipped on the branch, in commit order, with unit test counts rising from 74 to 122:
 
 - Onboarding draft survives a backgrounded app; one gentle nudge for a photo and free times.
 - Share a confirmed plan with a friend (safety message), and a public place picker.
@@ -87,7 +87,10 @@ Shipped on the branch, in commit order, with unit test counts rising from 74 to 
 - App Store rating prompt after a good check-in (`src/lib/rating.ts`, gate in
   `src/domain/rating.ts`): system sheet only, at most three asks a year and sixty days
   apart, first asked once a meetup is confirmed by both people.
-- A real city on profiles, with discovery, match pushes and near misses per city (pending).
+- A real city on every profile (allow list in `functions/lib/constants.js` and
+  `src/domain/cities.ts`): discovery, near misses, the learning count and the "a match
+  joined" push never cross a city. Onboarding and Edit profile get a city picker, defaulting
+  to Sydney; old apps that never send a city are treated as Sydney by the server.
 
 1.1.2 adds native packages (`expo-apple-authentication`, `expo-crypto`,
 `expo-store-review`), so it needs a new native build, not an OTA update.
@@ -123,6 +126,16 @@ profile step reads it once from `src/lib/pending-name.ts`. Hide my email gives a
 `privaterelay.appleid.com` address; nothing in the app emails people directly, so that is
 fine. There is no change password screen, and the reset link on the login screen is shown
 before anyone is signed in, so no password surface needs hiding for Apple accounts.
+
+### Backend deploy for 1.1.2
+
+`docs/BACKEND-HANDOFF.md`):
+
+- [ ] `node functions/scripts/backfill-city.js --project <id> --dry-run`, then without
+  `--dry-run`, so every existing profile is `sydney`.
+- [ ] `firebase deploy --only firestore:indexes` (two new `profiles` indexes with `city`),
+  and wait for them to be enabled.
+- [ ] `firebase deploy --only functions,firestore:rules`.
 
 ## Google Play
 

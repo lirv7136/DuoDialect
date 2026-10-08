@@ -17,6 +17,7 @@ import { rememberAccount, useMyAccount } from "../../hooks/use-my-account";
 import { usePhotoEditor } from "../../hooks/use-photo-editor";
 import { PhotoEditor } from "../../components/photo-editor";
 import { AvailabilityPicker } from "../../components/availability-picker";
+import { CityPicker } from "../../components/city-picker";
 import { DateTimeField } from "../../components/date-time-field";
 import { defaultBirthDate, earliestBirthDate, latestAdultBirthDate } from "../../src/domain/date-bounds";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -112,6 +113,7 @@ export default function ProfileOnboarding() {
 
       <Field label="First name" icon="eye-outline" value={draft.displayName} onChangeText={displayName => patch({ displayName })}
         maxLength={LIMITS.displayName} autoComplete="given-name" autoCapitalize="words" />
+      <CityPicker value={draft.city} onChange={city => patch({ city })} />
       <Field label="Neighbourhood (optional)" icon="location-outline" hint="We never use your location."
         value={draft.area} onChangeText={area => patch({ area })} maxLength={LIMITS.area} placeholder="e.g. Surry Hills" />
       <Field label="Bio (optional)" icon="eye-outline" value={draft.bio} onChangeText={bio => patch({ bio })} maxLength={LIMITS.bio} multiline

@@ -28,7 +28,7 @@ Two rules are worth stating plainly, because the client must not try to work aro
 
 | Path | Who may read | Who may write | Holds |
 | --- | --- | --- | --- |
-| `profiles/{uid}` | any signed in member, one document at a time, unless blocked | server only | public profile: display name, bio, area, languages, availability, interests, derived `offers` and `seeks`, `photos`, `meetupsConfirmed` |
+| `profiles/{uid}` | any signed in member, one document at a time, unless blocked | server only | public profile: display name, bio, `city`, area, languages, availability, interests, derived `offers` and `seeks`, `photos`, `meetupsConfirmed` |
 | `privateProfiles/{uid}` | the owner only | server only | birth date, gender, dating preferences |
 | `blocks/{uid}/users/{otherUid}` | the owner only | server only | blocks the owner has made |
 | `invitations/{invitationId}` | its two participants | server only | one two person invitation and its state |
@@ -116,7 +116,8 @@ batch, so they cannot drift apart.
 {
   displayName: string,                 // 1..40 chars, required
   bio?: string,                        // up to 400
-  area?: string,                       // up to 60
+  city: string,                        // one of the CITIES ids; required on first save (1.1.2)
+  area?: string,                       // up to 60, free text neighbourhood
   speaks: { lang: string, level: "native"|"fluent"|"intermediate"|"beginner" }[],
   learns: { lang: string, level: "native"|"fluent"|"intermediate"|"beginner" }[],
   availability?: string[],             // up to 14 entries, 32 chars each
@@ -146,12 +147,23 @@ same language may not appear in both `speaks` and `learns`.
 `offers` and `seeks` are derived on the server and are never accepted from the client.
 The discovery query depends on them.
 
+**City (1.1.2).** `city` is the id of the city the person lives in, from the allow list in
+`functions/lib/constants.js` (`CITIES`: `sydney`, `melbourne`, `brisbane`, `perth`,
+`adelaide`, `canberra`, `hobart`, `darwin`, `gold-coast`, `auckland`, `wellington`; the
+client mirrors it in `src/domain/cities.ts`). Ids are matched after trimming and lower
+casing. A new profile must send one; anything else is `invalid-argument` /
+`profile/city-invalid` and nothing is written. An existing profile may omit it: the stored
+city is kept, and a profile that has none yet (saved before 1.1.2) becomes `sydney`. That
+is what keeps the 1.0.1 and 1.1.0 apps, which never send a city, working. `area` stays a
+free text neighbourhood inside the city and is never used for filtering.
+
 ### `getMyAccount`
 
 No arguments. Returns `{ profile, account }` for the caller, or `{ profile: null,
 account: null }` if they have not completed onboarding. `profile.photos` is always an
 array, empty when there are none, and `profile.meetupsConfirmed` is always an integer,
-0 until a meetup has been confirmed.
+0 until a meetup has been confirmed. `profile.city` is always a city id: `sydney` for a
+profile saved before 1.1.2 that the backfill has not reached yet.
 
 ### `setDatingConsent`
 
@@ -175,7 +187,7 @@ Returns:
 {
   mode: "platonic" | "dating",
   candidates: {
-    uid, displayName, bio, area,
+    uid, displayName, bio, city, area,          // city is always the caller's own (1.1.2)
     offers: string[], seeks: string[],
     availability: string[], interests: string[],
     photos: { id: string, path: string }[],   // up to 3, main first; [] when none
@@ -196,9 +208,17 @@ Returns:
 }
 ```
 
-Filtering happens entirely on the server: reciprocal languages, blocks in both directions
-and, in dating mode, both people's private preferences. Candidates carry no private field.
-`cursor` is the `uid` to page after. `nextCursor` is null when the scan is exhausted.
+Filtering happens entirely on the server: the caller's city, reciprocal languages, blocks
+in both directions and, in dating mode, both people's private preferences. Candidates carry
+no private field. `cursor` is the `uid` to page after. `nextCursor` is null when the scan
+is exhausted.
+
+**City is a hard boundary (1.1.2).** Discovery only ever scans profiles whose `city`
+equals the caller's, so a Melbourne member never sees Sydney people. `nearMisses` and
+`learningYourLanguage` are scoped the same way, and the "a match joined" push
+(`onProfileWritten`) only goes to members in the newcomer's city. A caller whose profile
+has no city yet is treated as `sydney`. To see another city, change `city` through
+`upsertProfile`.
 
 When the first page is empty and the scan is exhausted, the response also explains itself:
 up to six `nearMisses`, people one step from a two way match with the reason, and
@@ -541,6 +561,7 @@ no reason code.
 | --- | --- | --- |
 | `account/not-adult` | `failed-precondition` | The self declared birth date is under 18. DuoDialect is an adults only service. |
 | `profile/incomplete` | `failed-precondition` | The caller, or the other person, has no usable profile yet. |
+| `profile/city-invalid` | `invalid-argument` | `city` is missing on a new profile, or is not one of the `CITIES` ids. |
 | `profile/not-found` | `not-found` | The other person has no profile. |
 | `target/self` | `invalid-argument` | The caller named themselves. |
 | `target/unavailable` | `permission-denied` | A block exists in one direction or the other. The direction is deliberately not disclosed. |

@@ -6,7 +6,7 @@ const {
   requireLanguageList, requireShortTextList, requireBirthDate, ageFromBirthDate,
   offeredLanguages, soughtLanguages,
 } = require("./validation");
-const { GENDERS, LIMITS, AGE_ASSURANCE, FLUENCY_ASSURANCE } = require("./constants");
+const { GENDERS, CITY_IDS, DEFAULT_CITY, LIMITS, AGE_ASSURANCE, FLUENCY_ASSURANCE } = require("./constants");
 const { REASON, reject } = require("./eligibility");
 const { refs } = require("./refs");
 const { cancelPendingInvitationsFor } = require("./invitations");
@@ -39,6 +39,24 @@ function requireDatingPreferences(value, field, { age }) {
   return { enabled: true, genders: [...new Set(genders)], ageMin, ageMax };
 }
 
+/**
+ * The city a profile belongs to. A new profile must name one from the allow list, since
+ * discovery is scoped by it. A profile saved by an app from before cities (1.0.1 and
+ * 1.1.0 never send one) keeps the city it has, or is treated as Sydney, the launch city,
+ * so those builds keep working after the backend moves ahead of them.
+ */
+function requireCity(value, field, { isNew, existing }) {
+  if (value === undefined || value === null) {
+    if (isNew) throw reject("invalid-argument", REASON.cityInvalid, "Choose the city you live in.");
+    return CITY_IDS.includes(existing) ? existing : DEFAULT_CITY;
+  }
+  const city = typeof value === "string" ? value.trim().toLocaleLowerCase("en") : value;
+  if (!CITY_IDS.includes(city)) {
+    throw reject("invalid-argument", REASON.cityInvalid, `${field} must be one of: ${CITY_IDS.join(", ")}.`);
+  }
+  return city;
+}
+
 /** Gender is optional until dating is on; mutual preference matching needs it then. */
 function requireGenderForDating(dating, gender) {
   if (dating.enabled === true && !gender) {
@@ -67,6 +85,9 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
   const displayName = requireString(body.displayName, "displayName", LIMITS.displayName);
   const bio = optionalString(body.bio, "bio", LIMITS.bio);
   const area = optionalString(body.area, "area", LIMITS.area);
+  const city = requireCity(body.city, "city", {
+    isNew, existing: publicSnap.exists ? publicSnap.get("city") : null,
+  });
   const speaks = requireLanguageList(body.speaks, "speaks", { min: 1 });
   const learns = requireLanguageList(body.learns, "learns", { min: 1 });
   const availability = body.availability === undefined ? [] : requireShortTextList(
@@ -141,6 +162,7 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
     displayName,
     bio,
     area,
+    city,
     speaks,
     learns,
     offers,
@@ -177,7 +199,7 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
 
   return {
     profile: {
-      uid, displayName, bio, area, speaks, learns, offers, seeks, availability, interests, photos,
+      uid, displayName, bio, area, city, speaks, learns, offers, seeks, availability, interests, photos,
       discoverable: true, fluencyAssurance: FLUENCY_ASSURANCE, meetupsConfirmed,
     },
     account: {
@@ -231,6 +253,8 @@ async function getMyAccount(db, uid, now = new Date()) {
     profile: publicSnap.exists
       ? {
         ...publicSnap.data(),
+        // Profiles from before 1.1.2 have no city until the backfill runs; they are Sydney.
+        city: CITY_IDS.includes(publicSnap.get("city")) ? publicSnap.get("city") : DEFAULT_CITY,
         photos: publicPhotos(publicSnap.get("photos")),
         meetupsConfirmed: Number(publicSnap.get("meetupsConfirmed") || 0),
       }

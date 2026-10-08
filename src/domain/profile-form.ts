@@ -12,6 +12,7 @@
  */
 import { normalizeLanguage, type LanguageLevel, type UserLang } from "./language-exchange";
 import { MAX_AVAILABILITY } from "./schedule";
+import { DEFAULT_CITY, isCityId, type CityId } from "./cities";
 
 export const LANGUAGE_LEVELS: LanguageLevel[] = ["native", "fluent", "intermediate", "beginner"];
 export const TEACHING_LEVELS: LanguageLevel[] = ["native", "fluent"];
@@ -32,6 +33,8 @@ export const LIMITS = {
 export type ProfileDraft = {
   displayName: string;
   bio: string;
+  /** Decides who the person can see at all; always one of the allow list. */
+  city: CityId;
   area: string;
   speaks: UserLang[];
   learns: UserLang[];
@@ -44,6 +47,7 @@ export type PrivateDraft = { birthDate: string };
 export type UpsertProfilePayload = {
   displayName: string;
   bio: string;
+  city: CityId;
   area: string;
   speaks: UserLang[];
   learns: UserLang[];
@@ -53,7 +57,7 @@ export type UpsertProfilePayload = {
 };
 
 export function emptyProfileDraft(): ProfileDraft {
-  return { displayName: "", bio: "", area: "", speaks: [], learns: [], availability: [], interests: [] };
+  return { displayName: "", bio: "", city: DEFAULT_CITY, area: "", speaks: [], learns: [], availability: [], interests: [] };
 }
 
 /** Accepts whatever the server stored and returns a well formed draft. */
@@ -67,6 +71,8 @@ export function draftFromProfile(profile: Partial<ProfileDraft> | null | undefin
   return {
     displayName: typeof profile?.displayName === "string" ? profile.displayName : "",
     bio: typeof profile?.bio === "string" ? profile.bio : "",
+    // A profile from before 1.1.2 has no city; the server treats it as Sydney, so do we.
+    city: isCityId(profile?.city) ? profile.city : DEFAULT_CITY,
     area: typeof profile?.area === "string" ? profile.area : "",
     speaks: langs(profile?.speaks),
     learns: langs(profile?.learns),
@@ -137,6 +143,7 @@ export function validateProfileDraft(
   if (!name) return "Add the name you’d like partners to see.";
   if (name.length > LIMITS.displayName) return `Keep your name to ${LIMITS.displayName} characters or fewer.`;
   if (draft.bio.length > LIMITS.bio) return `Keep your bio to ${LIMITS.bio} characters or fewer.`;
+  if (!isCityId(draft.city)) return "Choose your city.";
   if (draft.area.length > LIMITS.area) return `Keep your neighbourhood to ${LIMITS.area} characters or fewer.`;
   const languages = validateLanguages(draft.speaks, draft.learns);
   if (languages) return languages;
@@ -159,6 +166,7 @@ export function buildUpsertPayload(
   const payload: UpsertProfilePayload = {
     displayName: draft.displayName.trim(),
     bio: draft.bio.trim(),
+    city: draft.city,
     area: draft.area.trim(),
     speaks: draft.speaks.map(item => ({ lang: item.lang.trim(), level: item.level })),
     learns: draft.learns.map(item => ({ lang: item.lang.trim(), level: item.level })),

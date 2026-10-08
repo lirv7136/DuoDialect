@@ -13,6 +13,7 @@ const { refs } = require("./refs");
 const REASON = {
   profileMissing: "profile/not-found",
   profileIncomplete: "profile/incomplete",
+  cityInvalid: "profile/city-invalid",
   selfTarget: "target/self",
   unavailable: "target/unavailable",
   notReciprocal: "language/not-reciprocal",

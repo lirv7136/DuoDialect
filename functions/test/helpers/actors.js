@@ -4,7 +4,8 @@ const { makeActor, birthDateForAge } = require("./env");
 
 /**
  * The standing cast. Every profile is created through the real upsertProfile callable,
- * so tests never seed documents the backend would have rejected.
+ * so tests never seed documents the backend would have rejected. Everyone lives in
+ * Sydney, because discovery never crosses a city; see city.test.js for the exception.
  *
  * alex  English native, learning Japanese. Adult, dating on.
  * aiko  Japanese fluent, learning English. Adult, dating on, compatible with alex.
@@ -18,6 +19,7 @@ const CAST = {
     displayName: "Alex",
     bio: "Here for a weekly swap and better coffee.",
     area: "Surry Hills",
+    city: "sydney",
     speaks: [{ lang: "english", level: "native" }],
     learns: [{ lang: "japanese", level: "beginner" }],
     availability: ["Thursday evening", "Saturday morning"],
@@ -29,6 +31,7 @@ const CAST = {
   aiko: {
     displayName: "Aiko",
     area: "Surry Hills",
+    city: "sydney",
     speaks: [{ lang: "japanese", level: "fluent" }],
     learns: [{ lang: "english", level: "intermediate" }],
     availability: ["Thursday evening", "Saturday morning"],
@@ -40,6 +43,7 @@ const CAST = {
   ren: {
     displayName: "Ren",
     area: "Newtown",
+    city: "sydney",
     speaks: [{ lang: "japanese", level: "native" }],
     learns: [{ lang: "english", level: "beginner" }],
     availability: ["Thursday evening"],
@@ -51,6 +55,7 @@ const CAST = {
   mei: {
     displayName: "Mei",
     area: "Glebe",
+    city: "sydney",
     speaks: [{ lang: "mandarin", level: "native" }, { lang: "japanese", level: "intermediate" }],
     learns: [{ lang: "english", level: "beginner" }],
     availability: ["Saturday morning"],
@@ -61,6 +66,7 @@ const CAST = {
   sam: {
     displayName: "Sam",
     area: "CBD",
+    city: "sydney",
     speaks: [{ lang: "spanish", level: "native" }],
     learns: [{ lang: "french", level: "beginner" }],
     availability: ["Thursday evening"],
@@ -71,6 +77,7 @@ const CAST = {
   kai: {
     displayName: "Kai",
     area: "Newtown",
+    city: "sydney",
     speaks: [{ lang: "japanese", level: "fluent" }],
     learns: [{ lang: "english", level: "beginner" }],
     availability: ["Saturday morning"],

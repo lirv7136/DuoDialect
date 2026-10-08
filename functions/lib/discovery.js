@@ -1,12 +1,17 @@
 "use strict";
 
 const { requireObject, requireEnum, requireInteger, requireString } = require("./validation");
-const { INTENTS, LIMITS } = require("./constants");
+const { INTENTS, LIMITS, CITY_IDS, DEFAULT_CITY } = require("./constants");
 const {
   REASON, reject, isUsableProfile, reciprocalExchange, languageFailureReason, datingEligibility, intersect,
 } = require("./eligibility");
 const { refs } = require("./refs");
 const { publicPhotos } = require("./photos");
+
+/** A profile from before cities counts as Sydney until the backfill stamps it. */
+function cityOf(profile) {
+  return profile && CITY_IDS.includes(profile.city) ? profile.city : DEFAULT_CITY;
+}
 
 /** Only these fields ever leave the server for another member. */
 function publicCandidate(profile, exchange, myAvailability) {
@@ -15,6 +20,7 @@ function publicCandidate(profile, exchange, myAvailability) {
     displayName: profile.displayName,
     bio: profile.bio || "",
     area: profile.area || "",
+    city: cityOf(profile),
     offers: profile.offers || [],
     seeks: profile.seeks || [],
     availability: profile.availability || [],
@@ -32,10 +38,12 @@ function publicCandidate(profile, exchange, myAvailability) {
 /**
  * Server side discovery.
  *
- * Candidates are found by the languages they offer, then filtered against the caller's
- * own profile, blocks in both directions and, for dating, both people's private
- * preferences. Age, gender and dating preferences are read here but never returned:
- * the caller learns only that somebody is eligible, never why or what they prefer.
+ * Candidates are found in the caller's own city by the languages they offer, then
+ * filtered against the caller's own profile, blocks in both directions and, for dating,
+ * both people's private preferences. A city is a hard boundary: a Melbourne member never
+ * sees Sydney people, because meetups happen in person. Age, gender and dating
+ * preferences are read here but never returned: the caller learns only that somebody is
+ * eligible, never why or what they prefer.
  *
  * Paging is by document id. Scanning is bounded per call; this is not a ranked feed
  * and it does not scale to a large member base without a dedicated index.
@@ -74,6 +82,7 @@ async function discoverCandidates(db, uid, payload = {}, now = new Date()) {
 
   let query = r.profiles()
     .where("discoverable", "==", true)
+    .where("city", "==", cityOf(me))
     .where("offers", "array-contains-any", seeks)
     .orderBy("uid")
     .limit(LIMITS.discoveryScan);
@@ -150,8 +159,9 @@ function publicNearMiss(profile, reason) {
 
 /**
  * The people on either side of a one way match, with the reason it is one way, plus a
- * count of members learning a language the caller offers. Blocks are respected in both
- * directions, as for candidates. Bounded to one extra scan and one count.
+ * count of members in the caller's city learning a language the caller offers. Blocks
+ * are respected in both directions, as for candidates. Bounded to one extra scan and
+ * one count.
  */
 async function nearMisses(db, uid, me, alreadyVisible) {
   const r = refs(db);
@@ -163,6 +173,7 @@ async function nearMisses(db, uid, me, alreadyVisible) {
   // People who want what the caller offers, but do not offer what the caller wants.
   const wantMine = await r.profiles()
     .where("discoverable", "==", true)
+    .where("city", "==", cityOf(me))
     .where("seeks", "array-contains-any", offers)
     .orderBy("uid")
     .limit(LIMITS.nearMissScan)

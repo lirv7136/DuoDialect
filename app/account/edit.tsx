@@ -16,6 +16,7 @@ import { usePhotoEditor } from "../../hooks/use-photo-editor";
 import { PhotoEditor } from "../../components/photo-editor";
 import { LanguageEditor } from "../../components/language-editor";
 import { AvailabilityPicker } from "../../components/availability-picker";
+import { CityPicker } from "../../components/city-picker";
 import { View } from "react-native";
 import { Button, Caption, Chip, ChipRow, ErrorNotice, Field, IconButton, Loading, Screen } from "../../components/ui";
 
@@ -91,6 +92,7 @@ export default function EditProfile() {
       <PhotoEditor editor={photos} />
       <Field label="First name" value={draft.displayName} onChangeText={displayName => patch({ displayName })}
         maxLength={LIMITS.displayName} autoCapitalize="words" />
+      <CityPicker value={draft.city} onChange={city => patch({ city })} />
       <Field label="Neighbourhood (optional)" icon="location-outline" hint="We never use your location."
         value={draft.area} onChangeText={area => patch({ area })} maxLength={LIMITS.area} />
       <Field label="Bio (optional)" value={draft.bio} onChangeText={bio => patch({ bio })} maxLength={LIMITS.bio} multiline />

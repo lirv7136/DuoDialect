@@ -10,6 +10,7 @@ import { useNotificationsEnabled } from "../../src/lib/notification-prompt";
 import { emptyDiscoverTitle, inviteMessage, learningYourLanguageLine } from "../../src/domain/invite-copy";
 import { languageCode } from "../../src/domain/display";
 import { displayLanguage } from "../../src/domain/languages";
+import { cityName } from "../../src/domain/cities";
 import { hasSeen, markSeen } from "../../src/lib/seen-once";
 import { errorMessage } from "../../src/domain/errors";
 import { useMyAccount } from "../../hooks/use-my-account";
@@ -113,6 +114,9 @@ export default function Discover() {
   }, []);
 
   const offers = profile?.offers ?? [], seeks = profile?.seeks ?? [];
+  // The person's own city, since that is the only place Discover looks. Falls back to the
+  // launch city while the profile is still loading.
+  const city = cityName(profile?.city) || LAUNCH_CITY;
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(false, null, true)} tintColor={colors.primary} />}>
@@ -150,7 +154,7 @@ export default function Discover() {
       {!loading && !error && candidates.length === 0 ? (
         <EmptyState
           art="search"
-          title={cursor ? "No partners in this batch." : emptyDiscoverTitle(offers, seeks, LAUNCH_CITY)}
+          title={cursor ? "No partners in this batch." : emptyDiscoverTitle(offers, seeks, city)}
           body={[learningYourLanguageLine(learningCount, offers), "We’ll let you know when someone fits your exchange."].filter(Boolean).join(" ")}
         >
           {cursor ? <Button variant="primary" label="Show more" busy={loadingMore} busyLabel="Looking…" onPress={() => void load(true, cursor)} /> : null}

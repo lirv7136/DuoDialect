@@ -3,11 +3,12 @@ const assert = require('node:assert/strict');
 const load = require('./load-typescript.cjs');
 const exchange = load('src/domain/language-exchange.ts');
 const schedule = load('src/domain/schedule.ts');
-const f = load('src/domain/profile-form.ts', { './language-exchange': exchange, './schedule': schedule });
+const cities = load('src/domain/cities.ts');
+const f = load('src/domain/profile-form.ts', { './language-exchange': exchange, './schedule': schedule, './cities': cities });
 
 const now = new Date(Date.UTC(2026, 8, 26));
 const draft = (patch = {}) => ({
-  displayName: 'Alex', bio: '', area: 'Surry Hills',
+  displayName: 'Alex', bio: '', city: 'sydney', area: 'Surry Hills',
   speaks: [{ lang: 'English', level: 'fluent' }], learns: [{ lang: 'Japanese', level: 'beginner' }],
   availability: ['Thursday evening'], interests: [], ...patch,
 });
@@ -35,6 +36,8 @@ test('name, bio, area, availability and interest limits', () => {
   assert.match(f.validateProfileDraft(draft({ displayName: 'x'.repeat(41) }), { firstSave: false }), /40/);
   assert.match(f.validateProfileDraft(draft({ bio: 'x'.repeat(401) }), { firstSave: false }), /400/);
   assert.match(f.validateProfileDraft(draft({ area: 'x'.repeat(61) }), { firstSave: false }), /60/);
+  assert.match(f.validateProfileDraft(draft({ city: 'atlantis' }), { firstSave: false }), /city/);
+  assert.equal(f.validateProfileDraft(draft({ city: 'gold-coast' }), { firstSave: false }), null);
   assert.match(f.validateProfileDraft(draft({ availability: schedule.AVAILABILITY_SLOTS.slice(0, 15) }), { firstSave: false }), /14/);
   assert.match(f.validateProfileDraft(draft({ interests: Array(9).fill('a') }), { firstSave: false }), /8/);
   assert.match(f.validateProfileDraft(draft({ interests: ['x'.repeat(25)] }), { firstSave: false }), /24/);
@@ -57,7 +60,8 @@ test('payloads are complete, trimmed, and never carry dating fields or gender', 
   assert.equal(payload.birthDate, '1998-04-21');
   assert.equal('gender' in payload, false);
   assert.equal('dating' in payload, false);
-  for (const key of ['bio', 'area', 'availability', 'interests']) assert.ok(key in payload, key);
+  for (const key of ['bio', 'city', 'area', 'availability', 'interests']) assert.ok(key in payload, key);
+  assert.equal(payload.city, 'sydney');
   const later = f.buildUpsertPayload(draft(), { firstSave: false, private: { birthDate: '1998-04-21' } });
   assert.equal('birthDate' in later, false);
   assert.equal('gender' in later, false);
@@ -70,6 +74,10 @@ test('stored profiles become well formed drafts; interests are parsed and de-dup
   assert.equal(d.speaks[0].lang, 'Japanese');
   assert.equal(JSON.stringify(d.availability), JSON.stringify(['Saturday morning']));
   assert.equal(d.bio, '');
+  assert.equal(d.city, 'sydney', 'a profile from before cities reads as Sydney');
+  assert.equal(f.draftFromProfile({ displayName: 'Aiko', city: 'melbourne' }).city, 'melbourne');
+  assert.equal(f.draftFromProfile({ displayName: 'Aiko', city: 'Atlantis' }).city, 'sydney');
+  assert.equal(f.emptyProfileDraft().city, 'sydney');
   assert.equal(JSON.stringify(f.parseInterests(' Coffee, coffee ,Film,, ')), JSON.stringify(['Coffee', 'Film']));
 });
 

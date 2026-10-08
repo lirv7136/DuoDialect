@@ -6,7 +6,7 @@ const { isUsableProfile, reciprocalExchange } = require("./eligibility");
 const { refs, shortHash } = require("./refs");
 const { deliver } = require("./notifier");
 const { matchNotice } = require("./notifications");
-const { LIMITS } = require("./constants");
+const { LIMITS, CITY_IDS } = require("./constants");
 
 /**
  * "A match joined" notifications.
@@ -19,7 +19,9 @@ const { LIMITS } = require("./constants");
  *                             is never told about the same member twice
  *
  * Bounded: one scan of the discovery index and at most MAX_NOTICES sends per change.
- * Blocks in either direction suppress the notice, as they do everywhere else.
+ * Blocks in either direction suppress the notice, as they do everywhere else. Only
+ * members in the newcomer's city are told, since that is who could meet them; a profile
+ * with no city yet (written before the 1.1.2 backfill) notifies nobody rather than guess.
  */
 const MAX_NOTICES = 50;
 
@@ -55,11 +57,13 @@ async function notifyNewMatches(db, { uid, before, after }) {
 
   const r = refs(db);
   const seeks = (after.seeks || []).slice(0, 10);
-  if (seeks.length === 0) return { candidates: 0, notified: 0, skipped: 0 };
+  if (seeks.length === 0 || !CITY_IDS.includes(after.city)) return { candidates: 0, notified: 0, skipped: 0 };
 
-  // The same index discovery uses: people who offer something the newcomer is learning.
+  // The same index discovery uses: people in the same city who offer something the
+  // newcomer is learning.
   const snap = await r.profiles()
     .where("discoverable", "==", true)
+    .where("city", "==", after.city)
     .where("offers", "array-contains-any", seeks)
     .orderBy("uid")
     .limit(LIMITS.discoveryScan)

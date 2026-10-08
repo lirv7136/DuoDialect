@@ -17,6 +17,7 @@ import type { UpsertProfilePayload } from "../domain/profile-form";
 import type { Recurrence } from "../domain/schedule";
 import type { ProfilePhoto } from "../domain/photos";
 import type { CheckInAnswer } from "../domain/check-in";
+import type { CityId } from "../domain/cities";
 
 export class ApiError extends Error {
   readonly code: string;
@@ -35,6 +36,8 @@ export type PublicProfile = {
   uid: string;
   displayName: string;
   bio: string;
+  /** Always returned by getMyAccount; the server fills in "sydney" for a profile from before 1.1.2. */
+  city: CityId;
   area: string;
   speaks: { lang: string; level: LanguageLevel }[];
   learns: { lang: string; level: LanguageLevel }[];
@@ -64,6 +67,8 @@ export type Candidate = {
   uid: string;
   displayName: string;
   bio: string;
+  /** Always the caller's own city; discovery never crosses one. */
+  city: CityId;
   area: string;
   offers: string[];
   seeks: string[];

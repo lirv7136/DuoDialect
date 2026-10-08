@@ -21,6 +21,34 @@ const INVITATION_STATUSES = ["pending", "accepted", "declined", "cancelled"];
 
 const RECURRENCE = ["once", "weekly"];
 
+/**
+ * The cities Talkeven runs in. Discovery, near misses and match notices never cross a
+ * city, so a Melbourne member is not shown Sydney people. Ids are stable and lower case;
+ * the display names are what the app shows. The client mirrors this list in
+ * src/domain/cities.ts, and both must change together.
+ */
+const CITIES = [
+  { id: "sydney", name: "Sydney" },
+  { id: "melbourne", name: "Melbourne" },
+  { id: "brisbane", name: "Brisbane" },
+  { id: "perth", name: "Perth" },
+  { id: "adelaide", name: "Adelaide" },
+  { id: "canberra", name: "Canberra" },
+  { id: "hobart", name: "Hobart" },
+  { id: "darwin", name: "Darwin" },
+  { id: "gold-coast", name: "Gold Coast" },
+  { id: "auckland", name: "Auckland" },
+  { id: "wellington", name: "Wellington" },
+];
+
+const CITY_IDS = CITIES.map((city) => city.id);
+
+/**
+ * Where every profile saved before 1.1.2 lives. The 1.0.1 and 1.1.0 apps never send a
+ * city, and the backfill script stamps this onto every profile that lacks one.
+ */
+const DEFAULT_CITY = "sydney";
+
 const REPORT_REASONS = [
   "harassment",
   "spam",
@@ -67,6 +95,9 @@ module.exports = {
   INVITATION_STATUSES,
   RECURRENCE,
   REPORT_REASONS,
+  CITIES,
+  CITY_IDS,
+  DEFAULT_CITY,
   LIMITS,
   AGE_ASSURANCE,
   FLUENCY_ASSURANCE,

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const load = require('./load-typescript.cjs');
 const exchange = load('src/domain/language-exchange.ts');
 const schedule = load('src/domain/schedule.ts');
-const form = load('src/domain/profile-form.ts', { './language-exchange': exchange, './schedule': schedule });
+const form = load('src/domain/profile-form.ts', { './language-exchange': exchange, './schedule': schedule, './cities': load('src/domain/cities.ts') });
 const d = load('src/domain/date-bounds.ts', { './schedule': schedule });
 
 const iso = date => d.toLocalDateString(date);
@@ -30,7 +30,7 @@ test('the picker opens around 25 years ago, inside the allowed range', () => {
   assert.equal(iso(start), '2001-09-26');
   assert.ok(start <= d.latestAdultBirthDate(now));
   assert.ok(d.earliestBirthDate(now) < start);
-  assert.equal(form.validateProfileDraft({ displayName: 'A', bio: '', area: '', speaks: [{ lang: 'English', level: 'fluent' }],
+  assert.equal(form.validateProfileDraft({ displayName: 'A', bio: '', city: 'sydney', area: '', speaks: [{ lang: 'English', level: 'fluent' }],
     learns: [{ lang: 'Japanese', level: 'beginner' }], availability: [], interests: [] },
   { firstSave: true, private: { birthDate: iso(start) }, now }), null);
 });

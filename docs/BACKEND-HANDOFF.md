@@ -296,7 +296,10 @@ One profile field change worth noting: the public profile uses `displayName`, no
 
 | Collection | Fields | Used by |
 | --- | --- | --- |
-| `profiles` | `discoverable`, `offers` (array), `uid` | `discoverCandidates` |
+| `profiles` | `discoverable`, `offers` (array), `uid` | `discoverCandidates` and `notifyNewMatches` until 1.1.2; see [1.1.2 city](#112-city) |
+| `profiles` | `discoverable`, `city`, `offers` (array), `uid` | `discoverCandidates` and `notifyNewMatches` from 1.1.2 |
+| `profiles` | `discoverable`, `seeks` (array), `uid` | `nearMisses` until 1.1.2 |
+| `profiles` | `discoverable`, `city`, `seeks` (array), `uid` | `nearMisses` from 1.1.2 |
 | `invitations` | `participants` (array), `status` | the cancellation cascades |
 | `invitations` | `participants` (array), `status`, `intent` | the dating consent cascade |
 | `invitations` | `participants` (array), `createdAt` desc | the client's invitation list |
@@ -366,6 +369,43 @@ Four changes aimed at the empty Discover screen and flaky partners, all tested
 Deploy order: indexes, then functions and rules. Nothing to backfill: plans accepted before
 the deploy simply get no reminder, and existing members are told about newcomers from the
 deploy onward.
+
+## 1.1.2 city
+
+Profiles now carry a `city` from the allow list in `lib/constants.js` (`CITIES`: the
+Australian capitals, Gold Coast, Auckland and Wellington). `discoverCandidates`,
+`nearMisses` (including `learningYourLanguage`) and `notifyNewMatches` all filter on
+`where("city", "==", <the caller's or newcomer's city>)`, so nobody is ever shown, counted
+for, or told about a member in another city. A new profile must name a city
+(`invalid-argument` / `profile/city-invalid`); an existing profile that omits it keeps its
+stored city or, if it has none, becomes `sydney`, which is how the 1.0.1 and 1.1.0 apps
+keep working. `getMyAccount` and `publicCandidate` return `city`. Covered by
+`test/city.test.js` (7 tests, 136 in the suite), which also runs the backfill script
+against the emulator.
+
+**The order matters.** The new query needs every discoverable profile to have a city, and
+it needs a composite index with `city` in it. Deploy in this order, to staging first:
+
+1. **Backfill.** `cd functions && node scripts/backfill-city.js --project <id> --dry-run`
+   reports how many profiles lack a city and writes nothing; run it again without
+   `--dry-run` to set `city: "sydney"` on each, in batches of 500. It needs application
+   default credentials (`gcloud auth application-default login`, or
+   `GOOGLE_APPLICATION_CREDENTIALS`). Idempotent: a profile that already has a city is
+   never touched, so rerunning is safe. Until this has run, the deployed (pre 1.1.2)
+   functions keep working, because they do not read `city`.
+2. **Indexes.** `firebase deploy --only firestore:indexes --project <id>` adds
+   `(discoverable, city, offers, uid)` and `(discoverable, city, seeks, uid)` on
+   `profiles`. The two older profiles indexes without `city` stay in the file on purpose:
+   the deployed functions still use them until step 3, and removing them from the file
+   would make the deploy delete them. Wait for both new indexes to show as enabled in the
+   console before step 3, or the first discovery calls fail with `failed-precondition`.
+3. **Functions and rules.** `firebase deploy --only functions,firestore:rules --project <id>`.
+   Rules are unchanged by 1.1.2 but deploy with the functions as usual.
+
+After step 3 has been on production for a release cycle, the two old profiles indexes can
+be dropped from `firestore.indexes.json` and redeployed. The emulator enforces no indexes,
+so the suite cannot catch a missing one; the index JSON is checked for validity by the
+deploy itself.
 
 ## Remaining work
 
