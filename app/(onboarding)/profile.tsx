@@ -22,6 +22,7 @@ import { defaultBirthDate, earliestBirthDate, latestAdultBirthDate } from "../..
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Button, Caption, ErrorNotice, Field, Loading, Notice, Screen, Title, styles } from "../../components/ui";
 import { StepIndicator } from "../../components/step-indicator";
+import { pendingName } from "../../src/lib/pending-name";
 import { colors, space } from "../../constants/theme";
 
 /** Step two of onboarding: everything is saved here in one `upsertProfile` call. */
@@ -48,7 +49,8 @@ export default function ProfileOnboarding() {
     let active = true;
     void onboardingDraft.load().then(languages => {
       if (!active) return;
-      const base = profile ? draftFromProfile(profile) : emptyProfileDraft();
+      // A first Apple sign in is the only time Apple shares the name, so it waits here.
+      const base = profile ? draftFromProfile(profile) : { ...emptyProfileDraft(), displayName: pendingName.take() ?? "" };
       if (!languages && !profile) {
         router.replace("/(onboarding)/languages?next=profile");
         return;

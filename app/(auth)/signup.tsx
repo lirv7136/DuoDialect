@@ -7,6 +7,7 @@ import { signUp } from "../../src/lib/auth";
 import { authErrorMessage } from "../../src/domain/errors";
 import { Button, ErrorNotice, Field, Screen } from "../../components/ui";
 import { AuthHeader } from "../../components/auth-header";
+import { AppleSignInButton } from "../../components/apple-sign-in-button";
 import { PasswordField } from "../../components/password-field";
 import { colors, fonts, type } from "../../constants/theme";
 
@@ -69,6 +70,7 @@ export default function Signup() {
 
         <ErrorNotice message={error} />
         <Button variant="primary" onDark label="Create account" busy={busy} busyLabel="Creating…" onPress={() => void onSignup()} />
+        <AppleSignInButton mode="signUp" onError={setError} />
         <Text style={[type.caption, { color: colors.onPrimary }]}>
           {"By joining, you confirm you’re 18+ and agree to our "}
           <Text accessibilityRole="link" style={link} onPress={() => open(GUIDELINES_URL)}>Community guidelines</Text>

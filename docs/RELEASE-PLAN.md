@@ -76,6 +76,38 @@ clean. Still to do: deploy indexes then functions and rules to staging and produ
 indexes: profiles `(discoverable, seeks, uid)`, invitations `(status, nextReminderAt)`), a
 device run of the four flows, What's New, then build and submit after 1.1.0 is approved.
 
+## Sign in with Apple (1.1.2)
+
+Apple comes before Google on purpose: App Review guideline 4.8 requires an equivalent
+privacy preserving login (Sign in with Apple qualifies) as soon as a third party login such
+as Google is offered, so shipping Apple first keeps a later Google button review safe. The
+app code is on `agent-apple` (`src/lib/auth.ts`, `components/apple-sign-in-button.tsx`,
+`app/account/delete.tsx`, `app.json`). It is a native change, so it needs a new build.
+
+Outside the repo, in order:
+
+1. [ ] Install the packages (the branch adds them to `package.json` only):
+   `npx expo install expo-apple-authentication expo-crypto`.
+2. [ ] Firebase console, both `duodialect-staging` and `duodialect`: Authentication →
+   Sign-in method → Add new provider → Apple → Enable. For native iOS nothing else is
+   needed (no Services ID, no OAuth code flow fields); those are for web and Android.
+3. [ ] Apple Developer portal: the Sign in with Apple capability on the App ID
+   `com.lachlanirving.duodialect`. EAS adds it on the next build because `app.json` sets
+   `ios.usesAppleSignIn: true`; if the build log says otherwise, switch it on under
+   Certificates, Identifiers & Profiles → Identifiers → the App ID → Capabilities.
+4. [ ] New EAS build (`eas build --profile production --platform ios`), then on a device:
+   sign up with Apple (sheet shows the name and email choices, lands on onboarding with the
+   given name prefilled), sign out, sign in with Apple (lands on Discover), delete the
+   account via Confirm with Apple.
+5. [ ] App Store Connect: What's New mentions Sign in with Apple; App Review notes say the
+   reviewer can use Sign in with Apple or the demo email account.
+
+Notes: Apple shares the person's name on the first authorisation only, so the onboarding
+profile step reads it once from `src/lib/pending-name.ts`. Hide my email gives a
+`privaterelay.appleid.com` address; nothing in the app emails people directly, so that is
+fine. There is no change password screen, and the reset link on the login screen is shown
+before anyone is signed in, so no password surface needs hiding for Apple accounts.
+
 ## Google Play
 
 Unchanged, and blocked on Android device verification in Play Console. After that:

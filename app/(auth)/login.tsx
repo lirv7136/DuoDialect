@@ -5,6 +5,7 @@ import { requestPasswordReset, signIn } from "../../src/lib/auth";
 import { authErrorMessage } from "../../src/domain/errors";
 import { Button, ErrorNotice, Field, Notice, Screen } from "../../components/ui";
 import { AuthHeader } from "../../components/auth-header";
+import { AppleSignInButton } from "../../components/apple-sign-in-button";
 import { PasswordField } from "../../components/password-field";
 import { colors } from "../../constants/theme";
 
@@ -82,6 +83,7 @@ export default function Login() {
         <Notice message={notice} icon="mail-outline" />
 
         <Button variant="primary" onDark label="Log in" busy={busy} busyLabel="Logging in…" onPress={() => void onLogin()} />
+        <AppleSignInButton mode="signIn" onError={setError} />
         <Button variant="ghost" onDark label="Forgot password?" busy={resetting} busyLabel="Sending…"
           hint="Sends a reset link to the email above" onPress={() => void onForgot()} />
         <Button variant="secondary" onDark label="Create account" onPress={() => router.push("/(auth)/signup")} />

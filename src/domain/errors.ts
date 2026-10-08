@@ -54,6 +54,8 @@ const CODE_MESSAGES: Record<string, string> = {
 };
 
 const GENERIC = "Something went wrong. Try again.";
+/** Reauthenticating an Apple account with a different Apple ID. */
+const APPLE_MISMATCH = "That Apple ID doesn’t belong to this account. Confirm with the Apple ID you signed up with.";
 
 /** Normalises anything thrown by httpsCallable (or elsewhere) into a failure record. */
 export function toCallableFailure(error: unknown): CallableFailure {
@@ -88,6 +90,7 @@ export function describeFailure(failure: CallableFailure): string {
   if (failure.code === "auth/too-many-requests") return CODE_MESSAGES["resource-exhausted"];
   if (failure.code === "auth/network-request-failed") return CODE_MESSAGES.unavailable;
   if (failure.code === "auth/requires-recent-login") return "Log in again, then retry.";
+  if (failure.code === "auth/user-mismatch") return APPLE_MISMATCH;
   return CODE_MESSAGES[failure.code] ?? GENERIC;
 }
 
@@ -109,6 +112,12 @@ const AUTH_MESSAGES: Record<string, string> = {
   "auth/too-many-requests": "Too many attempts. Wait a few minutes, or reset your password.",
   "auth/network-request-failed": "We couldn’t reach the server. Check your connection and try again.",
   "auth/user-disabled": "This account has been disabled. Contact support if you think this is a mistake.",
+  // Sign in with Apple. The provider switch lives in the Firebase console, so a build can
+  // ship ahead of it; the person should see why rather than a generic failure.
+  "auth/operation-not-allowed": "Sign in with Apple isn’t available right now. Use your email and password.",
+  "auth/account-exists-with-different-credential": "An account already uses that email with a password. Log in with your email instead.",
+  "auth/missing-identity-token": "Apple didn’t finish signing you in. Try again.",
+  "auth/user-mismatch": APPLE_MISMATCH,
 };
 
 /** Sign in, sign up and password reset: a Firebase Auth error, to a sentence. */
