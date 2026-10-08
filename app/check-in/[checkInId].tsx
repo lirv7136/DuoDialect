@@ -3,9 +3,12 @@ import { View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "../../src/lib/api";
 import { subscribeCheckIn, type CheckInDoc } from "../../src/lib/live";
+import { maybeAskForRating } from "../../src/lib/rating";
 import { canAnswer, nextWeek, thanksFor, type CheckInAnswer } from "../../src/domain/check-in";
+import { isGoodMeetup } from "../../src/domain/rating";
 import { formatLocalDate } from "../../src/domain/schedule";
 import { errorMessage } from "../../src/domain/errors";
+import { useMyAccount } from "../../hooks/use-my-account";
 import { usePeople } from "../../hooks/use-people";
 import { Avatar } from "../../components/avatar";
 import { ExchangeStrip } from "../../components/exchange-strip";
@@ -13,6 +16,9 @@ import { Body, Button, Caption, ErrorNotice, Loading, Screen, Title } from "../.
 import { space } from "../../constants/theme";
 
 type Step = "happened" | "again" | "done";
+
+/** Long enough for the thanks screen and its buttons to settle before any system sheet. */
+const RATING_DELAY_MS = 1500;
 
 /**
  * The morning after a plan: did it happen, and would you meet again? One question at a
@@ -28,11 +34,28 @@ export default function CheckInScreen() {
   const inFlight = useRef(false);
   const people = usePeople(item ? [item.otherUid] : []);
   const name = item ? people[item.otherUid]?.name ?? "" : "";
+  const { profile, reload } = useMyAccount();
+  // The latest profile for the delayed rating check, which runs after the reload below may land.
+  const profileRef = useRef(profile);
 
   useEffect(() => {
     if (!checkInId) return;
     return subscribeCheckIn(String(checkInId), setItem, e => setProblem(errorMessage(e)));
   }, [checkInId]);
+
+  useEffect(() => { profileRef.current = profile; }, [profile]);
+
+  useEffect(() => {
+    if (step !== "done" || !answer || !isGoodMeetup(answer)) return;
+    // The server counts the meetup inside answerCheckIn once both people have said yes, and
+    // useMyAccount only refreshes on focus, so fetch once more while the thanks screen settles.
+    void reload();
+    // Asked only after "Same time next week?" has appeared, so the sheet never lands on top of it.
+    const timer = setTimeout(() => {
+      void maybeAskForRating({ meetupsConfirmed: profileRef.current?.meetupsConfirmed, answer });
+    }, RATING_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [step, answer, reload]);
 
   async function send(next: CheckInAnswer, key: string, then: Step) {
     if (!item || inFlight.current) return;

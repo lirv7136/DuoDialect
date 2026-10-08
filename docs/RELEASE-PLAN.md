@@ -76,7 +76,23 @@ clean. Still to do: deploy indexes then functions and rules to staging and produ
 indexes: profiles `(discoverable, seeks, uid)`, invitations `(status, nextReminderAt)`), a
 device run of the four flows, What's New, then build and submit after 1.1.0 is approved.
 
-## Sign in with Apple (1.1.2)
+## 1.1.2 (branch `feat-1.1.2`, local commits)
+
+Shipped on the branch, in commit order, with unit test counts rising from 74 to 119:
+
+- Onboarding draft survives a backgrounded app; one gentle nudge for a photo and free times.
+- Share a confirmed plan with a friend (safety message), and a public place picker.
+- "Met N times" trust chip from a server kept `meetupsConfirmed` count.
+- Sign in with Apple (checklist below).
+- App Store rating prompt after a good check-in (`src/lib/rating.ts`, gate in
+  `src/domain/rating.ts`): system sheet only, at most three asks a year and sixty days
+  apart, first asked once a meetup is confirmed by both people.
+- A real city on profiles, with discovery, match pushes and near misses per city (pending).
+
+1.1.2 adds native packages (`expo-apple-authentication`, `expo-crypto`,
+`expo-store-review`), so it needs a new native build, not an OTA update.
+
+### Sign in with Apple
 
 Apple comes before Google on purpose: App Review guideline 4.8 requires an equivalent
 privacy preserving login (Sign in with Apple qualifies) as soon as a third party login such
