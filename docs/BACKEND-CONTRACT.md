@@ -116,7 +116,7 @@ batch, so they cannot drift apart.
 {
   displayName: string,                 // 1..40 chars, required
   bio?: string,                        // up to 400
-  city: string,                        // one of the CITIES ids; required on first save (1.1.2)
+  city: string,                        // one of the CITIES ids; sydney when an older app omits it (1.1.2)
   area?: string,                       // up to 60, free text neighbourhood
   speaks: { lang: string, level: "native"|"fluent"|"intermediate"|"beginner" }[],
   learns: { lang: string, level: "native"|"fluent"|"intermediate"|"beginner" }[],
@@ -151,10 +151,11 @@ The discovery query depends on them.
 `functions/lib/constants.js` (`CITIES`: `sydney`, `melbourne`, `brisbane`, `perth`,
 `adelaide`, `canberra`, `hobart`, `darwin`, `gold-coast`, `auckland`, `wellington`; the
 client mirrors it in `src/domain/cities.ts`). Ids are matched after trimming and lower
-casing. A new profile must send one; anything else is `invalid-argument` /
-`profile/city-invalid` and nothing is written. An existing profile may omit it: the stored
-city is kept, and a profile that has none yet (saved before 1.1.2) becomes `sydney`. That
-is what keeps the 1.0.1 and 1.1.0 apps, which never send a city, working. `area` stays a
+casing. A city that is sent must be on the list; anything else is `invalid-argument` /
+`profile/city-invalid` and nothing is written. A profile may omit it: the stored city is
+kept, and a profile that has none yet, new or saved before 1.1.2, becomes `sydney`. That
+is what keeps the 1.0.1 and 1.1.0 apps, which never send a city, signing people up and
+working. The 1.1.2 client always sends one. `area` stays a
 free text neighbourhood inside the city and is never used for filtering.
 
 ### `getMyAccount`
@@ -456,6 +457,9 @@ when the answer repeats the stored one.
   records a confirmed meetup. If either later answers `"no"`, the record is removed.
   Confirmed meetups are not readable by clients yet; they are what the exchange balance
   will be built on.
+- **A confirmed meetup is, by its nature, shared.** The public count moves the moment both
+  people have said it happened, so a partner who answered yes can tell the other did too.
+  Whether to meet again is never shared, and neither is a lone answer.
 - **`meetupsConfirmed` tracks those records.** In the same transaction, both people's
   public `profiles/{uid}.meetupsConfirmed` goes up by one when a record is created and
   down by one when one is removed, never below zero. A repeated answer, or a change of
@@ -561,7 +565,7 @@ no reason code.
 | --- | --- | --- |
 | `account/not-adult` | `failed-precondition` | The self declared birth date is under 18. DuoDialect is an adults only service. |
 | `profile/incomplete` | `failed-precondition` | The caller, or the other person, has no usable profile yet. |
-| `profile/city-invalid` | `invalid-argument` | `city` is missing on a new profile, or is not one of the `CITIES` ids. |
+| `profile/city-invalid` | `invalid-argument` | `city` was sent but is not one of the `CITIES` ids. |
 | `profile/not-found` | `not-found` | The other person has no profile. |
 | `target/self` | `invalid-argument` | The caller named themselves. |
 | `target/unavailable` | `permission-denied` | A block exists in one direction or the other. The direction is deliberately not disclosed. |

@@ -56,18 +56,18 @@ test("the allow list is well formed and the default is on it", () => {
   assert.equal(DEFAULT_CITY, "sydney");
 });
 
-test("a new profile must name a city on the allow list", async () => {
+test("a new profile without a city is Sydney (older apps still sign up); a bogus city is refused", async () => {
   const { city: _omitted, ...withoutCity } = CAST.alex;
   const nobody = await makeActor("city-none");
-  const missing = await expectFailure(nobody.call("upsertProfile", withoutCity), "invalid-argument");
-  assert.equal(missing.details.reason, "profile/city-invalid");
+  const saved = await nobody.call("upsertProfile", withoutCity);
+  assert.equal(saved.profile.city, "sydney");
+  assert.equal((await admin().doc(`profiles/${nobody.uid}`).get()).get("city"), "sydney");
 
   const elsewhere = await makeActor("city-bogus");
   const bogus = await expectFailure(elsewhere.call("upsertProfile", { ...CAST.alex, city: "atlantis" }), "invalid-argument");
   assert.equal(bogus.details.reason, "profile/city-invalid");
 
-  // Nothing was written for either.
-  assert.equal((await admin().doc(`profiles/${nobody.uid}`).get()).exists, false);
+  // Nothing was written for the refused one.
   assert.equal((await admin().doc(`profiles/${elsewhere.uid}`).get()).exists, false);
 
   // A valid city, in any case, is stored normalised and returned.

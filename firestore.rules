@@ -146,7 +146,8 @@ service cloud.firestore {
     }
 
     // Post meetup check-ins, one per person per meetup. Only the owner can read theirs:
-    // the other person never sees what was answered. A query must filter on uid equal to
+    // the other person never sees the answer itself (a confirmed meetup shows in the public
+    // count, so whether it happened is shared; meet again never is). A query must filter on uid equal to
     // the caller, or it returns nothing. Answers go through the answerCheckIn callable.
     match /checkIns/{checkInId} {
       allow get, list: if signedIn() && resource.data.uid == request.auth.uid;

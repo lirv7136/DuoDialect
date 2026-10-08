@@ -50,12 +50,13 @@ export default function ProfileOnboarding() {
     let active = true;
     void onboardingDraft.load().then(languages => {
       if (!active) return;
-      // A first Apple sign in is the only time Apple shares the name, so it waits here.
-      const base = profile ? draftFromProfile(profile) : { ...emptyProfileDraft(), displayName: pendingName.take() ?? "" };
       if (!languages && !profile) {
         router.replace("/(onboarding)/languages?next=profile");
         return;
       }
+      // A first Apple sign in is the only time Apple shares the name, so it waits here
+      // and is taken only once this step is really going to show.
+      const base = profile ? draftFromProfile(profile) : { ...emptyProfileDraft(), displayName: pendingName.take() ?? "" };
       setDraft(languages ? { ...base, ...languages } : base);
       setReady(true);
     });

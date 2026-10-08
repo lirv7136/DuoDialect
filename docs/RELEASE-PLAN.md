@@ -111,8 +111,12 @@ Outside the repo, in order:
 1. [ ] Install the packages (the branch adds them to `package.json` only):
    `npx expo install expo-apple-authentication expo-crypto`.
 2. [ ] Firebase console, both `duodialect-staging` and `duodialect`: Authentication →
-   Sign-in method → Add new provider → Apple → Enable. For native iOS nothing else is
-   needed (no Services ID, no OAuth code flow fields); those are for web and Android.
+   Sign-in method → Add new provider → Apple → Enable. Sign in itself needs nothing else
+   on native iOS. Token revocation on account deletion (Apple guideline 5.1.1, which the
+   delete screen attempts) does need the OAuth code flow fields on that provider: Apple
+   Team ID, a Sign in with Apple key (Key ID and the .p8 private key from Certificates,
+   Identifiers & Profiles → Keys) and a Services ID. Until they are set, revocation fails
+   quietly and deletion still completes.
 3. [ ] Apple Developer portal: the Sign in with Apple capability on the App ID
    `com.lachlanirving.duodialect`. EAS adds it on the next build because `app.json` sets
    `ios.usesAppleSignIn: true`; if the build log says otherwise, switch it on under

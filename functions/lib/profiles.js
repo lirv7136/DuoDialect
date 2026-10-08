@@ -40,14 +40,14 @@ function requireDatingPreferences(value, field, { age }) {
 }
 
 /**
- * The city a profile belongs to. A new profile must name one from the allow list, since
- * discovery is scoped by it. A profile saved by an app from before cities (1.0.1 and
- * 1.1.0 never send one) keeps the city it has, or is treated as Sydney, the launch city,
- * so those builds keep working after the backend moves ahead of them.
+ * The city a profile belongs to, from the allow list, since discovery is scoped by it.
+ * An app from before cities (1.0.1 and 1.1.0 never send one) keeps the city the profile
+ * has, or is treated as Sydney, the launch city, whether the profile is new or not, so
+ * those builds keep signing people up after the backend moves ahead of them. The 1.1.2
+ * client always sends one; a city that is sent must be on the list.
  */
-function requireCity(value, field, { isNew, existing }) {
+function requireCity(value, field, { existing }) {
   if (value === undefined || value === null) {
-    if (isNew) throw reject("invalid-argument", REASON.cityInvalid, "Choose the city you live in.");
     return CITY_IDS.includes(existing) ? existing : DEFAULT_CITY;
   }
   const city = typeof value === "string" ? value.trim().toLocaleLowerCase("en") : value;
@@ -86,7 +86,7 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
   const bio = optionalString(body.bio, "bio", LIMITS.bio);
   const area = optionalString(body.area, "area", LIMITS.area);
   const city = requireCity(body.city, "city", {
-    isNew, existing: publicSnap.exists ? publicSnap.get("city") : null,
+    existing: publicSnap.exists ? publicSnap.get("city") : null,
   });
   const speaks = requireLanguageList(body.speaks, "speaks", { min: 1 });
   const learns = requireLanguageList(body.learns, "learns", { min: 1 });

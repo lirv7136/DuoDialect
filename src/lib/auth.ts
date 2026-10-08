@@ -10,6 +10,7 @@ import {
   signOut,
   type OAuthCredential,
   type User,
+  revokeAccessToken,
 } from "firebase/auth";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
@@ -65,7 +66,7 @@ export async function isAppleSignInAvailable(): Promise<boolean> {
  * nonce and checks the two match, so a token captured elsewhere cannot be replayed here.
  * Returns null when the person dismisses the sheet, which is not an error.
  */
-async function appleCredential(): Promise<{ credential: OAuthCredential; fullName: AppleAuthentication.AppleAuthenticationFullName | null } | null> {
+async function appleCredential(): Promise<{ credential: OAuthCredential; fullName: AppleAuthentication.AppleAuthenticationFullName | null; authorizationCode: string | null } | null> {
   const rawNonce = nonceFromBytes(Crypto.getRandomBytes(NONCE_BYTES));
   const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
   let response: AppleAuthentication.AppleAuthenticationCredential;
@@ -83,7 +84,7 @@ async function appleCredential(): Promise<{ credential: OAuthCredential; fullNam
   }
   if (!response.identityToken) throw Object.assign(new Error("Apple returned no identity token."), { code: "auth/missing-identity-token" });
   const credential = new OAuthProvider("apple.com").credential({ idToken: response.identityToken, rawNonce });
-  return { credential, fullName: response.fullName };
+  return { credential, fullName: response.fullName, authorizationCode: response.authorizationCode ?? null };
 }
 
 export type AppleSignInResult = { user: User; isNewUser: boolean; fullName: string | null };
@@ -128,5 +129,12 @@ export async function reauthenticateWithApple(): Promise<boolean> {
   const apple = await appleCredential();
   if (!apple) return false;
   await reauthenticateWithCredential(user, apple.credential);
+  // Apple requires the Sign in with Apple grant to be revoked when the account is deleted
+  // (guideline 5.1.1), which is the only reason this reauthentication exists. It needs the
+  // Apple key on the Firebase provider; until that is configured it fails quietly and the
+  // deletion still goes ahead.
+  if (apple.authorizationCode) {
+    try { await revokeAccessToken(auth, apple.authorizationCode); } catch { /* best effort */ }
+  }
   return true;
 }

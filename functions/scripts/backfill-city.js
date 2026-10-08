@@ -61,7 +61,8 @@ async function main() {
     if (typeof city === "string" && city) continue;
     missing += 1;
     if (!dryRun) {
-      batch.set(doc.ref, { city: DEFAULT_CITY, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      // No updatedAt: nothing the person did, and it would fire onProfileWritten once per profile.
+      batch.set(doc.ref, { city: DEFAULT_CITY }, { merge: true });
     }
     pending += 1;
     if (pending >= BATCH_SIZE) await flush();
