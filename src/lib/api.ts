@@ -225,6 +225,13 @@ export const api = {
     call<{ confirmation: "DELETE" }, { status: "completed" | "needs_retry"; deleted: Record<string, number>; retained: unknown }>(
       "requestAccountDeletion", { confirmation: "DELETE" },
     ),
+
+  /**
+   * Removes a push registration another account left on this phone. The token is the
+   * proof of possession; documents holding a different token are untouched.
+   */
+  releasePushToken: (input: { uid: string; deviceId: string; token: string }) =>
+    call<typeof input, { released: number }>("releasePushToken", input),
 };
 
 export type { UserLang, ProfilePhoto };

@@ -402,6 +402,56 @@ it needs a composite index with `city` in it. Deploy in this order, to staging f
 3. **Functions and rules.** `firebase deploy --only functions,firestore:rules --project <id>`.
    Rules are unchanged by 1.1.2 but deploy with the functions as usual.
 
+## 1.1.2 push token lifecycle
+
+Fixes the privacy bug recorded under "Remaining work" in earlier handoffs: a phone that
+signed out, or switched accounts, kept receiving the previous account's notifications,
+and one account could only ever have one device. See "Push tokens" in
+`docs/BACKEND-CONTRACT.md` for the layout and the client's obligations.
+
+- **One document per device.** `pushTokens/{uid}/devices/{deviceId}`, owner read and write
+  with the same exact field validation as the legacy document (`firestore.rules`,
+  `validPushToken()`). `deliver` (`lib/notifier.js`) reads every device document plus the
+  legacy `pushTokens/{uid}`, deduplicates by token and sends once per token, chunked with
+  `chunkPushNotifications`. The stub transport now writes one `pushDeliveries` record per
+  token, carrying `token` and `deviceId`, so the fan out is assertable.
+- **Client.** `src/lib/push.ts` writes both the device document and the legacy document
+  (the deployed functions read only the latter until they are redeployed), remembers the
+  registration on the install, deletes it on logout and before deletion
+  (`releasePushRegistration`, best effort with a 4 second bound so a dead connection never
+  traps anyone), and revokes a previous account's leftover before registering a new one
+  (`releaseStaleRegistration`). `syncPushRegistration` runs from `app/index.tsx` on every
+  sign in and launch: revoke what another account left, then re-register only if this
+  account turned notifications on here. Never prompts.
+- **`releasePushToken` callable** (`lib/push-devices.js`). The rules let nobody delete
+  another account's documents, so the next account on a phone hands the server the
+  remembered `{ uid, deviceId, token }` and the server deletes the documents that hold
+  exactly that token. The token is the proof of possession.
+- **Receipt sweep** (`lib/push-receipts.js`, hourly `sweepPushReceipts`). Successful Expo
+  tickets are stored at `pushTickets/{ticketId}` (server only). Tickets older than 15
+  minutes have their receipts fetched in chunks; `DeviceNotRegistered` deletes the device
+  document and the matching legacy document; answered tickets are deleted; tickets older
+  than a day with no receipt are dropped. Bounded to 150 tickets per run. A no op under
+  the stub transport. A ticket that reports `DeviceNotRegistered` at send time retires the
+  token immediately.
+- **Deletion** now removes the devices subcollection with the legacy document
+  (`db.recursiveDelete(r.pushToken(uid))`).
+- Covered by `test/push.test.js` (7 tests, 143 in the suite): fan out to two device tokens
+  plus a distinct legacy token exactly once, dedupe when one phone wrote both documents,
+  the devices rules, `releasePushToken` with the right and the wrong token, the deletion
+  cascade, the sweep as a no op under the stub, and the sweep against a fake Expo client.
+  Client helpers are covered by `tests/push.test.cjs` and `tests/push-device.test.cjs`.
+
+**Deploy notes.** No new indexes: the sweep queries `pushTickets` on `createdAt` alone.
+Deploy rules and functions together (`firebase deploy --only functions,firestore:rules`);
+the rules must land no later than the client that writes the devices collection, or those
+writes are refused and the client falls back to nothing (the legacy write still succeeds
+and the person is still reachable). `releasePushToken` must be deployed before a client
+that calls it, or the stale release fails quietly and is retried every launch. The 1.0.1
+and 1.1.0 clients keep working untouched: they write only the legacy document, which
+`deliver` still reads. Once no deployed function reads the legacy document, the client's
+legacy write and the legacy rule can go in a later release.
+
 After step 3 has been on production for a release cycle, the two old profiles indexes can
 be dropped from `firestore.indexes.json` and redeployed. The emulator enforces no indexes,
 so the suite cannot catch a missing one; the index JSON is checked for validity by the
@@ -441,11 +491,11 @@ issued.
 
 **Push token lifecycle**
 
-One token per account, and the token document is the only thing clients still write
-directly. Still needed: installation based tokens so two devices both work, revocation on
-logout and on account switch, cleanup driven by Expo receipts and `DeviceNotRegistered`,
-and deep link navigation tests. Nothing currently prevents a notification reaching a device
-where a different account has since signed in.
+Done in 1.1.2 (see "1.1.2 push token lifecycle" above): one token per device, revocation on
+logout, before deletion and on account switch, and cleanup driven by Expo receipts and
+`DeviceNotRegistered`. Still open: deep link navigation tests, and retiring the legacy
+`pushTokens/{uid}` document once no deployed function reads it. Declined invitations send
+no notification, and that is by design, not a gap.
 
 **Discovery scaling**
 

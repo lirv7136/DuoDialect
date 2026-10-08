@@ -92,16 +92,29 @@ service cloud.firestore {
     // Push tokens stay writable by their owner: no invariant depends on them and the
     // value is device state. The shape is constrained so the document cannot be reused
     // as arbitrary storage.
-    match /pushTokens/{uid} {
-      allow get: if isSelf(uid);
-      allow list: if false;
-      allow create, update: if isSelf(uid)
-        && request.resource.data.keys().hasOnly(['token', 'platform', 'updatedAt'])
+    function validPushToken() {
+      return request.resource.data.keys().hasOnly(['token', 'platform', 'updatedAt'])
         && request.resource.data.token is string
         && request.resource.data.token.size() > 0
         && request.resource.data.token.size() <= 256
         && request.resource.data.platform in ['ios', 'android']
         && request.resource.data.updatedAt is timestamp;
+    }
+
+    // The single document the 1.0.1 and 1.1.0 clients write. Kept until every client
+    // writes the devices collection below and the functions no longer read it.
+    match /pushTokens/{uid} {
+      allow get: if isSelf(uid);
+      allow list: if false;
+      allow create, update: if isSelf(uid) && validPushToken();
+      allow delete: if isSelf(uid);
+    }
+
+    // One document per device, so two phones on one account both hear. The device id
+    // is derived from the token by the client; the server never trusts it for anything.
+    match /pushTokens/{uid}/devices/{deviceId} {
+      allow get, list: if isSelf(uid);
+      allow create, update: if isSelf(uid) && validPushToken();
       allow delete: if isSelf(uid);
     }
 
@@ -112,6 +125,11 @@ service cloud.firestore {
 
     // Stubbed push delivery records written during emulator tests.
     match /pushDeliveries/{deliveryId} {
+      allow read, write: if false;
+    }
+
+    // Expo push tickets awaiting their receipt, so dead tokens can be retired. Server only.
+    match /pushTickets/{ticketId} {
       allow read, write: if false;
     }
 

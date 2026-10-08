@@ -12,7 +12,7 @@ import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "expo-router";
 import { auth } from "./firebase";
-import { registerForPush } from "./push";
+import { registerForPush, releaseStaleRegistration } from "./push";
 
 const DECLINED_KEY = "push.declined.v1";
 const enabledKey = (uid: string) => `push.enabled.v1.${uid}`;
@@ -48,6 +48,22 @@ export async function enableNotifications(): Promise<EnableResult> {
   if (!canUsePush()) return "unavailable";
   await write(DECLINED_KEY, "1");
   return "denied";
+}
+
+/**
+ * Runs on sign in and on every launch. Revokes whatever a previous account left on this
+ * phone, then refreshes this account's registration if it turned notifications on here.
+ * Never prompts: an account that has not opted in is left alone.
+ */
+export async function syncPushRegistration(): Promise<void> {
+  if (!canUsePush() || !auth.currentUser) return;
+  await releaseStaleRegistration();
+  if (!(await notificationsEnabled())) return;
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== "granted") return;
+    await registerForPush();
+  } catch { /* best effort; the next launch tries again */ }
 }
 
 export type PromptContext = { kind: "invitation-sent" | "invitation-accepted"; name?: string };

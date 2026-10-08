@@ -13,9 +13,11 @@ const crypto = require("crypto");
  * conversations/{conversationId}              participants only; membership immutable
  * conversations/{id}/messages/{messageId}     participants read; server writes
  * userConversations/{uid}/items/{convId}      owner readable inbox summary
- * pushTokens/{uid}                            owner read and write
+ * pushTokens/{uid}                            owner read and write; legacy single token, still written by every client
+ * pushTokens/{uid}/devices/{deviceId}         owner read and write; one token per device
  * reports/{reportId}                          server only
  * pushDeliveries/{deliveryId}                 server only; stubbed transport record
+ * pushTickets/{ticketId}                      server only; Expo ticket awaiting its receipt
  * accountStatus/{uid}                         server only; suspension state
  * deletionRequests/{uid}                      server only; deletion audit trail
  * moderationActions/{actionId}                server only; who did what, and why
@@ -37,6 +39,7 @@ const COLLECTIONS = {
   pushTokens: "pushTokens",
   reports: "reports",
   pushDeliveries: "pushDeliveries",
+  pushTickets: "pushTickets",
   accountStatus: "accountStatus",
   deletionRequests: "deletionRequests",
   moderationActions: "moderationActions",
@@ -109,8 +112,13 @@ function refs(db) {
       db.collection(COLLECTIONS.userConversations).doc(uid)
         .collection("items").doc(conversationIdValue),
     pushToken: (uid) => db.collection(COLLECTIONS.pushTokens).doc(uid),
+    pushDevices: (uid) => db.collection(COLLECTIONS.pushTokens).doc(uid).collection("devices"),
+    pushDevice: (uid, deviceId) =>
+      db.collection(COLLECTIONS.pushTokens).doc(uid).collection("devices").doc(deviceId),
     reports: () => db.collection(COLLECTIONS.reports),
     pushDeliveries: () => db.collection(COLLECTIONS.pushDeliveries),
+    pushTickets: () => db.collection(COLLECTIONS.pushTickets),
+    pushTicket: (id) => db.collection(COLLECTIONS.pushTickets).doc(id),
     profiles: () => db.collection(COLLECTIONS.profiles),
     conversations: () => db.collection(COLLECTIONS.conversations),
     messagesOf: (conversationIdValue) =>

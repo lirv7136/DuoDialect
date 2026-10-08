@@ -59,8 +59,8 @@ test("the allow list is well formed and the default is on it", () => {
 test("a new profile without a city is Sydney (older apps still sign up); a bogus city is refused", async () => {
   const { city: _omitted, ...withoutCity } = CAST.alex;
   const nobody = await makeActor("city-none");
-  const saved = await nobody.call("upsertProfile", withoutCity);
-  assert.equal(saved.profile.city, "sydney");
+  const defaulted = await nobody.call("upsertProfile", withoutCity);
+  assert.equal(defaulted.profile.city, "sydney");
   assert.equal((await admin().doc(`profiles/${nobody.uid}`).get()).get("city"), "sydney");
 
   const elsewhere = await makeActor("city-bogus");

@@ -36,9 +36,11 @@ Two rules are worth stating plainly, because the client must not try to work aro
 | `conversations/{conversationId}` | its two participants | server only | membership, intent, agreed languages, last message |
 | `conversations/{id}/messages/{messageId}` | the conversation's participants | server only | messages |
 | `userConversations/{uid}/items/{conversationId}` | the owner only | server only | inbox summary and unread count |
-| `pushTokens/{uid}` | the owner only | **the owner**, shape constrained | one Expo push token per account |
+| `pushTokens/{uid}` | the owner only | **the owner**, shape constrained | legacy single Expo push token; still written by every client, see "Push tokens" |
+| `pushTokens/{uid}/devices/{deviceId}` | the owner only (get and list) | **the owner**, shape constrained | one Expo push token per device |
 | `reports/{reportId}` | nobody | server only | reports awaiting moderation |
 | `pushDeliveries/{id}` | nobody | server only | stubbed notification records, emulator only |
+| `pushTickets/{ticketId}` | nobody | server only | one Expo push ticket awaiting its receipt |
 | `accountStatus/{uid}` | nobody | server only | suspension state, checked on every authenticated call |
 | `deletionRequests/{uid}` | nobody | server only | deletion audit trail, kept after the account is gone |
 | `moderationActions/{id}` | nobody | server only | what a moderator looked at and did |
@@ -61,6 +63,42 @@ Those live in `privateProfiles/{uid}`, which only the owner can read, and are ne
 returned to another member by any callable. A caller can learn that somebody is eligible
 for a language date; they cannot learn that person's age, gender, preferences, or why
 somebody else was excluded.
+
+### Push tokens
+
+Push tokens are the only documents a client still writes directly. Both documents take
+exactly `{ token, platform, updatedAt }` with `platform` in `ios` or `android` and
+`updatedAt` a timestamp; anything else is refused by the rules.
+
+- `pushTokens/{uid}/devices/{deviceId}` is one document per device, so two phones on one
+  account both hear. `deviceId` is derived by the client from the token itself (a hash, so
+  it is stable for the token and never a hardware id); the server never trusts it for
+  anything and only ever reads the `token` field.
+- `pushTokens/{uid}` is the single document the 1.0.1 and 1.1.0 clients write. Every
+  client, including the current one, keeps writing it, because the functions deployed
+  before this change read nothing else. Once the functions here are deployed everywhere the
+  client can stop writing it; until then it must not.
+
+**Delivery** reads every device document plus the legacy document, drops anything that is
+not a valid Expo token, deduplicates by token, and sends once per distinct token. The
+device document wins over the legacy document when both hold the same token.
+
+**Lifecycle on the phone.** The client registers only after the person turns notifications
+on, and re-registers the signed in account on every launch if they did. It remembers what
+it last registered (account, device id, token) on the install. On logout and before account
+deletion it deletes that device document and, if it holds the same token, the legacy
+document, then signs out; a dead connection never blocks signing out, the record is simply
+kept and retried. If a different account then signs in on the same phone, the client calls
+`releasePushToken` with the remembered record before registering, so a token is never
+carried from one account to the next.
+
+**Dead tokens.** Under the Expo transport every successful send stores its ticket at
+`pushTickets/{ticketId}`. The hourly `sweepPushReceipts` fetches receipts for tickets older
+than 15 minutes, deletes the device document (and the legacy document, when it holds the
+same token) for every `DeviceNotRegistered`, and forgets answered tickets; a ticket older
+than a day with no receipt is dropped unread. A ticket that already reports
+`DeviceNotRegistered` at send time retires the token straight away. Under the stub
+transport nothing is sent, so the sweep is a no op.
 
 ## Queries the rules permit
 
@@ -469,6 +507,23 @@ when the answer repeats the stored one.
 - To report the other person from a check-in, call `reportUser` with the check-in's
   `otherUid` and `conversationId`.
 
+### `releasePushToken`
+
+```ts
+{ uid: string; deviceId: string; token: string }
+```
+
+Returns `{ released }`: how many documents were deleted, 0 to 2.
+
+Removes a push registration a previous account left on this phone. Firestore rules let
+nobody delete another account's documents, so the server does it, taking the token as the
+proof of possession: only the phone that was issued the token knows it. Deletes
+`pushTokens/{uid}/devices/{deviceId}` and `pushTokens/{uid}` only where the stored `token`
+equals the one sent; any other token leaves them untouched and counts nothing. Any signed in
+account may call it, and calling it again is harmless. The client calls it from
+`releaseStaleRegistration` when the registration it remembers belongs to a different
+account than the one signed in now.
+
 ### `requestAccountDeletion`
 
 ```ts
@@ -479,7 +534,8 @@ Returns `{ status, deleted, retained }`. `status` is `"completed"` or `"needs_re
 `deleted` counts what was removed: invitations, conversations, inbox entries, blocks made,
 blocks received, photos, photo screening records, check-ins (with mutes) and confirmed meetups.
 
-Deletes the caller's profile, private profile, push token, every profile photo in Storage
+Deletes the caller's profile, private profile, push tokens (the legacy document and every
+device document beneath it), every profile photo in Storage
 and its screening record, blocks in both directions,
 every invitation they are part of, every conversation they are part of **including all
 its messages**, both participants' inbox entries for those conversations, every check-in

@@ -8,6 +8,7 @@ import { profileDestination } from "../src/domain/language-exchange";
 import { errorMessage } from "../src/domain/errors";
 import { forgetAccount, rememberAccount } from "../hooks/use-my-account";
 import { finishGate, resetGate } from "../src/lib/notification-routing";
+import { syncPushRegistration } from "../src/lib/notification-prompt";
 import { Button, Loading } from "../components/ui";
 import { colors, type } from "../constants/theme";
 
@@ -34,6 +35,8 @@ export default function Index() {
         const result = await api.getMyAccount();
         if (currentRequest !== request || auth.currentUser?.uid !== user.uid) return;
         rememberAccount(result);
+        // Push registration follows the account, never the phone: see notification-prompt.ts.
+        void syncPushRegistration();
         const destination = profileDestination(result.profile);
         router.replace(destination);
         // A notification tapped while the app was launching opens once the person is in.

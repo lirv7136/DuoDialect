@@ -12,7 +12,9 @@ module.exports = function loadTypeScript(relative, adapters = {}) {
     fileName: filename,
   }).outputText;
   const exports = {};
-  vm.runInNewContext(source, { exports, require: name => {
+  // Timers are host globals, not language builtins, so a module that bounds a network
+  // call with a timeout needs them handed in.
+  vm.runInNewContext(source, { exports, setTimeout, clearTimeout, require: name => {
     if (Object.hasOwn(adapters, name)) return adapters[name];
     throw new Error(`Test has no adapter for ${name}`);
   } }, { filename });

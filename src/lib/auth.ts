@@ -22,6 +22,7 @@ import { auth } from "./firebase";
 import { resetGate } from "./notification-routing";
 import { onboardingDraft } from "./onboarding-draft";
 import { pendingName } from "./pending-name";
+import { releasePushRegistration } from "./push";
 
 export async function signUp(email: string, password: string) {
   return createUserWithEmailAndPassword(auth, email.trim(), password);
@@ -50,6 +51,9 @@ export async function logOut() {
   // An unfinished onboarding draft belongs to this account, so it leaves with it.
   await onboardingDraft.clear();
   pendingName.clear();
+  // This phone must stop receiving the account's notifications once it is signed out.
+  // Best effort with a timeout, so a dead connection never traps someone in the account.
+  await releasePushRegistration();
   return signOut(auth);
 }
 

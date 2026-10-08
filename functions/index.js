@@ -33,6 +33,8 @@ const { setProfilePhotos, screenUpload } = require("./lib/photos");
 const { answerCheckIn, sweepCheckIns } = require("./lib/checkins");
 const { sweepReminders } = require("./lib/reminders");
 const { notifyNewMatches } = require("./lib/matches");
+const { releasePushToken } = require("./lib/push-devices");
+const { sweepPushReceipts } = require("./lib/push-receipts");
 
 setGlobalOptions({ region: "australia-southeast1", maxInstances: 10 });
 
@@ -104,6 +106,13 @@ exports.reportUser = authenticated("reportUser", (database, uid, data) =>
 
 exports.answerCheckIn = authenticated("answerCheckIn", (database, uid, data, now) =>
   answerCheckIn(database, uid, data, now));
+
+/**
+ * Removes a push registration a previous account left on this phone. Any signed in
+ * caller may ask; the token is the proof of possession. See lib/push-devices.js.
+ */
+exports.releasePushToken = authenticated("releasePushToken", (database, uid, data) =>
+  releasePushToken(database, uid, data));
 
 /**
  * Account deletion. Allowed while suspended, and given a long timeout because it walks
@@ -259,5 +268,18 @@ exports.sweepReminders = onSchedule(
   async () => {
     const result = await sweepReminders(db, new Date());
     logger.info("Reminder sweep finished", result);
+  },
+);
+
+/**
+ * Push receipts. Every hour, reads the receipts for tickets older than 15 minutes and
+ * retires any token Expo reports as no longer registered. Idempotent; a no op under the
+ * stub transport. See lib/push-receipts.js.
+ */
+exports.sweepPushReceipts = onSchedule(
+  { schedule: "every 60 minutes", timeZone: "Australia/Sydney", timeoutSeconds: 300 },
+  async () => {
+    const result = await sweepPushReceipts(db, new Date());
+    logger.info("Push receipt sweep finished", result);
   },
 );

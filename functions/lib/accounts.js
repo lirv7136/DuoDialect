@@ -20,7 +20,7 @@ const { adjustMeetupsConfirmed } = require("./checkins");
  * partial failure resumes rather than corrupting anything.
  *
  * What is removed:
- *   profile, private profile, push token, account status
+ *   profile, private profile, push tokens (legacy document and every device), account status
  *   every profile photo in Storage, and every photo screening record
  *   blocks the person made, and blocks other people made against them
  *   every invitation they are part of, and its duplicate lock
@@ -83,7 +83,8 @@ async function requestAccountDeletion(db, uid, payload) {
   await Promise.all([
     r.profile(uid).delete(),
     r.privateProfile(uid).delete(),
-    r.pushToken(uid).delete(),
+    // The legacy token document and every per device document beneath it.
+    db.recursiveDelete(r.pushToken(uid)),
   ]);
 
   // Photos go with the profile. An upload still in flight is caught by the screening

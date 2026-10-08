@@ -8,6 +8,7 @@ import { logOut, reauthenticate, reauthenticateWithApple, signInProvider } from 
 import { candidateCache } from "../../src/lib/candidate-cache";
 import { clearPhotoUrls } from "../../src/lib/photos";
 import { clearBlockedNames } from "../../src/lib/blocked-names";
+import { releasePushRegistration } from "../../src/lib/push";
 import { errorMessage } from "../../src/domain/errors";
 import { forgetAccount } from "../../hooks/use-my-account";
 import { Button, Caption, Card, ErrorNotice, Field, Notice, Screen, Title, styles } from "../../components/ui";
@@ -61,6 +62,8 @@ export default function DeleteAccount() {
     try {
       // The Apple account was reauthenticated by the Confirm with Apple step just above.
       if (!apple) await reauthenticate(password);
+      // The backend removes the token documents too; this clears the phone's own record first.
+      await releasePushRegistration();
       const result = await api.requestAccountDeletion();
       if (result.status !== "completed") {
         setProblem("Not quite finished. Tap Delete again.");
