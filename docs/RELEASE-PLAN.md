@@ -82,7 +82,7 @@ deploy after 1.1.0 is approved, a device run, What's New, then build and submit.
 
 ## 1.1.2 (branch `feat-1.1.2`, local commits)
 
-Shipped on the branch, in commit order, with unit test counts rising from 74 to 130:
+Shipped on the branch, in commit order, with unit test counts rising from 74 to 142 and emulator tests from 127 to 148:
 
 - Onboarding draft survives a backgrounded app; one gentle nudge for a photo and free times.
 - Share a confirmed plan with a friend (safety message), and a public place picker.
@@ -98,6 +98,9 @@ Shipped on the branch, in commit order, with unit test counts rising from 74 to 
 - In app moderation screen (Profile → Moderation, moderators only): the report queue by
   status, each report's thread and photo paths, and claim, warn, suspend, remove photos,
   dismiss and reinstate behind a confirm that spells out the consequence.
+- Push tokens per device, released on logout and account deletion, with a receipt sweep
+  that retires dead tokens (`docs/BACKEND-HANDOFF.md`, "1.1.2 push token lifecycle").
+  Deploy rules and functions together before the client that writes the devices collection.
 - Cancel a confirmed plan from either side (`cancelInvitation` with an optional fixed
   reason: can't make it, reschedule, other). A quiet "Cancel plan" on the card asks for
   the reason, then confirms that the partner will be told (a weekly plan goes as a whole
@@ -114,13 +117,13 @@ Shipped on the branch, in commit order, with unit test counts rising from 74 to 
 Apple comes before Google on purpose: App Review guideline 4.8 requires an equivalent
 privacy preserving login (Sign in with Apple qualifies) as soon as a third party login such
 as Google is offered, so shipping Apple first keeps a later Google button review safe. The
-app code is on `agent-apple` (`src/lib/auth.ts`, `components/apple-sign-in-button.tsx`,
-`app/account/delete.tsx`, `app.json`). It is a native change, so it needs a new build.
+code is in `src/lib/auth.ts`, `components/apple-sign-in-button.tsx`,
+`app/account/delete.tsx` and `app.json`. It is a native change, so it needs a new build.
 
 Outside the repo, in order:
 
-1. [ ] Install the packages (the branch adds them to `package.json` only):
-   `npx expo install expo-apple-authentication expo-crypto`.
+1. [x] Packages are in `package.json` and `package-lock.json` (`expo-apple-authentication`,
+   `expo-crypto`, `expo-store-review`); run `npm install` in a fresh checkout.
 2. [ ] Firebase console, both `duodialect-staging` and `duodialect`: Authentication →
    Sign-in method → Add new provider → Apple → Enable. Sign in itself needs nothing else
    on native iOS. Token revocation on account deletion (Apple guideline 5.1.1, which the
