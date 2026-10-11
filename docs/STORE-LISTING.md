@@ -63,6 +63,8 @@ this is a draft for review, not legal advice.
 
 **What's New** (1.1.1): `You now hear when someone who fits your exchange joins, get a reminder the evening before each meetup, and can suggest the same time next week straight from a check-in. An empty Discover now shows who is almost a match.`
 
+**What's New** (1.1.2): `Sign in with Apple. Cancel a plan when life gets in the way, and your partner is told straight away. A reminder the evening before each meetup, and a heads up when someone who fits your exchange joins. Choose your city, see who is almost a match when Discover is quiet, and turn a good meetup into the same time next week in one tap. Plus share a plan with a friend, and small fixes.`
+
 ### English (U.K.) localisation
 
 Add English (U.K.) as a second localisation in App Store Connect. The name, subtitle,
