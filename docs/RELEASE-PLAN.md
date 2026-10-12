@@ -80,7 +80,7 @@ designed. Noticed: a confirmed plan cannot be cancelled (fixed in 1.1.2), and th
 meeting" celebration rendered twice on Plans after a second accept. Still to do: production
 deploy after 1.1.0 is approved, a device run, What's New, then build and submit.
 
-## 1.1.2 (branch `feat-1.1.2`, local commits)
+## 1.1.2 (branch `feat-1.1.2`, pushed; build 24 submitted for review 2026-10-11)
 
 Shipped on the branch, in commit order, with unit test counts rising from 74 to 142 and emulator tests from 127 to 148:
 
@@ -111,6 +111,14 @@ Shipped on the branch, in commit order, with unit test counts rising from 74 to 
 
 1.1.2 adds native packages (`expo-apple-authentication`, `expo-crypto`,
 `expo-store-review`), so it needs a new native build, not an OTA update.
+
+Status 2026-10-11: backend (city backfill, indexes, functions, rules) deployed to staging
+and production; Apple provider enabled on both Firebase projects; the Sign in with Apple
+capability had to be added to the App ID through the App Store Connect API (EAS reported it
+synced but had not), then the provisioning profile regenerated; build 24 uploaded, attached
+to version 1.1.2 and submitted for review through the API. Still to do after approval:
+merge into `feat-server-push`, a device run of Apple sign in and cancel plan, Android
+registration in the production Firebase project (see `docs/PLAY-READINESS.md`).
 
 ### Sign in with Apple
 
