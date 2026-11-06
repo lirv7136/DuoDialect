@@ -10,7 +10,7 @@ import { useNotificationsEnabled } from "../../src/lib/notification-prompt";
 import { emptyDiscoverTitle, inviteMessage, learningYourLanguageLine } from "../../src/domain/invite-copy";
 import { languageCode } from "../../src/domain/display";
 import { displayLanguage } from "../../src/domain/languages";
-import { cityName } from "../../src/domain/cities";
+import { cityLabel } from "../../src/domain/cities";
 import { hasSeen, markSeen } from "../../src/lib/seen-once";
 import { errorMessage } from "../../src/domain/errors";
 import { useMyAccount } from "../../hooks/use-my-account";
@@ -20,7 +20,7 @@ import { InfoButton } from "../../components/sheet";
 import { PartnerCard } from "../../components/partner-card";
 import { NearMissCard } from "../../components/near-miss-card";
 import { CARD_GAP, colors, fonts, radius, space } from "../../constants/theme";
-import { APP_NAME, LAUNCH_CITY, SITE_URL } from "../../constants/brand";
+import { APP_NAME, SITE_URL } from "../../constants/brand";
 
 const PARTNERS_INFO = "discover.partners.v1";
 const codes = (values: string[]) => values.map(languageCode).join(" · ") || "?";
@@ -114,9 +114,8 @@ export default function Discover() {
   }, []);
 
   const offers = profile?.offers ?? [], seeks = profile?.seeks ?? [];
-  // The person's own city, since that is the only place Discover looks. Falls back to the
-  // launch city while the profile is still loading.
-  const city = cityName(profile?.city) || LAUNCH_CITY;
+  // The person's own city, with its country, since that is the only place Discover looks.
+  const city = cityLabel(profile?.city) || "your city";
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(false, null, true)} tintColor={colors.primary} />}>

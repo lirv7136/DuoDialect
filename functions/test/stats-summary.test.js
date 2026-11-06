@@ -38,7 +38,8 @@ test("pairs count both sides, and a member with nobody reciprocal in their city 
     ["sydney", 5, 2, 4, 1],
     ["melbourne", 1, 0, 1, 1],
   ]);
-  assert.equal(summary.cities[0].name, "Sydney");
+  assert.equal(summary.cities[0].name, "Sydney, Australia", "named with the country");
+  assert.equal(summary.cities[1].name, "Melbourne, Australia");
 
   const sydneyJaEn = summary.pairs.find((p) => p.city === "sydney" && p.a === "english" && p.b === "japanese");
   assert.deepEqual(sydneyJaEn, { city: "sydney", a: "english", b: "japanese", aSide: 1, bSide: 2, meetups: 1 });

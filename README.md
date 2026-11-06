@@ -42,6 +42,14 @@ there is no push (the Notifications switch is hidden), no Sign in with Apple and
 prompt; confirmations use the browser's own dialog, and a wide window keeps the app in a
 phone width column.
 
+## City data
+
+The list of cities a profile can belong to, `functions/data/cities.json`, is built from
+[GeoNames](https://www.geonames.org) by `scripts/build-world-cities.cjs` and is licensed
+under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The picker credits
+GeoNames too. Rebuild with `node scripts/build-world-cities.cjs` and commit the output; a
+rebuild keeps every id the previous file had.
+
 ## Where to start
 
 `docs/RELEASE-PLAN.md` says what is shipped and what is next. `docs/BACKEND-CONTRACT.md`

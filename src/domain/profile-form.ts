@@ -33,7 +33,7 @@ export const LIMITS = {
 export type ProfileDraft = {
   displayName: string;
   bio: string;
-  /** Decides who the person can see at all; always one of the allow list. */
+  /** Decides who the person can see at all: an id from the world list, or "" until chosen. */
   city: CityId;
   area: string;
   speaks: UserLang[];
@@ -53,11 +53,17 @@ export type UpsertProfilePayload = {
   learns: UserLang[];
   availability: string[];
   interests: string[];
+  /**
+   * Tells the backend this app knows the world list. Without it, a "sydney" sent over a
+   * city the 1.1.2 app cannot show is taken as that app's fallback and ignored.
+   */
+  cityList: "world";
   birthDate?: string;
 };
 
-export function emptyProfileDraft(): ProfileDraft {
-  return { displayName: "", bio: "", city: DEFAULT_CITY, area: "", speaks: [], learns: [], availability: [], interests: [] };
+/** A new profile starts on `city`, the likely one for the device's time zone, or none: the person chooses. */
+export function emptyProfileDraft(city: CityId = ""): ProfileDraft {
+  return { displayName: "", bio: "", city: isCityId(city) ? city : "", area: "", speaks: [], learns: [], availability: [], interests: [] };
 }
 
 /** Accepts whatever the server stored and returns a well formed draft. */
@@ -172,6 +178,7 @@ export function buildUpsertPayload(
     learns: draft.learns.map(item => ({ lang: item.lang.trim(), level: item.level })),
     availability: [...draft.availability],
     interests: [...draft.interests],
+    cityList: "world",
   };
   if (options.firstSave && options.private) {
     payload.birthDate = options.private.birthDate.trim();

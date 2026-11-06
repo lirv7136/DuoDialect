@@ -5,7 +5,7 @@
  * lines and the "updated N minutes ago" label, so they are unit tested directly
  * (tests/stats.test.cjs).
  */
-import { cityName } from "./cities";
+import { cityLabel } from "./cities";
 import { displayLanguage } from "./languages";
 import { parseLocalDate } from "./schedule";
 
@@ -212,12 +212,12 @@ export function shortDay(day: string): string {
 
 /**
  * The display name for a city in the stats. Accepts an id or a name: the snapshot's own
- * city list first, then the app's list, then the value as given.
+ * city list first, then the app's list ("Sydney, Australia"), then the value as given.
  */
 export function statsCityName(value: string, cities: readonly Pick<StatsCity, "id" | "name">[] = []): string {
   const listed = cities.find(city => city.id === value);
   if (listed?.name) return listed.name;
-  return cityName(value) || value;
+  return cityLabel(value) || value;
 }
 
 /** "English ⇄ Japanese". */

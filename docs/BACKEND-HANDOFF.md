@@ -402,6 +402,32 @@ it needs a composite index with `city` in it. Deploy in this order, to staging f
 3. **Functions and rules.** `firebase deploy --only functions,firestore:rules --project <id>`.
    Rules are unchanged by 1.1.2 but deploy with the functions as usual.
 
+## World cities
+
+`city` now accepts any id in `functions/data/cities.json`: every city of 100,000 people or
+more and every national capital, from GeoNames (CC BY 4.0), 5,338 cities in 244 countries.
+`scripts/build-world-cities.cjs` (repository root) downloads GeoNames and rebuilds it
+deterministically; commit its output. The app imports the same file, so the backend and
+the client cannot disagree. Details are under "City" in `docs/BACKEND-CONTRACT.md`.
+
+- **Ids.** The eleven 1.1.2 ids are unchanged and map to their GeoNames entries; others are
+  `london-gb`, `springfield-us-il`. A rebuild reads the previous file and keeps every id it
+  had, for the same GeoNames place, even if the place no longer qualifies, so a stored id
+  never becomes invalid.
+- **Unchanged.** Discovery, near misses and match notices stay inside one city, with the
+  same queries and the same two `city` indexes. `DEFAULT_CITY` is still `sydney` for a
+  profile without a city. Reminders and check-ins already used each plan's stored
+  `meeting.timeZone`; the app now sends the city's zone there.
+- **The 1.1.2 app.** It shows any city it does not know as Sydney and sends `"sydney"` when
+  that person saves their profile. New clients send `cityList: "world"`; without it,
+  `"sydney"` over a stored non-1.1.2 city is ignored and the stored city kept
+  (`requireCity` in `lib/profiles.js`).
+- **Stats.** City names in `getStats` carry the country ("Sydney, Australia").
+- **Deploy.** No data migration and no new index: every stored id is still valid. The
+  1.1.2 `backfill-city.js` is unchanged and only matters if it has not been run yet.
+  Deploy functions before (or with) the web app, because the old functions reject every
+  city but the eleven.
+
 ## 1.1.2 push token lifecycle
 
 Fixes the privacy bug recorded under "Remaining work" in earlier handoffs: a phone that

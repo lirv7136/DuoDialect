@@ -25,32 +25,52 @@ const RECURRENCE = ["once", "weekly"];
 const CANCEL_REASONS = ["cant-make-it", "reschedule", "other"];
 
 /**
- * The cities Talkeven runs in. Discovery, near misses and match notices never cross a
- * city, so a Melbourne member is not shown Sydney people. Ids are stable and lower case;
- * the display names are what the app shows. The client mirrors this list in
- * src/domain/cities.ts, and both must change together.
+ * The cities a profile can belong to: every city of 100,000 people or more and every
+ * capital, worldwide, from data/cities.json. That file is built from GeoNames (CC BY 4.0)
+ * by scripts/build-world-cities.cjs at the repository root, and the app imports the same
+ * file for its picker, so there is one list.
+ *
+ * Discovery, near misses and match notices never cross a city, so a Melbourne member is
+ * not shown Sydney people. Ids are stable and lower case and are never removed from the
+ * file: the eleven cities from before the world list keep their bare ids (sydney,
+ * melbourne, ...) and every other city is `<name>-<country>`, such as london-gb.
  */
-const CITIES = [
-  { id: "sydney", name: "Sydney" },
-  { id: "melbourne", name: "Melbourne" },
-  { id: "brisbane", name: "Brisbane" },
-  { id: "perth", name: "Perth" },
-  { id: "adelaide", name: "Adelaide" },
-  { id: "canberra", name: "Canberra" },
-  { id: "hobart", name: "Hobart" },
-  { id: "darwin", name: "Darwin" },
-  { id: "gold-coast", name: "Gold Coast" },
-  { id: "auckland", name: "Auckland" },
-  { id: "wellington", name: "Wellington" },
-];
+const WORLD_CITIES = require("../data/cities.json");
+
+const CITIES = WORLD_CITIES.cities.map(([id, name, country, zone, population, , region]) => ({
+  id,
+  name,
+  country,
+  countryName: WORLD_CITIES.countries[country] || country,
+  region: region || "",
+  timeZone: WORLD_CITIES.zones[zone],
+  population,
+}));
+
+const CITIES_BY_ID = new Map(CITIES.map((city) => [city.id, city]));
 
 const CITY_IDS = CITIES.map((city) => city.id);
+
+/** The cities from before the world list, the only ones the 1.1.2 app knows. */
+const LEGACY_CITY_IDS = [
+  "sydney", "melbourne", "brisbane", "perth", "adelaide", "canberra", "hobart", "darwin", "gold-coast", "auckland", "wellington",
+];
 
 /**
  * Where every profile saved before 1.1.2 lives. The 1.0.1 and 1.1.0 apps never send a
  * city, and the backfill script stamps this onto every profile that lacks one.
  */
 const DEFAULT_CITY = "sydney";
+
+function isCityId(value) {
+  return typeof value === "string" && CITIES_BY_ID.has(value);
+}
+
+/** "Sydney, Australia", or "Springfield, Illinois, United States"; the id itself when unknown. */
+function cityLabel(id) {
+  const city = CITIES_BY_ID.get(id);
+  return city ? [city.name, city.region, city.countryName].filter(Boolean).join(", ") : String(id);
+}
 
 const REPORT_REASONS = [
   "harassment",
@@ -101,7 +121,10 @@ module.exports = {
   REPORT_REASONS,
   CITIES,
   CITY_IDS,
+  LEGACY_CITY_IDS,
   DEFAULT_CITY,
+  isCityId,
+  cityLabel,
   LIMITS,
   AGE_ASSURANCE,
   FLUENCY_ASSURANCE,

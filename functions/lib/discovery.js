@@ -1,7 +1,7 @@
 "use strict";
 
 const { requireObject, requireEnum, requireInteger, requireString } = require("./validation");
-const { INTENTS, LIMITS, CITY_IDS, DEFAULT_CITY } = require("./constants");
+const { INTENTS, LIMITS, DEFAULT_CITY, isCityId } = require("./constants");
 const {
   REASON, reject, isUsableProfile, reciprocalExchange, languageFailureReason, datingEligibility, intersect,
 } = require("./eligibility");
@@ -10,7 +10,7 @@ const { publicPhotos } = require("./photos");
 
 /** A profile from before cities counts as Sydney until the backfill stamps it. */
 function cityOf(profile) {
-  return profile && CITY_IDS.includes(profile.city) ? profile.city : DEFAULT_CITY;
+  return profile && isCityId(profile.city) ? profile.city : DEFAULT_CITY;
 }
 
 /** Only these fields ever leave the server for another member. */

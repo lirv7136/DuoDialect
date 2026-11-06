@@ -24,6 +24,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Button, Caption, ErrorNotice, Field, Loading, Notice, Screen, Title, styles } from "../../components/ui";
 import { StepIndicator } from "../../components/step-indicator";
 import { pendingName } from "../../src/lib/pending-name";
+import { deviceTimeZone } from "../../src/lib/time-zone";
+import { likelyCity } from "../../src/domain/cities";
 import { colors, space } from "../../constants/theme";
 
 /** Step two of onboarding: everything is saved here in one `upsertProfile` call. */
@@ -55,8 +57,10 @@ export default function ProfileOnboarding() {
         return;
       }
       // A first Apple sign in is the only time Apple shares the name, so it waits here
-      // and is taken only once this step is really going to show.
-      const base = profile ? draftFromProfile(profile) : { ...emptyProfileDraft(), displayName: pendingName.take() ?? "" };
+      // and is taken only once this step is really going to show. A new profile starts on
+      // the biggest city in the device's time zone; the picker offers the others.
+      const base = profile ? draftFromProfile(profile)
+        : { ...emptyProfileDraft(likelyCity(deviceTimeZone())?.id), displayName: pendingName.take() ?? "" };
       setDraft(languages ? { ...base, ...languages } : base);
       setReady(true);
     });

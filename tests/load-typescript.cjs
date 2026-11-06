@@ -16,6 +16,8 @@ module.exports = function loadTypeScript(relative, adapters = {}) {
   // call with a timeout needs them handed in.
   vm.runInNewContext(source, { exports, setTimeout, clearTimeout, require: name => {
     if (Object.hasOwn(adapters, name)) return adapters[name];
+    // A JSON import is data in the repository, not a platform service, so it is read as is.
+    if (name.endsWith('.json')) return require(path.resolve(path.dirname(filename), name));
     throw new Error(`Test has no adapter for ${name}`);
   } }, { filename });
   return exports;
