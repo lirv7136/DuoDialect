@@ -26,6 +26,9 @@ const crypto = require("crypto");
  * checkInMutes/{muteId}                       server only; stop check-ins for one plan, one person
  * confirmedMeetups/{meetupId}                 server only; both people said the meetup happened
  * matchNotices/{noticeId}                     server only; one "a match joined" notice per recipient and newcomer
+ * stats/latest, stats/appStoreSync            server only; operator stats, see lib/stats.js
+ * statsDaily/{YYYY-MM-DD}                     server only; one stats snapshot per Sydney day
+ * appStoreDaily/{YYYY-MM-DD}                  server only; App Store units per report day
  */
 const COLLECTIONS = {
   profiles: "profiles",
@@ -48,6 +51,9 @@ const COLLECTIONS = {
   checkInMutes: "checkInMutes",
   confirmedMeetups: "confirmedMeetups",
   matchNotices: "matchNotices",
+  stats: "stats",
+  statsDaily: "statsDaily",
+  appStoreDaily: "appStoreDaily",
 };
 
 function shortHash(...parts) {
@@ -143,6 +149,12 @@ function refs(db) {
     confirmedMeetups: () => db.collection(COLLECTIONS.confirmedMeetups),
     matchNotice: (id) => db.collection(COLLECTIONS.matchNotices).doc(id),
     matchNotices: () => db.collection(COLLECTIONS.matchNotices),
+    statsLatest: () => db.collection(COLLECTIONS.stats).doc("latest"),
+    appStoreSync: () => db.collection(COLLECTIONS.stats).doc("appStoreSync"),
+    statsDay: (day) => db.collection(COLLECTIONS.statsDaily).doc(day),
+    statsDays: () => db.collection(COLLECTIONS.statsDaily),
+    appStoreDay: (day) => db.collection(COLLECTIONS.appStoreDaily).doc(day),
+    appStoreDays: () => db.collection(COLLECTIONS.appStoreDaily),
   };
 }
 

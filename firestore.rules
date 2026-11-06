@@ -185,6 +185,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Operator stats and App Store units. Server only; moderators read them through the
+    // getStats callable, never directly. See functions/lib/stats.js.
+    match /stats/{docId} {
+      allow read, write: if false;
+    }
+    match /statsDaily/{day} {
+      allow read, write: if false;
+    }
+    match /appStoreDaily/{day} {
+      allow read, write: if false;
+    }
+
     // Collections the earlier Expo client wrote to directly. They are closed rather than
     // migrated, so stale client code fails loudly instead of reading half migrated state.
     // See docs/BACKEND-HANDOFF.md for the replacement for each one.
