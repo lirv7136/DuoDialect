@@ -11,8 +11,10 @@ DRAFT = False
 CONTACT = "hello@talkeven.com"  # forwards to the operator through Cloudflare Email Routing
 OPERATOR = "Lachlan Irving, an individual developer based in Australia"
 UPDATED = "26 September 2026"
-PRIVACY_UPDATED = "5 October 2026"
+PRIVACY_UPDATED = "6 November 2026"
 GUIDELINES_UPDATED = "5 October 2026"
+APP_STORE = "https://apps.apple.com/au/app/talkeven-language-exchange/id6816316060"
+WEB_APP = "https://app.talkeven.com/signup"  # a direct link to sign up, which the web app keeps
 
 ROOT = Path(__file__).parent
 OUT = ROOT / "dist"
@@ -69,8 +71,8 @@ and chat to agree the details.</p>
 <p><strong>Language partners only.</strong> Talkeven is for adults and is not a dating app.
 No ads, no tracking, and we never ask for your location.</p>
 </div>
-<p><a class="button" href="join/">Join the founding members</a></p>
-<p class="muted">Launching in Sydney on 12 October 2026, on iPhone first and Android soon after.</p>
+<p><a class="button" href="join/">Get Talkeven</a></p>
+<p class="muted">Live in Sydney on iPhone and in your browser. The Android app is on the way.</p>
 """
 
 PRIVACY = f"""
@@ -99,10 +101,10 @@ neighbourhood on your profile is whatever you type. We do not use advertising or
 analytics tools, we do not track you across other apps or websites, and we do not sell or
 share your data.</p>
 
-<h2>Founding members list</h2>
-<p>If you join the founding members list on this website, we keep your first name, email,
-the languages you speak and are learning, your suburb (optional) and your phone type, so we
-can invite you when there are partners for you. We don't share the list. Email
+<h2>Waitlist</h2>
+<p>If you join the waitlist on this website, we keep your first name, email, the languages
+you speak and are learning, your suburb (optional) and your phone type, so we can tell you
+when Talkeven is ready for you. We don't share the list. Email
 <a href="mailto:{CONTACT}">{CONTACT}</a> to be removed at any time.</p>
 
 <h2>Service providers</h2>
@@ -299,16 +301,22 @@ LANGUAGES = ["English", "Japanese", "Spanish", "Korean", "Mandarin", "Cantonese"
              "Greek", "Turkish", "Russian", "Filipino", "Nepali"]
 
 JOIN = f"""
-<h1>Join the founding members</h1>
-<p>Be one of the first people in Sydney on Talkeven. We'll invite you as soon as there are
-partners for your languages, and before the public launch on 12 October.</p>
+<h1>Join Talkeven</h1>
+<p>Talkeven is live in Sydney. Add the languages you speak and the ones you're learning, and
+we'll show you people who are a match both ways. Then suggest a coffee at a public place,
+once or weekly.</p>
+<p class="actions"><a class="button" href="{APP_STORE}">Get it on iPhone</a>
+<a class="button secondary" href="{WEB_APP}">Use it in your browser</a></p>
+<p class="muted">The browser version works on any phone or computer, Android included, and
+it's the same account as the app.</p>
 <div class="card">
-<ul>
-<li>Early access: iPhone now, Android testing soon</li>
-<li>An invite to the launch night on Saturday 17 October</li>
-<li>A real say in what we build next</li>
-</ul>
+<p><strong>Language partners only.</strong> Talkeven is for adults and is not a dating app.
+It's free, with no ads.</p>
 </div>
+
+<h2>Want the Android app?</h2>
+<p>It's on the way. Leave your details and we'll email you when it's out. Until then, the
+browser version works on Android.</p>
 <form class="join" method="post" action="/api/join" id="join">
 <p class="form-error" id="form-error" role="alert" hidden></p>
 <label for="first_name">First name</label>
@@ -322,33 +330,29 @@ partners for your languages, and before the public launch on 12 October.</p>
 <datalist id="languages">{''.join(f'<option value="{l}">' for l in LANGUAGES)}</datalist>
 <label for="suburb">Suburb <span class="muted">(optional)</span></label>
 <input id="suburb" name="suburb" maxlength="60" placeholder="e.g. Newtown">
-<fieldset>
-<legend>Your phone</legend>
-<label class="choice"><input type="radio" name="platform" value="ios" required> iPhone</label>
-<label class="choice"><input type="radio" name="platform" value="android"> Android</label>
-</fieldset>
+<input type="hidden" name="platform" value="android">
 <label class="choice"><input type="checkbox" name="adult" required> I'm 18 or over</label>
 <div class="hp" aria-hidden="true"><label for="website">Leave this empty</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
 <input type="hidden" name="source" id="source">
-<button type="submit">Join the founding members</button>
-<p class="muted small">Language partners only. Not dating. We'll only email you about Talkeven, and you can ask to be removed any time. See our <a href="../privacy/">privacy policy</a>.</p>
+<button type="submit">Tell me when it's out</button>
+<p class="muted small">We'll only email you about Talkeven, and you can ask to be removed any time. See our <a href="../privacy/">privacy policy</a>.</p>
 </form>
 <script>
 (function () {{
   var params = new URLSearchParams(location.search);
   var err = params.get("error"), box = document.getElementById("form-error");
   if (err) {{ box.textContent = err; box.hidden = false; }}
-  document.getElementById("source").value = params.get("from") || "";
+  document.getElementById("source").value = params.get("from") || "android-list";
   var form = document.getElementById("join");
   form.addEventListener("submit", function (e) {{
     e.preventDefault();
-    var button = form.querySelector("button"); button.disabled = true; button.textContent = "Joining…";
+    var button = form.querySelector("button"); button.disabled = true; button.textContent = "Sending…";
     fetch("/api/join", {{ method: "POST", headers: {{ accept: "application/json" }}, body: new FormData(form) }})
       .then(function (r) {{ return r.json(); }})
       .then(function (res) {{
         if (res.ok) {{ location.href = "thanks/"; return; }}
         box.textContent = res.error || "Something went wrong. Please try again."; box.hidden = false;
-        button.disabled = false; button.textContent = "Join the founding members";
+        button.disabled = false; button.textContent = "Tell me when it's out";
       }})
       .catch(function () {{ form.submit(); }});
   }});
@@ -358,8 +362,9 @@ partners for your languages, and before the public launch on 12 October.</p>
 
 THANKS = f"""
 <h1>You're on the list</h1>
-<p>Thanks for joining the founding members. We'll email you as soon as there are partners
-for your languages, and with details of the launch night on Saturday 17 October.</p>
+<p>Thanks. We'll email you when the Android app is out.</p>
+<p>You don't have to wait: <a href="{WEB_APP}">use Talkeven in your browser</a> now, on any
+phone or computer, and keep the same account when the app arrives.</p>
 <p>Know someone who speaks the language you're learning? Send them
 <a href="../">talkeven.com/join</a>. Every person on the other side is a partner for you.</p>
 <p class="muted">Questions? <a href="mailto:{CONTACT}">{CONTACT}</a></p>
@@ -377,8 +382,8 @@ if __name__ == "__main__":
     page("privacy", "Privacy policy · Talkeven", "What Talkeven collects and why.", PRIVACY)
     page("delete-account", "Delete your account · Talkeven", "How to delete your Talkeven account and data.", DELETE)
     page("support", "Support · Talkeven", "Get help with Talkeven.", SUPPORT)
-    page("join", "Join the founding members · Talkeven", "Be one of the first people in Sydney on Talkeven.", JOIN)
-    page("join/thanks", "You're on the list · Talkeven", "Thanks for joining the Talkeven founding members.", THANKS)
+    page("join", "Join Talkeven", "Get Talkeven on iPhone or in your browser, and find a language partner in Sydney.", JOIN)
+    page("join/thanks", "You're on the list · Talkeven", "Thanks for joining the Talkeven Android list.", THANKS)
     page("child-safety", "Child safety standards · Talkeven", "Talkeven's standards against child sexual abuse and exploitation.", CHILD_SAFETY)
     page("guidelines", "Community guidelines · Talkeven", "How to stay safe and respectful on Talkeven.", GUIDELINES)
     print(f"Built {len(list(OUT.rglob('index.html')))} pages in {OUT}")
