@@ -1,0 +1,55 @@
+# Runs the same checks as `npm run verify`, the native bundle check and the backend emulator
+# suite on every push and pull request. Nothing here touches staging or production: the
+# backend tests run against the demo-duodialect emulators, where photo screening and push are
+# stubbed automatically.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App (typecheck, lint, unit tests, bundle check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run verify
+      - run: npm run bundle:check
+
+  backend:
+    name: Backend (Firebase emulator tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Cloud Functions run on Node 24 (functions/package.json engines).
+          node-version: 24
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-15-${{ runner.os }}
+      - run: npm install -g firebase-tools@15
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
