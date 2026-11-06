@@ -72,7 +72,7 @@ and chat to agree the details.</p>
 No ads, no tracking, and we never ask for your location.</p>
 </div>
 <p><a class="button" href="join/">Get Talkeven</a></p>
-<p class="muted">Live in Sydney on iPhone and in your browser. The Android app is on the way.</p>
+<p class="muted">Free on iPhone and in your browser. The Android app is on the way.</p>
 """
 
 PRIVACY = f"""
@@ -103,7 +103,7 @@ share your data.</p>
 
 <h2>Waitlist</h2>
 <p>If you join the waitlist on this website, we keep your first name, email, the languages
-you speak and are learning, your suburb (optional) and your phone type, so we can tell you
+you speak and are learning, your city (optional) and your phone type, so we can tell you
 when Talkeven is ready for you. We don't share the list. Email
 <a href="mailto:{CONTACT}">{CONTACT}</a> to be removed at any time.</p>
 
@@ -231,7 +231,7 @@ enforcement requests made through proper legal channels.</p>
 GUIDELINES = f"""
 <h1>Community guidelines</h1>
 <p class="muted">Last updated {GUIDELINES_UPDATED}</p>
-<p>Talkeven helps adults in Sydney meet in person to swap languages. It works because
+<p>Talkeven helps adults meet in person to swap languages. It works because
 people show up as themselves and treat each other well. These guidelines apply in the app
 and at every meetup.</p>
 
@@ -302,8 +302,8 @@ LANGUAGES = ["English", "Japanese", "Spanish", "Korean", "Mandarin", "Cantonese"
 
 JOIN = f"""
 <h1>Join Talkeven</h1>
-<p>Talkeven is live in Sydney. Add the languages you speak and the ones you're learning, and
-we'll show you people who are a match both ways. Then suggest a coffee at a public place,
+<p>Add the languages you speak and the ones you're learning, and we'll show you people
+nearby who are a match both ways. Then suggest a coffee at a public place,
 once or weekly.</p>
 <p class="actions"><a class="button" href="{APP_STORE}">Get it on iPhone</a>
 <a class="button secondary" href="{WEB_APP}">Use it in your browser</a></p>
@@ -328,8 +328,8 @@ browser version works on Android.</p>
 <label for="learning">A language you're learning</label>
 <input id="learning" name="learning" list="languages" maxlength="40" placeholder="e.g. Japanese" required>
 <datalist id="languages">{''.join(f'<option value="{l}">' for l in LANGUAGES)}</datalist>
-<label for="suburb">Suburb <span class="muted">(optional)</span></label>
-<input id="suburb" name="suburb" maxlength="60" placeholder="e.g. Newtown">
+<label for="suburb">Your city <span class="muted">(optional)</span></label>
+<input id="suburb" name="suburb" maxlength="60" placeholder="e.g. Melbourne">
 <input type="hidden" name="platform" value="android">
 <label class="choice"><input type="checkbox" name="adult" required> I'm 18 or over</label>
 <div class="hp" aria-hidden="true"><label for="website">Leave this empty</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
@@ -382,7 +382,7 @@ if __name__ == "__main__":
     page("privacy", "Privacy policy · Talkeven", "What Talkeven collects and why.", PRIVACY)
     page("delete-account", "Delete your account · Talkeven", "How to delete your Talkeven account and data.", DELETE)
     page("support", "Support · Talkeven", "Get help with Talkeven.", SUPPORT)
-    page("join", "Join Talkeven", "Get Talkeven on iPhone or in your browser, and find a language partner in Sydney.", JOIN)
+    page("join", "Join Talkeven", "Get Talkeven on iPhone or in your browser, and find a language partner near you.", JOIN)
     page("join/thanks", "You're on the list · Talkeven", "Thanks for joining the Talkeven Android list.", THANKS)
     page("child-safety", "Child safety standards · Talkeven", "Talkeven's standards against child sexual abuse and exploitation.", CHILD_SAFETY)
     page("guidelines", "Community guidelines · Talkeven", "How to stay safe and respectful on Talkeven.", GUIDELINES)
