@@ -37,4 +37,19 @@ if ! grep -q "\"$PROJECT.firebaseapp.com\"" "$OUT"/_expo/static/js/web/*.js; the
   exit 1
 fi
 
-npx wrangler pages deploy "$OUT" --project-name talkeven-app --branch "$BRANCH" --commit-dirty=true
+# Expo exports the fonts and icons under assets/.../node_modules, and wrangler never uploads a
+# folder with that name, so the site would load without them. Rename those folders and point
+# the bundle at the new paths.
+find "$OUT/assets" -depth -type d -name node_modules -execdir mv node_modules npm \;
+# One segment per pass, until none is left, so a path with nested node_modules is fully rewritten.
+sed -i -E -e ':a' -e 's#("/assets[^"]*)/node_modules/#\1/npm/#' -e 'ta' "$OUT"/_expo/static/js/web/*.js
+# -print -quit: with pipefail, find killed by grep -q's early exit would make this check pass.
+if find "$OUT" -path '*node_modules*' -print -quit | grep -q . || grep -q '"/assets[^"]*/node_modules/' "$OUT"/_expo/static/js/web/*.js; then
+  echo "Some files are still under node_modules and would not upload; nothing was deployed." >&2
+  exit 1
+fi
+
+# Deploy from inside the export, so wrangler doesn't read the Firebase functions folder as
+# Pages Functions.
+cd "$OUT"
+npx wrangler pages deploy . --project-name talkeven-app --branch "$BRANCH" --commit-dirty=true
