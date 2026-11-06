@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, Platform, Text, View } from "react-native";
 import { router } from "expo-router";
 import { logOut } from "../../src/lib/auth";
 import { isModerator } from "../../src/lib/moderation";
@@ -88,15 +88,18 @@ export default function Profile() {
       ) : null}
 
       <View style={{ backgroundColor: colors.surface, borderRadius: radius.card, borderWidth: 1, borderColor: colors.line, overflow: "hidden", ...elevation.card }}>
-        <ToggleRow
-          icon="notifications-outline"
-          label="Notifications"
-          value={notifications.enabled || registeringPush}
-          disabled={notifications.enabled || registeringPush}
-          hint={notifications.enabled ? "On. Turn off in your phone’s Settings." : "Turns on message notifications"}
-          onChange={next => { if (next) void onEnableNotifications(); }}
-        />
-        <Divider />
+        {/* Push needs the installed app, so the browser version leaves the switch out. */}
+        {Platform.OS !== "web" ? <>
+          <ToggleRow
+            icon="notifications-outline"
+            label="Notifications"
+            value={notifications.enabled || registeringPush}
+            disabled={notifications.enabled || registeringPush}
+            hint={notifications.enabled ? "On. Turn off in your phone’s Settings." : "Turns on message notifications"}
+            onChange={next => { if (next) void onEnableNotifications(); }}
+          />
+          <Divider />
+        </> : null}
         <ListRow icon="shield-checkmark-outline" label="Meeting safely" hint="Tips for meeting a language partner" onPress={() => router.push("/account/safety")} />
         <Divider />
         <ListRow icon="ban-outline" label="Blocked" hint="People you’ve blocked" onPress={() => router.push("/account/blocked")} />

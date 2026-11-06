@@ -6,6 +6,7 @@ reciprocal matching only, a suggested meetup at a public place, chat once the pl
 accepted, and a private check-in the morning after.
 
 - App Store (Australia): https://apps.apple.com/au/app/talkeven-language-exchange/id6816316060
+- In a browser: https://app.talkeven.com (the same app, built for the web)
 - Site, privacy policy and community guidelines: https://talkeven.com
 - Support: hello@talkeven.com
 
@@ -33,6 +34,13 @@ cd functions && npm install && npm test   # emulator tests against demo-duodiale
 
 Firebase config comes from `.env` (gitignored). Production is the `duodialect` project and
 staging is `duodialect-staging`; deploy indexes before functions and rules.
+
+The browser version is the same app exported as a single page and served by Cloudflare
+Pages (project `talkeven-app`). `scripts/deploy-web.sh preview` deploys a staging build to
+a preview URL; `scripts/deploy-web.sh production` deploys to app.talkeven.com. On the web
+there is no push (the Notifications switch is hidden), no Sign in with Apple and no rating
+prompt; confirmations use the browser's own dialog, and a wide window keeps the app in a
+phone width column.
 
 ## Where to start
 

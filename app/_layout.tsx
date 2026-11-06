@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Platform, StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
@@ -48,25 +49,45 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(onboarding)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="chat/[chatId]" options={detail("Chat")} />
-        <Stack.Screen name="person/[uid]" options={detail("")} />
-        <Stack.Screen name="plan/new" options={detail("New invite")} />
-        <Stack.Screen name="report/[uid]" options={detail("Report")} />
-        <Stack.Screen name="check-in/[checkInId]" options={detail("Check in")} />
-        <Stack.Screen name="account/edit" options={detail("Edit profile")} />
-        <Stack.Screen name="account/blocked" options={detail("Blocked")} />
-        <Stack.Screen name="account/moderation/index" options={detail("Moderation")} />
-        <Stack.Screen name="account/moderation/[reportId]" options={detail("Report")} />
-        <Stack.Screen name="account/delete" options={detail("Delete account")} />
-        <Stack.Screen name="account/safety" options={detail("Meeting safely")} />
-      </Stack>
-    </>
+    <View style={styles.page}>
+      <View style={styles.column}>
+        <StatusBar style="dark" />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(onboarding)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="chat/[chatId]" options={detail("Chat")} />
+          <Stack.Screen name="person/[uid]" options={detail("")} />
+          <Stack.Screen name="plan/new" options={detail("New invite")} />
+          <Stack.Screen name="report/[uid]" options={detail("Report")} />
+          <Stack.Screen name="check-in/[checkInId]" options={detail("Check in")} />
+          <Stack.Screen name="account/edit" options={detail("Edit profile")} />
+          <Stack.Screen name="account/blocked" options={detail("Blocked")} />
+          <Stack.Screen name="account/moderation/index" options={detail("Moderation")} />
+          <Stack.Screen name="account/moderation/[reportId]" options={detail("Report")} />
+          <Stack.Screen name="account/delete" options={detail("Delete account")} />
+          <Stack.Screen name="account/safety" options={detail("Meeting safely")} />
+        </Stack>
+      </View>
+    </View>
   );
 }
+
+// Every screen is designed for a phone, so a wide browser window keeps the app in a
+// phone width column on the deep water ground. On a phone both views fill the screen.
+const WEB_COLUMN_WIDTH = 480;
+
+const styles = StyleSheet.create({
+  page: {
+    flex: 1,
+    backgroundColor: Platform.OS === "web" ? colors.primary : colors.background,
+  },
+  column: {
+    flex: 1,
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? WEB_COLUMN_WIDTH : undefined,
+    alignSelf: "center",
+    backgroundColor: colors.background,
+  },
+});

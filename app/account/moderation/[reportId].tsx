@@ -5,7 +5,7 @@
  * through a confirm sheet that spells out the consequence from the contract.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Platform, Text, View } from "react-native";
+import { Platform, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { cachedReport, moderation, type ReportContext, type ReportMessage } from "../../../src/lib/moderation";
 import { errorMessage } from "../../../src/domain/errors";
@@ -14,6 +14,7 @@ import {
 } from "../../../src/domain/moderation";
 import { colors, radius, space, type } from "../../../constants/theme";
 import { Body, Button, Caption, Card, ErrorNotice, Field, Heading, InfoChip, Loading, Notice, Screen } from "../../../components/ui";
+import { confirmAction } from "../../../components/safety-menu";
 
 export default function ReportDetail() {
   const { reportId } = useLocalSearchParams<{ reportId: string }>();
@@ -39,10 +40,13 @@ export default function ReportDetail() {
 
   function confirm(action: ReportAction) {
     const label = actionLabel(action);
-    Alert.alert(`${label}?`, actionConsequence(action), [
-      { text: "Cancel", style: "cancel" },
-      { text: label, style: isDestructive(action) ? "destructive" : "default", onPress: () => void act(action) },
-    ]);
+    confirmAction({
+      title: `${label}?`,
+      body: actionConsequence(action),
+      confirm: label,
+      destructive: isDestructive(action),
+      onConfirm: () => void act(action),
+    });
   }
 
   async function act(action: ReportAction) {

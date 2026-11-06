@@ -34,8 +34,13 @@
       "googleServicesFile": "./google-services.json"
     },
     "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "output": "single",
+      "favicon": "./assets/images/favicon.png",
+      "name": "Talkeven",
+      "shortName": "Talkeven",
+      "description": "Swap languages, meet in person.",
+      "themeColor": "#16a39f",
+      "backgroundColor": "#f3f5f0"
     },
     "plugins": [
       "expo-router",
