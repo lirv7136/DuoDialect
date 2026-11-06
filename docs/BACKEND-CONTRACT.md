@@ -649,8 +649,10 @@ Returns `{ latest, history, appStore }`. Counts only: no names, emails or messag
   redownloads and updates. `lastSyncAt` is null until `syncAppStoreDownloads` has run.
 
 `snapshotStats` saves a snapshot every day at 05:00 Sydney time. `syncAppStoreDownloads`
-runs at 10:00 and needs the `APPSTORE_CONNECT` secret (`scripts/set-appstore-secret.sh`);
-until that secret exists, deploy functions by name, or the deploy stops to ask for it.
+runs at 10:00 and reads the `APPSTORE_CONNECT` secret (`scripts/set-appstore-secret.sh`).
+The Firebase CLI refuses to deploy any function while a secret the codebase references is
+missing, so every project needs it: `scripts/set-appstore-secret.sh placeholder <project>`
+stores `{}`, which the sync reports as "not connected yet" (lastError, with lastSyncAt null).
 
 ### Moderator identity
 

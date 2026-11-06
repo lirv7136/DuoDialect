@@ -14,7 +14,8 @@ const { localDay } = require("./stats");
  * Daily units from App Store Connect Sales and Trends (the SUMMARY sales report), so the
  * stats screen shows downloads beside sign ups. Needs the secret APPSTORE_CONNECT: a JSON
  * object { keyId, issuerId, privateKey, vendorNumber } for an App Store Connect API key
- * with the Sales, Finance or Admin role. scripts/set-appstore-secret.sh builds it.
+ * with the Sales, Finance or Admin role. scripts/set-appstore-secret.sh builds it, and stores
+ * a placeholder in projects that are not connected (see runAppStoreSync).
  *
  *   appStoreDaily/{YYYY-MM-DD}   server only; units for one report day (Pacific time)
  *   stats/appStoreSync           server only; when the sync last ran, and its last error
@@ -173,17 +174,25 @@ async function syncAppStoreDownloads(db, config, { now = new Date(), fetchImpl =
   return { checked: wanted.length, written, lastError };
 }
 
+/** The value scripts/set-appstore-secret.sh stores until a vendor number is given. */
+const PLACEHOLDER = "{}";
+const NOT_CONNECTED = "Not connected yet. Run scripts/set-appstore-secret.sh <vendor-number>.";
+
 /**
- * The scheduled entry point: reads the secret, then syncs. A missing or malformed secret is
- * recorded as the last error, so the stats screen says what is wrong instead of nothing.
+ * The scheduled entry point: reads the secret, then syncs. Every project carries the secret,
+ * because the Firebase CLI will not deploy any function while one it references is missing,
+ * so until App Store Connect is connected it holds the placeholder. A placeholder or a
+ * malformed secret is recorded as the last error without a run time, so the stats screen
+ * says "not connected" and why, instead of nothing.
  */
 async function runAppStoreSync(db, rawConfig, options = {}) {
   let config;
   try {
+    if (String(rawConfig || "").trim() === PLACEHOLDER) throw new Error(NOT_CONNECTED);
     config = parseAppStoreConfig(rawConfig);
   } catch (error) {
     const lastError = String(error.message).slice(0, 300);
-    await refs(db).appStoreSync().set({ lastRunAt: FieldValue.serverTimestamp(), lastError }, { merge: true });
+    await refs(db).appStoreSync().set({ lastError, lastAttemptAt: FieldValue.serverTimestamp() }, { merge: true });
     return { checked: 0, written: 0, lastError };
   }
   return syncAppStoreDownloads(db, config, options);

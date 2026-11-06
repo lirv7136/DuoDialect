@@ -3,6 +3,11 @@
 # Firebase secret APPSTORE_CONNECT, then deploys that function.
 #
 #   scripts/set-appstore-secret.sh <vendor-number> [project]    # project defaults to duodialect
+#   scripts/set-appstore-secret.sh placeholder [project]        # not connected yet
+#
+# Every project needs the secret before any function can deploy (the Firebase CLI checks the
+# secrets of the whole codebase), so a project that is not connected holds the placeholder
+# "{}", which the function reports as "not connected yet" on the stats screen.
 #
 # The vendor number is at the top left of App Store Connect, Payments and Financial Reports.
 # The key comes from ~/.config/talkeven/asc.env (the release key), unless ASC_KEY_ID,
@@ -17,8 +22,13 @@ export PATH="$HOME/.nvm/versions/node/v20.19.6/bin:$PATH"
 
 VENDOR="${1:-}"
 PROJECT="${2:-duodialect}"
+
+if [ "$VENDOR" = "placeholder" ]; then
+  printf '{}' | firebase functions:secrets:set APPSTORE_CONNECT --project "$PROJECT" --data-file - --force
+  exit 0
+fi
 if ! [[ "$VENDOR" =~ ^[0-9]+$ ]]; then
-  echo "Usage: scripts/set-appstore-secret.sh <vendor-number> [project]" >&2
+  echo "Usage: scripts/set-appstore-secret.sh <vendor-number>|placeholder [project]" >&2
   exit 2
 fi
 

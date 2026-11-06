@@ -4,7 +4,7 @@
  * Operator stats, end to end: only a moderator gets them, the first call builds a snapshot
  * from the real community, a refresh is honoured once the cooldown has passed, the stats
  * collections stay closed to every client, and App Store units land where getStats reads
- * them, with a broken secret reported rather than swallowed.
+ * them, with a broken secret or the placeholder reported rather than swallowed.
  */
 
 process.env.DUODIALECT_PUSH_TRANSPORT = "stub";
@@ -145,8 +145,12 @@ test("App Store units land where getStats reads them, and a broken secret is rep
   assert.deepEqual(appStore.days[0], { day: "2026-11-05", downloads: 2, redownloads: 0, updates: 5 });
   assert.deepEqual(appStore.days[1], { day: "2026-11-04", downloads: 0, redownloads: 0, updates: 0 });
 
-  const broken = await runAppStoreSync(admin(), "{}");
-  assert.match(broken.lastError, /missing keyId/);
+  const broken = await runAppStoreSync(admin(), JSON.stringify({ keyId: "only this" }));
+  assert.match(broken.lastError, /missing issuerId/);
   const after = await moderator.call("getStats", {});
-  assert.match(after.appStore.lastError, /missing keyId/);
+  assert.match(after.appStore.lastError, /missing issuerId/);
+  assert.equal(after.appStore.lastSyncAt, appStore.lastSyncAt, "a failed read of the secret is not a run");
+
+  const placeholder = await runAppStoreSync(admin(), "{}");
+  assert.match(placeholder.lastError, /^Not connected yet/);
 });
