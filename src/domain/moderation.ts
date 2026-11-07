@@ -16,8 +16,12 @@ export function whenLabel(iso: string | null, now: Date = new Date()): string {
 }
 
 export type ReportStatus = "received" | "reviewing" | "actioned" | "dismissed";
-export type ReportAction = "claim" | "dismiss" | "warn" | "suspend" | "reinstate" | "remove-photos";
-export type ReportReason = "harassment" | "spam" | "inappropriate_content" | "impersonation" | "safety_concern" | "other";
+export type ReportAction =
+  | "claim" | "dismiss" | "warn" | "suspend" | "reinstate" | "remove-photos" | "approve-photo" | "reject-photo";
+export type ReportReason =
+  | "harassment" | "spam" | "inappropriate_content" | "impersonation" | "safety_concern" | "other" | "duplicate_photo";
+/** "member" for a report a person filed; "photo-screening" for a photo held because it matched another account's. */
+export type ReportSource = "member" | "photo-screening";
 
 export const REPORT_STATUSES: readonly ReportStatus[] = ["received", "reviewing", "actioned", "dismissed"];
 
@@ -44,6 +48,7 @@ export function describeReason(reason: string): string {
     case "impersonation": return "Impersonation";
     case "safety_concern": return "Safety concern";
     case "other": return "Other";
+    case "duplicate_photo": return "Duplicate photo";
     default: return reason;
   }
 }
@@ -51,9 +56,15 @@ export function describeReason(reason: string): string {
 /**
  * Which actions make sense from each status. A new report is claimed or dismissed; a
  * claimed one gets a decision; an actioned one can only be undone; a dismissed one is
- * closed. The server accepts any action in any state, so this is the screen's guard rail.
+ * closed. A photo held by screening is decided straight away: approve it, reject it, or
+ * suspend the account. The server accepts any action in any state (photo actions only on
+ * a held photo), so this is the screen's guard rail.
  */
-export function nextActions(status: string): ReportAction[] {
+export function nextActions(status: string, source: string = "member"): ReportAction[] {
+  if (source === "photo-screening") {
+    if (status === "received" || status === "reviewing") return ["approve-photo", "reject-photo", "suspend", "dismiss"];
+    return status === "actioned" ? ["reinstate"] : [];
+  }
   switch (status) {
     case "received": return ["claim", "dismiss"];
     case "reviewing": return ["warn", "suspend", "remove-photos", "dismiss"];
@@ -63,6 +74,7 @@ export function nextActions(status: string): ReportAction[] {
 }
 
 export type ReportSummary = {
+  source?: string;
   reporterName: string | null;
   reporterDeleted?: boolean;
   reportedName: string | null;
@@ -76,11 +88,16 @@ export function partyName(name: string | null | undefined, deleted: boolean | un
   return deleted ? "Deleted account" : "No profile";
 }
 
-/** One line for the queue: "Harassment: Aiko reported Ben". */
+/** Who filed it: a member, or the automatic photo check. */
+export function reporterLabel(report: ReportSummary): string {
+  return report.source === "photo-screening" ? "Automatic check" : partyName(report.reporterName, report.reporterDeleted);
+}
+
+/** One line for the queue: "Harassment: Aiko reported Ben", or "Duplicate photo: Automatic check flagged Ben". */
 export function summariseReport(report: ReportSummary): string {
-  const reporter = partyName(report.reporterName, report.reporterDeleted);
   const reported = partyName(report.reportedName, report.reportedUserDeleted);
-  return `${describeReason(report.reason)}: ${reporter} reported ${reported}`;
+  const verb = report.source === "photo-screening" ? "flagged" : "reported";
+  return `${describeReason(report.reason)}: ${reporterLabel(report)} ${verb} ${reported}`;
 }
 
 export function actionLabel(action: ReportAction): string {
@@ -91,6 +108,8 @@ export function actionLabel(action: ReportAction): string {
     case "suspend": return "Suspend";
     case "reinstate": return "Reinstate";
     case "remove-photos": return "Remove photos";
+    case "approve-photo": return "Approve photo";
+    case "reject-photo": return "Reject photo";
   }
 }
 
@@ -109,10 +128,38 @@ export function actionConsequence(action: ReportAction): string {
       return "Lifts the suspension: back into discovery and every callable accepted again.";
     case "remove-photos":
       return "Deletes every photo in the member's folder and their screening records, and clears their profile photos. They can upload again; repeat problems are for suspend.";
+    case "approve-photo":
+      return "Makes the held photo visible and usable, and adds it to the member's profile if there is room. Nobody is told.";
+    case "reject-photo":
+      return "Deletes the held photo and its screening record. The member can upload a different one. Nobody is told.";
   }
 }
 
-/** Suspend and remove photos change someone's account, so they get the danger style. */
+/** Suspend and deleting photos change someone's account, so they get the danger style. */
 export function isDestructive(action: ReportAction): boolean {
-  return action === "suspend" || action === "remove-photos";
+  return action === "suspend" || action === "remove-photos" || action === "reject-photo";
+}
+
+/** What a moderator may set by hand (setVerification). */
+export type ManualVerification = "verified" | "review" | "failed";
+export const MANUAL_VERIFICATIONS: readonly ManualVerification[] = ["verified", "review", "failed"];
+
+export function verificationActionLabel(status: ManualVerification): string {
+  switch (status) {
+    case "verified": return "Mark verified";
+    case "review": return "Needs review";
+    case "failed": return "Mark not verified";
+  }
+}
+
+/** What setting a verification by hand does, read before the moderator confirms. */
+export function verificationConsequence(status: ManualVerification): string {
+  switch (status) {
+    case "verified":
+      return "Shows the Verified badge on their profile and lets them make plans when verification is required. Only do this once you are sure they are who their photos show.";
+    case "review":
+      return "Takes the badge away while someone looks again. Recorded in the audit trail.";
+    case "failed":
+      return "Takes the badge away. They can be verified again later. Recorded in the audit trail.";
+  }
 }

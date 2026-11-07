@@ -16,6 +16,7 @@ import { errorMessage } from "../../src/domain/errors";
 import { useMyAccount } from "../../hooks/use-my-account";
 import { Button, Caption, Display, ErrorNotice, Heading, Loading, Screen, styles } from "../../components/ui";
 import { EmptyState } from "../../components/empty-state";
+import { EmailCheckNotice, TrustNotices } from "../../components/trust-notices";
 import { InfoButton } from "../../components/sheet";
 import { PartnerCard } from "../../components/partner-card";
 import { NearMissCard } from "../../components/near-miss-card";
@@ -26,7 +27,8 @@ const PARTNERS_INFO = "discover.partners.v1";
 const codes = (values: string[]) => values.map(languageCode).join(" · ") || "?";
 
 export default function Discover() {
-  const { profile } = useMyAccount();
+  const { profile, account, reload: reloadAccount } = useMyAccount();
+  const verifiedOnly = account?.discovery?.verifiedOnly === true;
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [nearMisses, setNearMisses] = useState<NearMiss[]>([]);
@@ -141,12 +143,16 @@ export default function Discover() {
         ) : null}
       </View>
 
+      <EmailCheckNotice trust={account?.trust} onConfirmed={() => { void reloadAccount(); void load(false, null, true); }} />
+      <TrustNotices trust={account?.trust} />
+
       <View style={[styles.row, { gap: 0, marginBottom: -space.xs }]}>
         <Heading>Partners</Heading>
         <InfoButton label="About partners" title="Partners" open={aboutOpen} onOpenChange={setAboutOpen}
           body="They speak what you’re learning, and are learning what you speak." />
       </View>
 
+      {verifiedOnly ? <Caption icon="shield-checkmark">Showing verified members only. Change this in Profile.</Caption> : null}
       {loading ? <Loading label="Finding language partners" /> : null}
       <ErrorNotice message={error} onRetry={() => void load(false, null)} />
 

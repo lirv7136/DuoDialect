@@ -13,7 +13,8 @@ import { createDraftKeys } from "../../src/domain/idempotency";
 import { groupMessages, type MessageRow } from "../../src/domain/display";
 import { haptic } from "../../src/lib/feel";
 import { errorMessage } from "../../src/domain/errors";
-import { Body, Button, ErrorNotice, Loading, styles } from "../../components/ui";
+import { CONTACT_WARNING } from "../../src/domain/trust";
+import { Body, Button, ErrorNotice, Loading, Notice, styles } from "../../components/ui";
 import { EmptyState } from "../../components/empty-state";
 import { Avatar } from "../../components/avatar";
 import { MonogramPair } from "../../components/exchange-strip";
@@ -42,6 +43,8 @@ export default function ChatScreen() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Contact details went out before the two have met: sent, with a word of caution.
+  const [warning, setWarning] = useState<string | null>(null);
   const [gone, setGone] = useState(false);
   const inFlight = useRef(false);
   const lastMarked = useRef<string | null>(null);
@@ -96,10 +99,12 @@ export default function ChatScreen() {
     inFlight.current = true;
     setSending(true);
     setError(null);
+    setWarning(null);
     setText("");
     try {
-      await api.sendMessage(chatId, clean, clientMessageId);
+      const sent = await api.sendMessage(chatId, clean, clientMessageId);
       keys.settle();
+      if (sent.contactWarning) setWarning(CONTACT_WARNING);
     } catch (e) {
       // Restoring the same text keeps the same clientMessageId, so a retry cannot duplicate.
       setText(current => current || clean);
@@ -213,6 +218,7 @@ export default function ChatScreen() {
 
         <View style={{ paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: space.sm, gap: space.sm, borderTopWidth: 1, borderColor: colors.line }}>
           <ErrorNotice message={error} />
+          <Notice message={warning} icon="alert-circle-outline" tone="info" />
           <View style={{ flexDirection: "row", gap: space.sm, alignItems: "flex-end" }}>
             <TextInput
               value={text}

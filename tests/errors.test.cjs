@@ -27,7 +27,9 @@ test('every contract reason used by v1 flows has specific copy', () => {
     'language/offered-and-sought', 'invitation/duplicate-active', 'invitation/not-pending', 'invitation/not-recipient',
     'invitation/not-sender', 'invitation/not-participant', 'invitation/not-found', 'conversation/not-found', 'conversation/not-member',
     'deletion/not-confirmed',
-    'photo/not-found', 'photo/not-screened'];
+    'photo/not-found', 'photo/not-screened', 'photo/in-review', 'photo/main-needs-face', 'profile/photo-required',
+    'profile/contact-details', 'invitation/contact-details', 'verification/required-to-meet', 'trust/email-unconfirmed',
+    'rate-limit/invitations', 'rate-limit/messages', 'rate-limit/reports'];
   const generic = describeFailure({ code: 'failed-precondition', reason: null, message: '' });
   for (const reason of reasons) {
     const text = describeFailure({ code: 'failed-precondition', reason, message: '' });
@@ -71,4 +73,21 @@ test('Firebase Auth codes map to friendly sign in and sign up copy', () => {
   const unknown = authErrorMessage(authError('auth/something-new'));
   assert.doesNotMatch(unknown, /Firebase/);
   assert.equal(unknown, 'Something went wrong. Try again.');
+});
+
+test('a refused field or main photo shows the server’s own words, which name what to fix', () => {
+  const bio = callableError('invalid-argument', 'profile/contact-details', 'Take links, email addresses and phone numbers out of your bio.');
+  assert.equal(errorMessage(bio), 'Take links, email addresses and phone numbers out of your bio.');
+  assert.match(errorMessage(callableError('invalid-argument', 'profile/contact-details', '')), /out of your profile/);
+  assert.match(errorMessage(callableError('invalid-argument', 'photo/main-needs-face', 'That one has more than one face.')), /more than one face/);
+  // Everything else still branches on the reason, not the text.
+  assert.match(errorMessage(callableError('invalid-argument', 'invitation/contact-details', 'anything')), /once you’ve agreed to meet/);
+});
+
+test('a daily limit is not offered as worth retrying', () => {
+  for (const reason of ['rate-limit/invitations', 'rate-limit/messages', 'rate-limit/reports']) {
+    assert.equal(isRetryable({ code: 'resource-exhausted', reason, message: '' }), false, reason);
+    assert.match(describeFailure({ code: 'resource-exhausted', reason, message: '' }), /today/);
+  }
+  assert.equal(isRetryable({ code: 'resource-exhausted', reason: null, message: '' }), true);
 });

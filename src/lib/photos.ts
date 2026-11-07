@@ -22,8 +22,9 @@ import {
   SCREENING_TIMEOUT_MS,
   photoPath,
   squareCrop,
+  verdictFrom,
   type PhotoProblem,
-  type ScreeningStatus,
+  type ScreeningVerdict,
 } from "../domain/photos";
 
 export class PhotoError extends Error {
@@ -96,14 +97,15 @@ export async function uploadPhoto(uid: string, photoId: string, uri: string, onP
 
 /**
  * Waits for the server's verdict in photoScreening/{uid}_{photoId}, which only the owner
- * can read. Resolves "timeout" if nothing arrives in time; the upload then stays unreadable
- * and unused, and the server cleans it up later.
+ * can read: its status, and whether it may be the main photo. Resolves "timeout" if
+ * nothing arrives in time; the upload then stays unreadable and unused, and the server
+ * cleans it up later.
  */
-export function waitForScreening(uid: string, photoId: string, timeoutMs: number = SCREENING_TIMEOUT_MS): Promise<ScreeningStatus | "timeout"> {
+export function waitForScreening(uid: string, photoId: string, timeoutMs: number = SCREENING_TIMEOUT_MS): Promise<ScreeningVerdict | "timeout"> {
   return new Promise(resolve => {
     let settled = false;
     let unsubscribe: Unsubscribe | null = null;
-    const finish = (value: ScreeningStatus | "timeout") => {
+    const finish = (value: ScreeningVerdict | "timeout") => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -114,29 +116,32 @@ export function waitForScreening(uid: string, photoId: string, timeoutMs: number
     unsubscribe = onSnapshot(
       doc(db, "photoScreening", `${uid}_${photoId}`),
       snap => {
-        const status = snap.exists() ? snap.get("status") : null;
-        if (status === "approved" || status === "rejected" || status === "failed") finish(status);
+        const verdict = snap.exists() ? verdictFrom(snap.data()) : null;
+        if (verdict) finish(verdict);
       },
-      () => finish("failed"),
+      () => finish({ status: "failed", faceOk: null }),
     );
     if (settled) unsubscribe();
   });
 }
 
 /**
- * Upload, then wait for screening. Resolves once the photo is approved; throws a
- * PhotoError whose `problem` says what to tell the person otherwise.
+ * Upload, then wait for screening. Resolves once the photo is approved, saying whether it
+ * may be the main photo; throws a PhotoError whose `problem` says what to tell the person
+ * otherwise (including "review", when our team will look at it first).
  */
 export async function uploadAndScreen(
   uid: string,
   photoId: string,
   uri: string,
   hooks: { onProgress: (fraction: number) => void; onChecking: () => void },
-): Promise<void> {
+): Promise<{ faceOk: boolean | null }> {
   await uploadPhoto(uid, photoId, uri, hooks.onProgress);
   hooks.onChecking();
   const verdict = await waitForScreening(uid, photoId);
-  if (verdict !== "approved") throw new PhotoError(verdict);
+  if (verdict === "timeout") throw new PhotoError("timeout");
+  if (verdict.status !== "approved") throw new PhotoError(verdict.status);
+  return { faceOk: verdict.faceOk };
 }
 
 /** Saves the order and selection. The server re-checks ownership and screening. */

@@ -59,6 +59,13 @@ export type UpsertProfilePayload = {
    */
   cityList: "world";
   birthDate?: string;
+  /**
+   * First save only: the screened photos to attach, main first, so a new profile is
+   * created with its photo. `photoPolicy: "required"` tells the backend this app asks
+   * for one, so a first save without one is refused; older apps send neither.
+   */
+  photoIds?: string[];
+  photoPolicy?: "required";
 };
 
 /** A new profile starts on `city`, the likely one for the device's time zone, or none: the person chooses. */
@@ -167,7 +174,7 @@ export function validateProfileDraft(
 
 export function buildUpsertPayload(
   draft: ProfileDraft,
-  options: { firstSave: boolean; private?: PrivateDraft },
+  options: { firstSave: boolean; private?: PrivateDraft; photoIds?: readonly string[] },
 ): UpsertProfilePayload {
   const payload: UpsertProfilePayload = {
     displayName: draft.displayName.trim(),
@@ -182,6 +189,10 @@ export function buildUpsertPayload(
   };
   if (options.firstSave && options.private) {
     payload.birthDate = options.private.birthDate.trim();
+  }
+  if (options.firstSave && options.photoIds) {
+    payload.photoIds = [...options.photoIds];
+    payload.photoPolicy = "required";
   }
   return payload;
 }

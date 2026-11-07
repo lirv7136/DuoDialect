@@ -38,7 +38,25 @@ const REASON_MESSAGES: Record<string, string> = {
   "deletion/not-confirmed": "Type DELETE to confirm.",
   "photo/not-found": "That photo is no longer available. Add it again.",
   "photo/not-screened": "That photo is still being checked. Try again in a moment.",
+  "photo/in-review": "That photo is being checked by our team. Try a different one for now.",
+  "photo/main-needs-face": "Your main photo needs to show your face clearly, with no one else in it.",
+  "profile/photo-required": "Add a clear photo of your face to finish your profile.",
+  "profile/contact-details": "Take links, email addresses and phone numbers out of your profile. You can share them once you’ve met.",
+  "invitation/contact-details": "Share contact details once you’ve agreed to meet.",
+  "verification/required-to-meet": "Verify your profile to make plans. It’s how members know you’re real.",
+  "verification/member-not-found": "No member matches that.",
+  "trust/email-unconfirmed": "Confirm your email so other members can find you.",
+  "rate-limit/invitations": "You’ve sent a lot of plans today. You can send more tomorrow.",
+  "rate-limit/messages": "You’ve sent a lot of messages today. You can send more tomorrow.",
+  "rate-limit/reports": "You’ve sent a lot of reports today. If you need help now, use Get help in Meeting safely.",
+  "moderation/not-a-photo-report": "This report isn’t about a held photo.",
 };
+
+/**
+ * Reasons whose server message is more specific than any fixed copy here: it names the
+ * field that has contact details in it, or what is wrong with the main photo.
+ */
+const SERVER_WORDED = new Set(["profile/contact-details", "photo/main-needs-face"]);
 
 const DATING_FALLBACK = "That isn’t available.";
 
@@ -71,14 +89,19 @@ export function toCallableFailure(error: unknown): CallableFailure {
   return { code, reason, message };
 }
 
-/** Whether repeating the identical request (same idempotency key) is worth offering. */
+/**
+ * Whether repeating the identical request (same idempotency key) is worth offering. A
+ * daily limit is resource-exhausted too, but trying again today cannot help.
+ */
 export function isRetryable(failure: CallableFailure): boolean {
+  if (failure.reason?.startsWith("rate-limit/")) return false;
   return ["unavailable", "deadline-exceeded", "internal", "unknown", "resource-exhausted"].includes(failure.code) ||
     failure.code === "network-request-failed";
 }
 
 export function describeFailure(failure: CallableFailure): string {
   if (failure.reason) {
+    if (SERVER_WORDED.has(failure.reason) && failure.message) return failure.message;
     if (REASON_MESSAGES[failure.reason]) return REASON_MESSAGES[failure.reason];
     if (failure.reason.startsWith("dating/")) return DATING_FALLBACK;
   }

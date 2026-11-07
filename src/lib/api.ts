@@ -19,6 +19,7 @@ import type { ProfilePhoto } from "../domain/photos";
 import type { CheckInAnswer } from "../domain/check-in";
 import type { CityId } from "../domain/cities";
 import type { CancelReason } from "../domain/cancel-plan";
+import type { TrustSummary } from "../domain/trust";
 
 export class ApiError extends Error {
   readonly code: string;
@@ -52,6 +53,8 @@ export type PublicProfile = {
   fluencyAssurance?: "self-declared";
   /** Meetups both people said happened. Server maintained; absent on older profiles. */
   meetupsConfirmed?: number;
+  /** Talkeven verified this member. Server written; absent means no. */
+  verified?: boolean;
 };
 
 /** The caller's private record. Dating fields exist on the server but v1 never reads them. */
@@ -60,6 +63,10 @@ export type MyAccount = {
   age: number | null;
   ageAssurance: "self-declared";
   isAdultSelfDeclared: boolean;
+  /** Discovery settings; absent from a server before trust phase 1. */
+  discovery?: { verifiedOnly: boolean };
+  /** Verification, email confirmation and what is holding the caller back, if anything. */
+  trust?: TrustSummary;
 };
 
 export type AccountResult = { profile: PublicProfile | null; account: MyAccount | null };
@@ -80,6 +87,8 @@ export type Candidate = {
   fluencyAssurance: "self-declared";
   /** Meetups both people said happened. Honest evidence, not verification; 0 is never shown. */
   meetupsConfirmed?: number;
+  /** Talkeven verified this member. */
+  verified?: boolean;
   exchange: { theyOffer: string[]; youOffer: string[] };
   sharedAvailability: string[];
 };
@@ -92,6 +101,7 @@ export type NearMiss = {
   offers: string[];
   seeks: string[];
   photos: ProfilePhoto[];
+  verified?: boolean;
   reason: "language/not-reciprocal" | "language/insufficient-fluency";
 };
 
@@ -210,11 +220,19 @@ export const api = {
       "cancelInvitation", { invitationId, ...(reason ? { reason } : {}) },
     ),
 
-  /** `clientMessageId` must be reused for every retry of the same message. */
+  /**
+   * `clientMessageId` must be reused for every retry of the same message. `contactWarning`
+   * is true when the text carried contact details before the two have a confirmed meetup:
+   * the message was sent, and the sender should be told to be careful.
+   */
   sendMessage: (conversationId: string, text: string, clientMessageId: string) =>
-    call<{ conversationId: string; text: string; clientMessageId: string }, { messageId: string; conversationId: string; created: boolean }>(
+    call<{ conversationId: string; text: string; clientMessageId: string }, { messageId: string; conversationId: string; created: boolean; contactWarning?: boolean }>(
       "sendMessage", { conversationId, text, clientMessageId },
     ),
+
+  /** "Only show verified members", applied by discoverCandidates. */
+  setDiscoveryPreferences: (preferences: { verifiedOnly: boolean }) =>
+    call<{ verifiedOnly: boolean }, { discovery: { verifiedOnly: boolean } }>("setDiscoveryPreferences", preferences),
 
   markConversationRead: (conversationId: string) =>
     call<{ conversationId: string }, { conversationId: string; unread: 0 }>("markConversationRead", { conversationId }),

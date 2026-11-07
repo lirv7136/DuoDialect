@@ -5,7 +5,9 @@ import { errorMessage } from "../src/domain/errors";
 import {
   addSlot,
   canAddPhoto,
+  canBeMain,
   hasPendingPhotos,
+  mainPhotoProblem,
   makeMain as moveToFront,
   newPhotoId,
   photoPath,
@@ -15,6 +17,7 @@ import {
   sameIds,
   slotsFromPhotos,
   updateSlot,
+  withMainFirst,
   type PhotoSlot,
   type ProfilePhoto,
 } from "../src/domain/photos";
@@ -34,6 +37,10 @@ type Options = {
  * State and actions for the profile photo row: add (pick → compress → upload → screening),
  * remove, and make main. Saves are serialised, and each one sends the latest order, so fast
  * taps cannot land out of order.
+ *
+ * The main photo must show one clear face. A photo screening found without one stays as an
+ * extra; a face photo is kept in front, and nothing is saved while no photo can lead,
+ * because the server would refuse it.
  */
 export function usePhotoEditor({ initial, autoSave, onSaved }: Options) {
   const [slots, setSlots] = useState<PhotoSlot[]>([]);
@@ -56,6 +63,7 @@ export function usePhotoEditor({ initial, autoSave, onSaved }: Options) {
     const run = async () => {
       const ids = readyPhotoIds(current.current);
       if (committed.current && sameIds(ids, committed.current)) return null;
+      if (mainPhotoProblem(current.current)) return null;
       setSaving(true);
       try {
         const result = await saveProfilePhotos(ids);
@@ -98,21 +106,29 @@ export function usePhotoEditor({ initial, autoSave, onSaved }: Options) {
     const id = newPhotoId();
     apply(value => addSlot(value, { id, status: "uploading", progress: 0, localUri: picked.uri, path: null }));
     try {
-      await uploadAndScreen(uid, id, picked.uri, {
+      const { faceOk } = await uploadAndScreen(uid, id, picked.uri, {
         onProgress: progress => apply(value => updateSlot(value, id, { progress })),
         onChecking: () => apply(value => updateSlot(value, id, { status: "checking", progress: 1 })),
       });
       // Removed while it was being checked: leave it for the server to clean up.
       if (!current.current.some(slot => slot.id === id)) return;
-      apply(value => updateSlot(value, id, { status: "ready", path: photoPath(uid, id) }), true);
+      apply(value => withMainFirst(updateSlot(value, id, { status: "ready", path: photoPath(uid, id), faceOk })), true);
     } catch (error) {
       apply(value => removeSlot(value, id));
       setNotice(photoProblemMessage(problemOf(error)));
     }
   }, [apply]);
 
-  const remove = useCallback((id: string) => { setNotice(null); apply(value => removeSlot(value, id), true); }, [apply]);
-  const makeMain = useCallback((id: string) => { setNotice(null); apply(value => moveToFront(value, id), true); }, [apply]);
+  const remove = useCallback((id: string) => { setNotice(null); apply(value => withMainFirst(removeSlot(value, id)), true); }, [apply]);
+  const makeMain = useCallback((id: string) => {
+    setNotice(null);
+    apply(value => (canBeMain(value.find(slot => slot.id === id)) ? moveToFront(value, id) : value), true);
+  }, [apply]);
+
+  /** The photos were saved some other way (with the first profile save), so there is nothing to send. */
+  const markSaved = useCallback((photos: ProfilePhoto[]) => {
+    committed.current = photos.map(photo => photo.id);
+  }, []);
 
   return {
     slots,
@@ -120,9 +136,14 @@ export function usePhotoEditor({ initial, autoSave, onSaved }: Options) {
     saving,
     canAdd: canAddPhoto(slots),
     pending: hasPendingPhotos(slots),
+    /** Why the photos cannot be saved as they are (no face photo to lead with), or null. */
+    mainProblem: mainPhotoProblem(slots),
+    /** Screened photos in the order shown: what the first profile save attaches. */
+    readyIds: readyPhotoIds(slots),
     add,
     remove,
     makeMain,
+    markSaved,
     /** Saves the current selection now, whatever autoSave says. Resolves null if unchanged. */
     save: persist,
   };

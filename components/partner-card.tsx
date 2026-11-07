@@ -8,7 +8,7 @@ import Animated from "react-native-reanimated";
 import type { Candidate } from "../src/lib/api";
 import { displayLanguage } from "../src/domain/languages";
 import { shortSlot } from "../src/domain/display";
-import { meetupsLabel } from "../src/domain/trust";
+import { meetupsLabel, verifiedBadge } from "../src/domain/trust";
 import { MAX_FONT_SCALE, colors, fonts, space, type } from "../constants/theme";
 import { Avatar, CardPhoto } from "./avatar";
 import { ExchangeStrip } from "./exchange-strip";
@@ -30,13 +30,20 @@ export function SharedTimes({ slots, max = 2 }: { slots: string[]; max?: number 
 }
 
 /**
- * "Met 3 times": meetups both people confirmed. The only trust signal the product can
- * honestly show, so it appears only once there is one and never claims verification.
+ * "Met 3 times": meetups both people confirmed. Two people's word rather than a check, so
+ * it appears only once there is one and never claims verification.
  */
 export function MetChip({ count }: { count: number | undefined }) {
   const met = meetupsLabel(count);
   if (!met) return null;
   return <InfoChip icon="checkmark-done-outline" label={met.label} accessibilityLabel={met.accessibilityLabel} />;
+}
+
+/** "Verified": Talkeven checked this member. Only when the server says so. */
+export function VerifiedChip({ verified }: { verified: boolean | undefined }) {
+  const badge = verifiedBadge(verified);
+  if (!badge) return null;
+  return <InfoChip icon="shield-checkmark" label={badge.label} accessibilityLabel={badge.accessibilityLabel} tone="coral" />;
 }
 
 export function PartnerCard({ person, invited, onOpen, onInvite, onInvited }: {
@@ -45,8 +52,10 @@ export function PartnerCard({ person, invited, onOpen, onInvite, onInvited }: {
   const press = usePressFeedback();
   const hasPhoto = person.photos.length > 0;
   const met = meetupsLabel(person.meetupsConfirmed);
+  const verified = verifiedBadge(person.verified);
   const spoken = [
     person.displayName,
+    verified?.accessibilityLabel ?? "",
     person.area,
     met?.accessibilityLabel ?? "",
     `Teaches you ${list(person.exchange.theyOffer)}. You teach ${list(person.exchange.youOffer)}.`,
@@ -73,8 +82,9 @@ export function PartnerCard({ person, invited, onOpen, onInvite, onInvited }: {
                 style={{ fontFamily: fonts.display, fontSize: 24, lineHeight: 30, color: colors.primary }}>
                 {person.displayName}
               </Text>
-              {person.area || met ? (
+              {person.area || met || verified ? (
                 <ChipRow>
+                  <VerifiedChip verified={person.verified} />
                   {person.area ? <InfoChip icon="location-outline" label={person.area} tone="plain" /> : null}
                   <MetChip count={person.meetupsConfirmed} />
                 </ChipRow>

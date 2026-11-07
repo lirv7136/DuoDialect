@@ -99,3 +99,14 @@ test('the interest chip input trims, de-duplicates, caps length and stops at the
   const list = ['a'];
   assert.notEqual(f.addInterest(list, 'b'), list, 'returns a new array');
 });
+
+test('a first save carries its screened photos and says this app asks for one; later saves never do', () => {
+  const first = f.buildUpsertPayload(draft(), { firstSave: true, private: { birthDate: '1998-04-21' }, photoIds: ['face00001', 'extra0002'] });
+  assert.equal(JSON.stringify(first.photoIds), JSON.stringify(['face00001', 'extra0002']));
+  assert.equal(first.photoPolicy, 'required');
+  const later = f.buildUpsertPayload(draft(), { firstSave: false, photoIds: ['face00001'] });
+  assert.equal('photoIds' in later, false);
+  assert.equal('photoPolicy' in later, false);
+  const older = f.buildUpsertPayload(draft(), { firstSave: true, private: { birthDate: '1998-04-21' } });
+  assert.equal('photoPolicy' in older, false, 'no photo list, no marker');
+});

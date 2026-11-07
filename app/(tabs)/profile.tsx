@@ -9,16 +9,25 @@ import { clearPhotoUrls } from "../../src/lib/photos";
 import { capitalise } from "../../src/domain/profile-form";
 import { displayLanguage } from "../../src/domain/languages";
 import { cityLabel } from "../../src/domain/cities";
+import { errorMessage } from "../../src/domain/errors";
+import { VERIFIED_EXPLAINER } from "../../src/domain/trust";
+import { api } from "../../src/lib/api";
 import { forgetAccount, useMyAccount } from "../../hooks/use-my-account";
 import { Body, Button, Card, ChipRow, Display, ErrorNotice, InfoChip, ListRow, Loading, Screen, ToggleRow } from "../../components/ui";
 import { Avatar } from "../../components/avatar";
 import { ExchangeStrip } from "../../components/exchange-strip";
+import { VerifiedChip } from "../../components/partner-card";
+import { EmailCheckNotice, TrustNotices } from "../../components/trust-notices";
 import { AvailabilityDots } from "../../components/availability-picker";
 import { MAX_FONT_SCALE, colors, elevation, fonts, radius, space } from "../../constants/theme";
 
 export default function Profile() {
-  const { profile, loading, error, reload } = useMyAccount();
+  const { profile, account, loading, error, reload } = useMyAccount();
   const [registeringPush, setRegisteringPush] = useState(false);
+  // The switch shows the saved value until a change is in flight, then the change.
+  const [verifiedOnly, setVerifiedOnly] = useState<boolean | null>(null);
+  const [preferenceProblem, setPreferenceProblem] = useState<string | null>(null);
+  const showVerifiedOnly = verifiedOnly ?? account?.discovery?.verifiedOnly ?? false;
   const notifications = useNotificationsEnabled();
   // Hidden by default and shown only once the token says moderator, so nobody else sees a flash of it.
   const [moderator, setModerator] = useState(false);
@@ -43,6 +52,21 @@ export default function Profile() {
     } finally { setRegisteringPush(false); }
   }
 
+  async function onVerifiedOnly(next: boolean) {
+    if (verifiedOnly !== null) return;
+    setVerifiedOnly(next);
+    setPreferenceProblem(null);
+    try {
+      await api.setDiscoveryPreferences({ verifiedOnly: next });
+      candidateCache.clear();
+      await reload();
+    } catch (e) {
+      setPreferenceProblem(errorMessage(e));
+    } finally {
+      setVerifiedOnly(null);
+    }
+  }
+
   async function onLogout() {
     candidateCache.clear();
     clearPhotoUrls();
@@ -59,6 +83,8 @@ export default function Profile() {
     <Screen>
       <Display>Profile</Display>
       <ErrorNotice message={error} onRetry={() => void reload()} />
+      <EmailCheckNotice trust={account?.trust} onConfirmed={() => void reload()} />
+      <TrustNotices trust={account?.trust} />
 
       {profile ? (
         <Card>
@@ -68,6 +94,7 @@ export default function Profile() {
               <Text maxFontSizeMultiplier={MAX_FONT_SCALE.display} style={{ fontFamily: fonts.display, fontSize: 26, lineHeight: 32, color: colors.primary }}>
                 {profile.displayName}
               </Text>
+              <VerifiedChip verified={profile.verified} />
               {cityLabel(profile.city) ? (
                 <InfoChip icon="business-outline" label={cityLabel(profile.city)} tone="plain" accessibilityLabel={`City: ${cityLabel(profile.city)}`} />
               ) : null}
@@ -104,6 +131,15 @@ export default function Profile() {
           />
           <Divider />
         </> : null}
+        <ToggleRow
+          icon="shield-checkmark"
+          label="Only show verified members"
+          value={showVerifiedOnly}
+          disabled={verifiedOnly !== null || !account}
+          hint={VERIFIED_EXPLAINER}
+          onChange={next => void onVerifiedOnly(next)}
+        />
+        <Divider />
         <ListRow icon="shield-checkmark-outline" label="Meeting safely" hint="Tips for meeting a language partner" onPress={() => router.push("/account/safety")} />
         <Divider />
         <ListRow icon="ban-outline" label="Blocked" hint="People you’ve blocked" onPress={() => router.push("/account/blocked")} />
@@ -118,6 +154,7 @@ export default function Profile() {
         ) : null}
         <ListRow icon="log-out-outline" label="Log out" onPress={() => void onLogout()} />
       </View>
+      <ErrorNotice message={preferenceProblem} />
       <View style={{ backgroundColor: colors.surface, borderRadius: radius.card, borderWidth: 1, borderColor: colors.line, overflow: "hidden" }}>
         <ListRow icon="trash-outline" label="Delete account" danger hint="Permanently deletes your account and conversations"
           onPress={() => router.push("/account/delete")} />

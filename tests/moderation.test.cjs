@@ -4,6 +4,7 @@ const load = require('./load-typescript.cjs');
 const display = load('src/domain/display.ts', { './schedule': load('src/domain/schedule.ts') });
 const {
   REPORT_STATUSES, statusLabel, describeReason, nextActions, summariseReport, partyName, actionLabel, actionConsequence, isDestructive, whenLabel,
+  reporterLabel, MANUAL_VERIFICATIONS, verificationActionLabel, verificationConsequence,
 } = load('src/domain/moderation.ts', { './display': display });
 
 test('the created time reads as a day and a clock, and an absent time as nothing', () => {
@@ -57,7 +58,7 @@ test('a missing name says whether the account was deleted', () => {
 });
 
 test('every action has a label and a consequence from the contract', () => {
-  const actions = ['claim', 'dismiss', 'warn', 'suspend', 'reinstate', 'remove-photos'];
+  const actions = ['claim', 'dismiss', 'warn', 'suspend', 'reinstate', 'remove-photos', 'approve-photo', 'reject-photo'];
   for (const action of actions) {
     assert.ok(actionLabel(action).length > 0, action);
     assert.ok(actionConsequence(action).length > 20, action);
@@ -68,11 +69,38 @@ test('every action has a label and a consequence from the contract', () => {
   assert.match(actionConsequence('remove-photos'), /upload again/);
 });
 
-test('only suspend and remove photos are destructive', () => {
+test('only suspend and deleting photos are destructive', () => {
   assert.equal(isDestructive('suspend'), true);
   assert.equal(isDestructive('remove-photos'), true);
+  assert.equal(isDestructive('reject-photo'), true);
+  assert.equal(isDestructive('approve-photo'), false);
   assert.equal(isDestructive('claim'), false);
   assert.equal(isDestructive('dismiss'), false);
   assert.equal(isDestructive('warn'), false);
   assert.equal(isDestructive('reinstate'), false);
+});
+
+test('a photo held by screening reads as an automatic flag and is decided with photo actions', () => {
+  const held = { source: 'photo-screening', reporterName: null, reportedName: 'Ben', reason: 'duplicate_photo' };
+  assert.equal(describeReason('duplicate_photo'), 'Duplicate photo');
+  assert.equal(reporterLabel(held), 'Automatic check');
+  assert.equal(summariseReport(held), 'Duplicate photo: Automatic check flagged Ben');
+  assert.deepEqual([...nextActions('received', 'photo-screening')], ['approve-photo', 'reject-photo', 'suspend', 'dismiss']);
+  assert.deepEqual([...nextActions('reviewing', 'photo-screening')], ['approve-photo', 'reject-photo', 'suspend', 'dismiss']);
+  assert.deepEqual([...nextActions('actioned', 'photo-screening')], ['reinstate']);
+  assert.deepEqual([...nextActions('dismissed', 'photo-screening')], []);
+  // A member's report, with or without a source from an older server, is unchanged.
+  assert.deepEqual([...nextActions('received', 'member')], ['claim', 'dismiss']);
+  assert.equal(reporterLabel({ reporterName: 'Aiko', reportedName: 'Ben', reason: 'spam' }), 'Aiko');
+  assert.match(actionConsequence('approve-photo'), /adds it to the member's profile/);
+  assert.match(actionConsequence('reject-photo'), /Deletes the held photo/);
+});
+
+test('verification by hand: three choices, each saying what it does', () => {
+  assert.deepEqual([...MANUAL_VERIFICATIONS], ['verified', 'review', 'failed']);
+  assert.equal(verificationActionLabel('verified'), 'Mark verified');
+  assert.equal(verificationActionLabel('review'), 'Needs review');
+  assert.equal(verificationActionLabel('failed'), 'Mark not verified');
+  assert.match(verificationConsequence('verified'), /Verified badge/);
+  for (const status of MANUAL_VERIFICATIONS) assert.match(verificationConsequence(status), /\./);
 });

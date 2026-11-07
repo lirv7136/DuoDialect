@@ -11,6 +11,7 @@ import {
   type OAuthCredential,
   type User,
   revokeAccessToken,
+  sendEmailVerification,
 } from "firebase/auth";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
@@ -24,8 +25,43 @@ import { onboardingDraft } from "./onboarding-draft";
 import { pendingName } from "./pending-name";
 import { releasePushRegistration } from "./push";
 
+/** When this install last sent a confirmation email, for the resend cooldown. */
+let verificationEmailSentAt: number | null = null;
+
+export function lastVerificationEmailAt(): number | null {
+  return verificationEmailSentAt;
+}
+
+/**
+ * Creates the account and sends the email confirmation link. The email is best effort: a
+ * failure there never stops the account being created, and "Send again" is on Discover.
+ */
 export async function signUp(email: string, password: string) {
-  return createUserWithEmailAndPassword(auth, email.trim(), password);
+  const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+  verificationEmailSentAt = Date.now();
+  void sendEmailVerification(credential.user).catch(() => { verificationEmailSentAt = null; });
+  return credential;
+}
+
+/** Sends the confirmation link again to the signed in account's email. */
+export async function resendVerificationEmail() {
+  const user = auth.currentUser;
+  if (!user) throw Object.assign(new Error("Log in again."), { code: "auth/requires-recent-login" });
+  await sendEmailVerification(user);
+  verificationEmailSentAt = Date.now();
+}
+
+/**
+ * Asks Firebase whether the email has been confirmed since the app last looked, and when
+ * it has, fetches a fresh token so the server sees it too. Resolves the answer.
+ */
+export async function refreshEmailVerified(): Promise<boolean> {
+  const user = auth.currentUser;
+  if (!user) return false;
+  await user.reload();
+  const fresh = auth.currentUser;
+  if (fresh?.emailVerified) await fresh.getIdToken(true);
+  return fresh?.emailVerified === true;
 }
 
 export async function signIn(email: string, password: string) {

@@ -98,3 +98,43 @@ test('labels and messages: every image is named, and a rejection is kind', () =>
     assert.notEqual(p.photoProblemMessage(problem), rejected);
   }
 });
+
+test('a screening verdict carries whether the photo may lead; an unchecked face counts as fine', () => {
+  same(p.verdictFrom({ status: 'approved', face: { ok: true } }), { status: 'approved', faceOk: true });
+  same(p.verdictFrom({ status: 'approved', face: { ok: false, problem: 'no-face' } }), { status: 'approved', faceOk: false });
+  same(p.verdictFrom({ status: 'approved' }), { status: 'approved', faceOk: null });
+  same(p.verdictFrom({ status: 'review', face: null }), { status: 'review', faceOk: null });
+  assert.equal(p.verdictFrom({ status: 'pending' }), null, 'still waiting');
+  assert.equal(p.verdictFrom(null), null);
+});
+
+test('the main photo must be a face photo: one is kept in front, and others stay as extras', () => {
+  const face = slot('face00001', { faceOk: true });
+  const legacy = slot('legacy001');
+  const scenery = slot('scenery01', { faceOk: false });
+  const checking = slot('checking1', { status: 'checking', faceOk: undefined });
+
+  assert.equal(p.canBeMain(face), true);
+  assert.equal(p.canBeMain(legacy), true, 'photos from before face checks still lead');
+  assert.equal(p.canBeMain(scenery), false);
+  assert.equal(p.canBeMain(checking), false, 'not until screened');
+  assert.equal(p.canBeMain(undefined), false);
+
+  assert.equal(ids(p.withMainFirst([scenery, face])), 'face00001,scenery01');
+  assert.equal(ids(p.withMainFirst([face, scenery])), 'face00001,scenery01');
+  assert.equal(ids(p.withMainFirst([scenery, checking])), 'scenery01,checking1', 'nothing qualifies yet, so nothing moves');
+  assert.equal(ids(p.withMainFirst([])), '');
+
+  assert.equal(p.mainPhotoProblem([face, scenery]), null);
+  assert.equal(p.mainPhotoProblem([]), null, 'no photos is a different question');
+  assert.equal(p.mainPhotoProblem([scenery]), p.MAIN_PHOTO_NEEDS_FACE);
+  assert.equal(p.mainPhotoProblem([checking, scenery]), p.MAIN_PHOTO_NEEDS_FACE);
+});
+
+test('a new profile needs a screened face photo before the first save', () => {
+  assert.equal(p.photoRequirementProblem([]), p.PHOTO_REQUIRED);
+  assert.match(p.photoRequirementProblem([slot('checking1', { status: 'checking' })]), /still being checked/);
+  assert.equal(p.photoRequirementProblem([slot('scenery01', { faceOk: false })]), p.MAIN_PHOTO_NEEDS_FACE);
+  assert.equal(p.photoRequirementProblem([slot('face00001', { faceOk: true })]), null);
+  assert.match(p.photoProblemMessage('review'), /check by our team/);
+});

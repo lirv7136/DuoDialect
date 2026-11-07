@@ -20,7 +20,22 @@ const PHOTO_ID_PATTERN = /^[A-Za-z0-9-]{8,64}$/;
 
 export type ProfilePhoto = { id: string; path: string };
 
-export type ScreeningStatus = "approved" | "rejected" | "failed";
+/** "review": the same picture is on another account, so a moderator looks before it is used. */
+export type ScreeningStatus = "approved" | "rejected" | "failed" | "review";
+
+/**
+ * The server's verdict for one upload. `faceOk` says whether it may be the main photo
+ * (exactly one clear face); null when the server did not check, which counts as fine.
+ */
+export type ScreeningVerdict = { status: ScreeningStatus; faceOk: boolean | null };
+
+/** Reads a photoScreening document's fields into a verdict, or null while there is none. */
+export function verdictFrom(data: { status?: unknown; face?: unknown } | null | undefined): ScreeningVerdict | null {
+  const status = data?.status;
+  if (status !== "approved" && status !== "rejected" && status !== "failed" && status !== "review") return null;
+  const face = data?.face as { ok?: unknown } | null | undefined;
+  return { status, faceOk: face && typeof face.ok === "boolean" ? face.ok : null };
+}
 
 export function isValidPhotoId(value: unknown): value is string {
   return typeof value === "string" && PHOTO_ID_PATTERN.test(value);
@@ -83,6 +98,8 @@ export type PhotoSlot = {
   progress: number;
   localUri: string | null;
   path: string | null;
+  /** False when screening found no single clear face: fine as an extra, never as the main photo. */
+  faceOk?: boolean | null;
 };
 
 export function slotsFromPhotos(photos: unknown): PhotoSlot[] {
@@ -122,6 +139,45 @@ export function hasPendingPhotos(slots: PhotoSlot[]): boolean {
   return slots.some(slot => slot.status !== "ready");
 }
 
+/**
+ * Whether a photo may be the main one: screened, and not found to lack one clear face.
+ * Photos already on a profile carry no face result and count as fine, as the server does.
+ */
+export function canBeMain(slot: PhotoSlot | undefined): boolean {
+  return !!slot && slot.status === "ready" && slot.faceOk !== false;
+}
+
+/**
+ * Keeps a face photo in front: when the first photo cannot be the main one, the first that
+ * can moves up. Nothing moves when the first is fine or no photo qualifies.
+ */
+export function withMainFirst(slots: PhotoSlot[]): PhotoSlot[] {
+  if (slots.length === 0 || canBeMain(slots[0])) return slots;
+  const index = slots.findIndex(slot => canBeMain(slot));
+  return index > 0 ? makeMain(slots, slots[index].id) : slots;
+}
+
+export const MAIN_PHOTO_NEEDS_FACE = "Your main photo needs to show your face clearly, with no one else in it. Add one like that, and the others can stay as extras.";
+
+/** Why the photos as they stand cannot be saved, or null when they can. */
+export function mainPhotoProblem(slots: PhotoSlot[]): string | null {
+  const ready = slots.filter(slot => slot.status === "ready");
+  if (ready.length === 0) return null;
+  return canBeMain(ready[0]) ? null : MAIN_PHOTO_NEEDS_FACE;
+}
+
+export const PHOTO_REQUIRED = "Add a clear photo of your face to finish. It’s how your partner will recognise you.";
+
+/**
+ * For a new profile, which must have a main photo: still checking, none yet, or no face
+ * to lead with. Null when the photos are ready to go with the first save.
+ */
+export function photoRequirementProblem(slots: PhotoSlot[]): string | null {
+  if (hasPendingPhotos(slots)) return "Your photo is still being checked. Wait a moment.";
+  if (!slots.some(slot => slot.status === "ready")) return PHOTO_REQUIRED;
+  return mainPhotoProblem(slots);
+}
+
 export function sameIds(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((id, index) => id === b[index]);
 }
@@ -132,9 +188,12 @@ export function slotStatusLabel(slot: PhotoSlot): string | null {
   return null;
 }
 
+/** Said of a ready photo that cannot be the main one, so the screen can mark it. */
+export const EXTRA_ONLY_LABEL = "Extra only";
+
 // ── Copy ────────────────────────────────────────────────────────────────────────────
 
-export type PhotoProblem = "rejected" | "failed" | "timeout" | "too-large" | "upload";
+export type PhotoProblem = "rejected" | "failed" | "timeout" | "too-large" | "upload" | "review";
 
 /** Kind, specific messages. A rejection never says why in detail, and never blames. */
 export function photoProblemMessage(problem: PhotoProblem): string {
@@ -147,6 +206,8 @@ export function photoProblemMessage(problem: PhotoProblem): string {
       return "Still checking. Try again in a moment.";
     case "too-large":
       return "Too large. Pick another.";
+    case "review":
+      return "That photo needs a quick check by our team. If it’s fine, we’ll add it to your profile. Try a different one for now.";
     default:
       return "That photo didn’t upload. Check your connection and try again.";
   }

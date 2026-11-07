@@ -10,6 +10,7 @@ import { nearMissReason } from "../src/domain/invite-copy";
 import { MAX_FONT_SCALE, colors, fonts, space, type } from "../constants/theme";
 import { Avatar } from "./avatar";
 import { Card, ChipRow, InfoChip } from "./ui";
+import { VerifiedChip } from "./partner-card";
 
 const list = (values: string[]) => values.map(displayLanguage).join(", ");
 
@@ -30,6 +31,7 @@ export function NearMissCard({ person, me }: { person: NearMiss; me: { offers: s
         </View>
       </View>
       <ChipRow>
+        <VerifiedChip verified={person.verified} />
         <InfoChip icon="chatbubble-outline" label={`Speaks ${list(person.offers)}`} tone="plain" />
         <InfoChip icon="school-outline" label={`Learning ${list(person.seeks)}`} tone="plain" />
       </ChipRow>

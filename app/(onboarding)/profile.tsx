@@ -26,6 +26,7 @@ import { StepIndicator } from "../../components/step-indicator";
 import { pendingName } from "../../src/lib/pending-name";
 import { deviceTimeZone } from "../../src/lib/time-zone";
 import { likelyCity } from "../../src/domain/cities";
+import { photoRequirementProblem, type ProfilePhoto } from "../../src/domain/photos";
 import { colors, space } from "../../constants/theme";
 
 /** Step two of onboarding: everything is saved here in one `upsertProfile` call. */
@@ -36,15 +37,16 @@ export default function ProfileOnboarding() {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  // Photo and times are optional, but the first tap with either empty says why they matter.
-  // Each field is nudged once; the next tap, or "Save anyway", goes through.
+  // A new profile needs a photo of the person's face; times are optional, but the first tap
+  // with none says why they matter. That nudge shows once; the next tap, or "Save anyway",
+  // goes through.
   const [nudge, setNudge] = useState<string | null>(null);
   const nudged = useRef(new Set<NudgeField>());
   const inFlight = useRef(false);
   // A profile that already exists keeps its private fields; the server only needs them once.
   const firstSave = !profile || !account;
-  // Photos are optional. Uploads and screening start as soon as one is picked, but they can
-  // only be attached once the profile exists, so a first save attaches them afterwards.
+  // Uploads and screening start as soon as a photo is picked. A first save sends the screened
+  // photos with the profile (photoIds), which is how the profile is created with them.
   const photos = usePhotoEditor({ initial: loading ? null : profile?.photos ?? [], autoSave: !firstSave });
 
   useEffect(() => {
@@ -71,9 +73,11 @@ export default function ProfileOnboarding() {
 
   async function onSave(anyway = false) {
     if (inFlight.current) return;
-    const options = { firstSave, private: { birthDate } };
+    const options = { firstSave, private: { birthDate }, photoIds: firstSave ? photos.readyIds : undefined };
     const issue = validateProfileDraft(draft, options)
-      ?? (photos.pending ? "Your photo is still being checked. Wait a moment, or remove it and add photos later." : null);
+      ?? (firstSave
+        ? photoRequirementProblem(photos.slots)
+        : photos.pending ? "Your photo is still being checked. Wait a moment, or remove it and add photos later." : null);
     setProblem(issue);
     if (issue) return;
     if (!anyway) {
@@ -90,7 +94,11 @@ export default function ProfileOnboarding() {
     try {
       // Replaying the same full profile is harmless, so a double tap needs no key.
       const saved = await api.upsertProfile(buildUpsertPayload(draft, options));
-      const savedPhotos = await photos.save();
+      let savedPhotos: ProfilePhoto[] | null = null;
+      const attached = saved.profile?.photos ?? [];
+      if (firstSave && attached.length > 0) photos.markSaved(attached);
+      // A later save, or a server from before photos came with the first save.
+      else savedPhotos = await photos.save();
       rememberAccount(savedPhotos && saved.profile ? { ...saved, profile: { ...saved.profile, photos: savedPhotos } } : saved);
       await onboardingDraft.clear();
       router.replace("/(tabs)/discover");
@@ -114,7 +122,7 @@ export default function ProfileOnboarding() {
         <Caption icon="lock-closed-outline">Private</Caption>
       </View>
 
-      <PhotoEditor editor={photos} icon="eye-outline" />
+      <PhotoEditor editor={photos} icon="eye-outline" required={firstSave} />
 
       <Field label="First name" icon="eye-outline" value={draft.displayName} onChangeText={displayName => patch({ displayName })}
         maxLength={LIMITS.displayName} autoComplete="given-name" autoCapitalize="words" />

@@ -3,6 +3,10 @@
  * actions that make sense from its status. Opening this screen reads a private
  * conversation, which the server records as `viewed-context`. Every action goes
  * through a confirm sheet that spells out the consequence from the contract.
+ *
+ * A photo held by screening (the same picture on another account) shows the held photo and
+ * what it matched instead of a reporter, and offers approve or reject. Any report also
+ * lets the moderator set the reported member's verification by hand.
  */
 import { useCallback, useEffect, useState } from "react";
 import { Platform, Text, View } from "react-native";
@@ -10,7 +14,8 @@ import { useLocalSearchParams } from "expo-router";
 import { cachedReport, moderation, type ReportContext, type ReportMessage } from "../../../src/lib/moderation";
 import { errorMessage } from "../../../src/domain/errors";
 import {
-  actionConsequence, actionLabel, describeReason, isDestructive, nextActions, partyName, statusLabel, whenLabel, type ReportAction,
+  MANUAL_VERIFICATIONS, actionConsequence, actionLabel, describeReason, isDestructive, nextActions, partyName, reporterLabel,
+  statusLabel, verificationActionLabel, verificationConsequence, whenLabel, type ManualVerification, type ReportAction,
 } from "../../../src/domain/moderation";
 import { colors, radius, space, type } from "../../../constants/theme";
 import { Body, Button, Caption, Card, ErrorNotice, Field, Heading, InfoChip, Loading, Notice, Screen } from "../../../components/ui";
@@ -21,7 +26,7 @@ export default function ReportDetail() {
   const [context, setContext] = useState<ReportContext | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<ReportAction | null>(null);
+  const [busy, setBusy] = useState<ReportAction | ManualVerification | null>(null);
   const [result, setResult] = useState<string | null>(null);
   // The queue row, for the fields the context read leaves out. Absent on a cold deep link.
   const row = reportId ? cachedReport(reportId) : null;
@@ -57,9 +62,39 @@ export default function ReportDetail() {
     try {
       const outcome = await moderation.actOnReport(reportId, action, note.trim() || undefined);
       const removed = outcome.photosRemoved === undefined ? "" : ` ${outcome.photosRemoved} photo${outcome.photosRemoved === 1 ? "" : "s"} removed.`;
-      setResult(`${actionLabel(outcome.action)} done. The report is now ${statusLabel(outcome.reportStatus).toLowerCase()}.${removed}`);
+      const attached = outcome.photoAttached === undefined ? ""
+        : outcome.photoAttached ? " Added to their profile." : " Not added to their profile (no room, or it can’t lead).";
+      setResult(`${actionLabel(outcome.action)} done. The report is now ${statusLabel(outcome.reportStatus).toLowerCase()}.${removed}${attached}`);
       setNote("");
       await load();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function confirmVerification(status: ManualVerification) {
+    const label = verificationActionLabel(status);
+    confirmAction({
+      title: `${label}?`,
+      body: verificationConsequence(status),
+      confirm: label,
+      destructive: status !== "verified",
+      onConfirm: () => void verify(status),
+    });
+  }
+
+  async function verify(status: ManualVerification) {
+    const subject = context?.report.reportedUid;
+    if (!reportId || !subject || busy) return;
+    setBusy(status);
+    setError(null);
+    setResult(null);
+    try {
+      const outcome = await moderation.setVerification({ uid: subject, status, note: note.trim() || undefined, reportId });
+      setResult(`${verificationActionLabel(status)} done. Was ${outcome.previousStatus}; the badge is now ${outcome.verified ? "on" : "off"}.`);
+      setNote("");
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -70,11 +105,11 @@ export default function ReportDetail() {
   if (!context && !error) return <Loading label="Loading report" />;
 
   const report = context?.report ?? null;
-  const actions = report ? nextActions(report.status) : [];
-  const names: Record<string, string> = report ? {
-    [report.reporterUid]: partyName(report.reporterName, row?.reporterDeleted),
-    [report.reportedUid]: partyName(report.reportedName, row?.reportedUserDeleted),
-  } : {};
+  const fromScreening = report?.source === "photo-screening";
+  const actions = report ? nextActions(report.status, report.source) : [];
+  const names: Record<string, string> = {};
+  if (report?.reporterUid) names[report.reporterUid] = partyName(report.reporterName, row?.reporterDeleted);
+  if (report) names[report.reportedUid] = partyName(report.reportedName, row?.reportedUserDeleted);
 
   return (
     <Screen edges={[]}>
@@ -87,7 +122,8 @@ export default function ReportDetail() {
               <InfoChip label={statusLabel(report.status)} />
             </View>
             {row?.createdAt ? <Caption icon="time-outline">{whenLabel(row.createdAt)}</Caption> : null}
-            <Party role="Reporter" name={partyName(report.reporterName, row?.reporterDeleted)} uid={report.reporterUid} deleted={row?.reporterDeleted} />
+            <Party role="Reporter" name={reporterLabel({ ...report, reporterDeleted: row?.reporterDeleted })} uid={report.reporterUid}
+              deleted={row?.reporterDeleted} />
             <Party role="Reported" name={partyName(report.reportedName, row?.reportedUserDeleted)} uid={report.reportedUid} deleted={row?.reportedUserDeleted} />
             {report.detail ? <Body>{report.detail}</Body> : <Caption>No detail given.</Caption>}
           </Card>
@@ -103,11 +139,28 @@ export default function ReportDetail() {
             ) : <Caption>No messages yet.</Caption>
           ) : <Caption>{row && !row.conversationId ? "The report named no conversation." : "The conversation no longer exists."}</Caption>}
 
+          {fromScreening && report.photo ? (
+            <>
+              <Heading>Held photo</Heading>
+              <Card style={{ gap: space.xs }}>
+                <Mono>{report.photo.path}</Mono>
+                {(report.matches ?? []).length ? <Text style={type.label}>Matches</Text> : null}
+                {(report.matches ?? []).map(match => (
+                  <View key={match.path} style={{ gap: 2 }}>
+                    <Mono>{match.path}</Mono>
+                    <Text style={[type.caption, { fontSize: 12 }]}>{`${match.distance} of 64 bits differ`}</Text>
+                  </View>
+                ))}
+                <Caption icon="information-circle-outline">Hidden from everyone until you approve it. Open these in the Firebase console.</Caption>
+              </Card>
+            </>
+          ) : null}
+
           <Heading>Photos</Heading>
           {report.reportedPhotos.length ? (
             <Card style={{ gap: space.xs }}>
               {report.reportedPhotos.map(photo => (
-                <Text key={photo.id} selectable style={[type.caption, { fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }]}>{photo.path}</Text>
+                <Mono key={photo.id}>{photo.path}</Mono>
               ))}
               <Caption icon="information-circle-outline">Open these in the Firebase console. Nothing is downloaded here.</Caption>
             </Card>
@@ -133,13 +186,35 @@ export default function ReportDetail() {
               </View>
             </>
           ) : <Caption center>This report is closed.</Caption>}
+
+          <Heading>Verification</Heading>
+          <Caption>Set the reported member’s verification by hand. The note above goes with it.</Caption>
+          <View style={{ gap: space.sm }}>
+            {MANUAL_VERIFICATIONS.map(status => (
+              <Button
+                key={status}
+                label={verificationActionLabel(status)}
+                variant={status === "verified" ? "secondary" : "ghost"}
+                busy={busy === status}
+                busyLabel="Working…"
+                disabled={busy !== null && busy !== status}
+                hint={verificationConsequence(status)}
+                onPress={() => confirmVerification(status)}
+              />
+            ))}
+          </View>
         </>
       ) : null}
     </Screen>
   );
 }
 
-function Party({ role, name, uid, deleted }: { role: string; name: string; uid: string; deleted: boolean | undefined }) {
+/** A Storage path, selectable, in a fixed width face so it can be copied exactly. */
+function Mono({ children }: { children: string }) {
+  return <Text selectable style={[type.caption, { fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }]}>{children}</Text>;
+}
+
+function Party({ role, name, uid, deleted }: { role: string; name: string; uid: string | null; deleted: boolean | undefined }) {
   return (
     <View style={{ gap: 2 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, flexWrap: "wrap" }}>
@@ -147,7 +222,7 @@ function Party({ role, name, uid, deleted }: { role: string; name: string; uid: 
         <Text style={type.label}>{name}</Text>
         {deleted ? <InfoChip icon="person-remove-outline" label="Deleted" tone="plain" /> : null}
       </View>
-      <Text selectable style={[type.caption, { fontSize: 12 }]}>{uid}</Text>
+      {uid ? <Text selectable style={[type.caption, { fontSize: 12 }]}>{uid}</Text> : null}
     </View>
   );
 }
