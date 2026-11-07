@@ -38,6 +38,8 @@ test('name, bio, area, availability and interest limits', () => {
   assert.match(f.validateProfileDraft(draft({ area: 'x'.repeat(61) }), { firstSave: false }), /60/);
   assert.match(f.validateProfileDraft(draft({ city: 'atlantis' }), { firstSave: false }), /city/);
   assert.equal(f.validateProfileDraft(draft({ city: 'gold-coast' }), { firstSave: false }), null);
+  assert.equal(f.validateProfileDraft(draft({ city: 'london-gb' }), { firstSave: false }), null, 'any city on the world list');
+  assert.match(f.validateProfileDraft(draft({ city: '' }), { firstSave: false }), /Choose your city/);
   assert.match(f.validateProfileDraft(draft({ availability: schedule.AVAILABILITY_SLOTS.slice(0, 15) }), { firstSave: false }), /14/);
   assert.match(f.validateProfileDraft(draft({ interests: Array(9).fill('a') }), { firstSave: false }), /8/);
   assert.match(f.validateProfileDraft(draft({ interests: ['x'.repeat(25)] }), { firstSave: false }), /24/);
@@ -62,6 +64,7 @@ test('payloads are complete, trimmed, and never carry dating fields or gender', 
   assert.equal('dating' in payload, false);
   for (const key of ['bio', 'city', 'area', 'availability', 'interests']) assert.ok(key in payload, key);
   assert.equal(payload.city, 'sydney');
+  assert.equal(payload.cityList, 'world', 'tells the backend this app knows every city, so a Sydney choice is never mistaken for 1.1.2');
   const later = f.buildUpsertPayload(draft(), { firstSave: false, private: { birthDate: '1998-04-21' } });
   assert.equal('birthDate' in later, false);
   assert.equal('gender' in later, false);
@@ -77,7 +80,10 @@ test('stored profiles become well formed drafts; interests are parsed and de-dup
   assert.equal(d.city, 'sydney', 'a profile from before cities reads as Sydney');
   assert.equal(f.draftFromProfile({ displayName: 'Aiko', city: 'melbourne' }).city, 'melbourne');
   assert.equal(f.draftFromProfile({ displayName: 'Aiko', city: 'Atlantis' }).city, 'sydney');
-  assert.equal(f.emptyProfileDraft().city, 'sydney');
+  assert.equal(f.draftFromProfile({ displayName: 'Aiko', city: 'london-gb' }).city, 'london-gb', 'a world city is kept');
+  assert.equal(f.emptyProfileDraft().city, '', 'a new profile has no city until one is suggested or chosen');
+  assert.equal(f.emptyProfileDraft('paris-fr').city, 'paris-fr');
+  assert.equal(f.emptyProfileDraft('atlantis').city, '');
   assert.equal(JSON.stringify(f.parseInterests(' Coffee, coffee ,Film,, ')), JSON.stringify(['Coffee', 'Film']));
 });
 

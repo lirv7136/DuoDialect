@@ -7,6 +7,7 @@ import { candidateCache } from "../../src/lib/candidate-cache";
 import { getPublicProfile } from "../../src/lib/live";
 import { askForNotificationsInContext } from "../../src/lib/notification-prompt";
 import { deviceTimeZone } from "../../src/lib/time-zone";
+import { cityById, meetingTimeZone } from "../../src/domain/cities";
 import { exchangeLanguages } from "../../src/domain/language-exchange";
 import { displayLanguage } from "../../src/domain/languages";
 import { dateBlock } from "../../src/domain/display";
@@ -70,7 +71,11 @@ export default function NewPlan() {
   const inFlight = useRef(false);
   // One requestKey per intended invitation, reused for every retry of the same draft.
   const keys = useRef(createDraftKeys()).current;
-  const timeZone = deviceTimeZone();
+  // Both people are in the sender's city, so the time is that city's wall time, wherever
+  // the phone is. The phone's own zone is only a fallback.
+  const city = cityById(me?.city);
+  const phoneZone = deviceTimeZone();
+  const timeZone = meetingTimeZone(me?.city, phoneZone);
 
   useEffect(() => {
     if (!toUid || meLoading || target) return;
@@ -203,7 +208,7 @@ export default function NewPlan() {
         </View>
       ) : null}
       {!timeZone ? <Caption icon="globe-outline">Time zone unavailable</Caption>
-        : timeZone !== HOME_ZONE ? <Caption icon="globe-outline">{`Times in ${timeZone}`}</Caption> : null}
+        : timeZone !== phoneZone ? <Caption icon="globe-outline">{city ? `${city.name} time (${timeZone})` : `Times in ${timeZone}`}</Caption> : null}
 
       <View style={[styles.row, { gap: space.sm, flexWrap: "nowrap" }]}>
         <View style={{ flex: 1 }}>
@@ -264,8 +269,6 @@ export default function NewPlan() {
     </Screen>
   );
 }
-
-const HOME_ZONE = "Australia/Sydney";
 
 /**
  * 20′ | 20′: the swap, as a bar. Their language first, as the invitation note used to say.

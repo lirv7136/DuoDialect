@@ -6,7 +6,9 @@ const {
   requireLanguageList, requireShortTextList, requireBirthDate, ageFromBirthDate,
   offeredLanguages, soughtLanguages,
 } = require("./validation");
-const { GENDERS, CITY_IDS, DEFAULT_CITY, LIMITS, AGE_ASSURANCE, FLUENCY_ASSURANCE } = require("./constants");
+const {
+  GENDERS, LEGACY_CITY_IDS, DEFAULT_CITY, LIMITS, AGE_ASSURANCE, FLUENCY_ASSURANCE, isCityId,
+} = require("./constants");
 const { REASON, reject } = require("./eligibility");
 const { refs } = require("./refs");
 const { cancelPendingInvitationsFor } = require("./invitations");
@@ -40,20 +42,27 @@ function requireDatingPreferences(value, field, { age }) {
 }
 
 /**
- * The city a profile belongs to, from the allow list, since discovery is scoped by it.
+ * The city a profile belongs to, from the world list, since discovery is scoped by it.
  * An app from before cities (1.0.1 and 1.1.0 never send one) keeps the city the profile
  * has, or is treated as Sydney, the launch city, whether the profile is new or not, so
- * those builds keep signing people up after the backend moves ahead of them. The 1.1.2
- * client always sends one; a city that is sent must be on the list.
+ * those builds keep signing people up after the backend moves ahead of them. Later
+ * clients always send one; a city that is sent must be on the list.
+ *
+ * The 1.1.2 app knows only the eleven original cities and shows any other stored city as
+ * Sydney, so when it saves a profile it sends "sydney" for, say, london-gb. A client that
+ * knows the world list says so with `cityList: "world"`. Without that, "sydney" over a
+ * stored city 1.1.2 cannot show is its fallback, not a move, and the stored city is kept.
+ * Picking any other city in 1.1.2 still moves the person there.
  */
-function requireCity(value, field, { existing }) {
+function requireCity(value, field, { existing, worldList }) {
   if (value === undefined || value === null) {
-    return CITY_IDS.includes(existing) ? existing : DEFAULT_CITY;
+    return isCityId(existing) ? existing : DEFAULT_CITY;
   }
   const city = typeof value === "string" ? value.trim().toLocaleLowerCase("en") : value;
-  if (!CITY_IDS.includes(city)) {
-    throw reject("invalid-argument", REASON.cityInvalid, `${field} must be one of: ${CITY_IDS.join(", ")}.`);
+  if (!isCityId(city)) {
+    throw reject("invalid-argument", REASON.cityInvalid, `${field} must be the id of a city on the Talkeven list, such as "sydney" or "london-gb".`);
   }
+  if (!worldList && city === DEFAULT_CITY && isCityId(existing) && !LEGACY_CITY_IDS.includes(existing)) return existing;
   return city;
 }
 
@@ -87,6 +96,7 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
   const area = optionalString(body.area, "area", LIMITS.area);
   const city = requireCity(body.city, "city", {
     existing: publicSnap.exists ? publicSnap.get("city") : null,
+    worldList: body.cityList === "world",
   });
   const speaks = requireLanguageList(body.speaks, "speaks", { min: 1 });
   const learns = requireLanguageList(body.learns, "learns", { min: 1 });
@@ -254,7 +264,7 @@ async function getMyAccount(db, uid, now = new Date()) {
       ? {
         ...publicSnap.data(),
         // Profiles from before 1.1.2 have no city until the backfill runs; they are Sydney.
-        city: CITY_IDS.includes(publicSnap.get("city")) ? publicSnap.get("city") : DEFAULT_CITY,
+        city: isCityId(publicSnap.get("city")) ? publicSnap.get("city") : DEFAULT_CITY,
         photos: publicPhotos(publicSnap.get("photos")),
         meetupsConfirmed: Number(publicSnap.get("meetupsConfirmed") || 0),
       }

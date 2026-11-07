@@ -157,7 +157,8 @@ batch, so they cannot drift apart.
 {
   displayName: string,                 // 1..40 chars, required
   bio?: string,                        // up to 400
-  city: string,                        // one of the CITIES ids; sydney when an older app omits it (1.1.2)
+  city: string,                        // a city id from the world list; sydney when an older app omits it
+  cityList?: "world",                  // sent by clients that know the world list (see City below)
   area?: string,                       // up to 60, free text neighbourhood
   speaks: { lang: string, level: "native"|"fluent"|"intermediate"|"beginner" }[],
   learns: { lang: string, level: "native"|"fluent"|"intermediate"|"beginner" }[],
@@ -188,24 +189,41 @@ same language may not appear in both `speaks` and `learns`.
 `offers` and `seeks` are derived on the server and are never accepted from the client.
 The discovery query depends on them.
 
-**City (1.1.2).** `city` is the id of the city the person lives in, from the allow list in
-`functions/lib/constants.js` (`CITIES`: `sydney`, `melbourne`, `brisbane`, `perth`,
-`adelaide`, `canberra`, `hobart`, `darwin`, `gold-coast`, `auckland`, `wellington`; the
-client mirrors it in `src/domain/cities.ts`). Ids are matched after trimming and lower
-casing. A city that is sent must be on the list; anything else is `invalid-argument` /
-`profile/city-invalid` and nothing is written. A profile may omit it: the stored city is
-kept, and a profile that has none yet, new or saved before 1.1.2, becomes `sydney`. That
-is what keeps the 1.0.1 and 1.1.0 apps, which never send a city, signing people up and
-working. The 1.1.2 client always sends one. `area` stays a
-free text neighbourhood inside the city and is never used for filtering.
+**City.** `city` is the id of the city the person lives in, from the world list in
+`functions/data/cities.json`: every city of 100,000 people or more and every national
+capital, from GeoNames (CC BY 4.0), about 5,300 cities. `functions/lib/constants.js` loads
+it (`CITIES`, `CITY_IDS`, `isCityId`) and the app imports the same file
+(`src/domain/cities.ts`), so there is one list. `scripts/build-world-cities.cjs` builds it;
+a rebuild only ever adds ids. A borough or district that GeoNames lists on its own
+(Brooklyn, Paris 15e, Pudong) is folded into its city, so one city's members are not split.
+
+Ids are stable and lower case. The eleven cities from 1.1.2 keep their bare ids (`sydney`,
+`melbourne`, `brisbane`, `perth`, `adelaide`, `canberra`, `hobart`, `darwin`,
+`gold-coast`, `auckland`, `wellington`), so stored profiles and the 1.1.2 app need nothing.
+Every other city is `<ascii name>-<country>`, such as `london-gb` or `sao-paulo-br`, with the
+first-level region code added only where a country has two of one name
+(`springfield-us-il`). Ids are matched after trimming and lower casing. A city that is sent
+must be on the list; anything else (including a name such as `"London"`) is
+`invalid-argument` / `profile/city-invalid` and nothing is written. A profile may omit it:
+the stored city is kept, and a profile that has none yet, new or saved before 1.1.2,
+becomes `sydney`. That is what keeps the 1.0.1 and 1.1.0 apps, which never send a city,
+signing people up and working. `area` stays a free text neighbourhood inside the city and
+is never used for filtering.
+
+The 1.1.2 app knows only the eleven original cities and shows any other stored city as
+Sydney, so a save from it sends `"sydney"` for a member who lives in, say, `london-gb`.
+Clients that know the world list send `cityList: "world"`. Without it, `"sydney"` over a
+stored city that is not one of the eleven is taken as that fallback and the stored city is
+kept; any other city sent from 1.1.2 is a real move. With it, `"sydney"` always means
+Sydney.
 
 ### `getMyAccount`
 
 No arguments. Returns `{ profile, account }` for the caller, or `{ profile: null,
 account: null }` if they have not completed onboarding. `profile.photos` is always an
 array, empty when there are none, and `profile.meetupsConfirmed` is always an integer,
-0 until a meetup has been confirmed. `profile.city` is always a city id: `sydney` for a
-profile saved before 1.1.2 that the backfill has not reached yet.
+0 until a meetup has been confirmed. `profile.city` is always a city id from the world
+list: `sydney` for a profile saved before 1.1.2 that the backfill has not reached yet.
 
 ### `setDatingConsent`
 
@@ -357,7 +375,7 @@ const url = await getDownloadURL(ref(getStorage(app), photo.path)); // refused i
     venue: string,
     localDate: string,                 // "YYYY-MM-DD"
     localTime: string,                 // "HH:mm", 24 hour
-    timeZone: string,                  // IANA name, for example "Australia/Sydney"
+    timeZone: string,                  // IANA name, for example "Australia/Sydney"; the app sends its city's zone
     recurrence: "once" | "weekly"
   }
 }
@@ -380,7 +398,10 @@ valid pair itself.
 
 The meeting must be in the future and within a year. `startAt` is returned as an ISO
 instant derived from the wall time in the stated zone; the local fields remain the
-authoritative human description.
+authoritative human description. The app states the zone of the sender's city (from the
+world list), not the phone's, since both people are in that city; older apps send the
+phone's zone. Reminders (18:00 the evening before) and check-ins (the morning after) are
+computed in this stored `timeZone`, never in Sydney time.
 
 ### `respondToInvitation`
 
@@ -642,6 +663,8 @@ Returns `{ latest, history, appStore }`. Counts only: no names, emails or messag
   read a message in the last 7 days. `unmatched` counts discoverable members with nobody
   in their city who speaks what they learn and learns what they speak; it ignores blocks
   and age, so it is the generous count.
+- `cities` rows are `{ id, name, members, active7, new30, unmatched }`, most members first;
+  `name` carries the country, such as "Sydney, Australia".
 - `pairs` rows are `{ city, a, b, aSide, bSide, meetups }` with `a < b`: aSide speaks `a`
   and learns `b`, bSide the reverse. Sorted by the scarce side.
 - `history` is up to 30 days, newest first: `{ day, accounts, members, active7, plans, meetups }`.
@@ -673,7 +696,7 @@ no reason code.
 | --- | --- | --- |
 | `account/not-adult` | `failed-precondition` | The self declared birth date is under 18. DuoDialect is an adults only service. |
 | `profile/incomplete` | `failed-precondition` | The caller, or the other person, has no usable profile yet. |
-| `profile/city-invalid` | `invalid-argument` | `city` was sent but is not one of the `CITIES` ids. |
+| `profile/city-invalid` | `invalid-argument` | `city` was sent but is not an id on the world list (`functions/data/cities.json`). |
 | `profile/not-found` | `not-found` | The other person has no profile. |
 | `target/self` | `invalid-argument` | The caller named themselves. |
 | `target/unavailable` | `permission-denied` | A block exists in one direction or the other. The direction is deliberately not disclosed. |

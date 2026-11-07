@@ -26,14 +26,14 @@
         "buildType": "app-bundle"
       },
       "ios": {
-        "image": "latest"
+        "image": "sdk-54"
       }
     },
     "testflight": {
       "extends": "production",
       "environment": "preview",
       "ios": {
-        "image": "latest"
+        "image": "sdk-54"
       }
     }
   },

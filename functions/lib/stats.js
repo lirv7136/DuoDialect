@@ -2,7 +2,7 @@
 
 const { Timestamp } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
-const { CITIES, DEFAULT_CITY } = require("./constants");
+const { DEFAULT_CITY, cityLabel } = require("./constants");
 const { refs } = require("./refs");
 
 /**
@@ -37,8 +37,6 @@ const REFRESH_COOLDOWN_MS = 60 * 1000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const CITY_NAMES = new Map(CITIES.map((city) => [city.id, city.name]));
-
 /** "2026-11-06" for an instant, in a time zone. */
 function localDay(instant, timeZone = STATS_TIME_ZONE) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -64,10 +62,6 @@ function firstLanguage(value) {
   return languagesOf(value)[0] || null;
 }
 
-function cityName(id) {
-  return CITY_NAMES.get(id) || id;
-}
-
 /**
  * Everything that needs the profiles themselves, as a pure function so it can be tested
  * without a database.
@@ -89,7 +83,8 @@ function summarisePeople(people, { activeUids = new Set(), since30 = 0, meetups 
 
   const cityRow = (id) => {
     if (!cities.has(id)) {
-      cities.set(id, { id, name: cityName(id), members: 0, active7: 0, new30: 0, unmatched: 0 });
+      // "Sydney, Australia": with the country, since cities span the world.
+      cities.set(id, { id, name: cityLabel(id), members: 0, active7: 0, new30: 0, unmatched: 0 });
     }
     return cities.get(id);
   };

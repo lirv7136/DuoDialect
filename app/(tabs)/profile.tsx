@@ -8,6 +8,7 @@ import { candidateCache } from "../../src/lib/candidate-cache";
 import { clearPhotoUrls } from "../../src/lib/photos";
 import { capitalise } from "../../src/domain/profile-form";
 import { displayLanguage } from "../../src/domain/languages";
+import { cityLabel } from "../../src/domain/cities";
 import { forgetAccount, useMyAccount } from "../../hooks/use-my-account";
 import { Body, Button, Card, ChipRow, Display, ErrorNotice, InfoChip, ListRow, Loading, Screen, ToggleRow } from "../../components/ui";
 import { Avatar } from "../../components/avatar";
@@ -67,6 +68,9 @@ export default function Profile() {
               <Text maxFontSizeMultiplier={MAX_FONT_SCALE.display} style={{ fontFamily: fonts.display, fontSize: 26, lineHeight: 32, color: colors.primary }}>
                 {profile.displayName}
               </Text>
+              {cityLabel(profile.city) ? (
+                <InfoChip icon="business-outline" label={cityLabel(profile.city)} tone="plain" accessibilityLabel={`City: ${cityLabel(profile.city)}`} />
+              ) : null}
               {profile.area ? <InfoChip icon="location-outline" label={profile.area} tone="plain" /> : null}
             </View>
           </View>

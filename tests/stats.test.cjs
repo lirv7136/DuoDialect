@@ -110,7 +110,8 @@ test('a city in the stats reads by name, whether the server sent an id or a name
   const cities = [{ id: 'sydney', name: 'Sydney' }, { id: 'atlantis', name: 'Atlantis' }];
   assert.equal(s.statsCityName('sydney', cities), 'Sydney');
   assert.equal(s.statsCityName('atlantis', cities), 'Atlantis', 'the snapshot list knows cities the app may not');
-  assert.equal(s.statsCityName('gold-coast'), 'Gold Coast', 'falls back to the app list');
+  assert.equal(s.statsCityName('gold-coast'), 'Gold Coast, Australia', 'falls back to the app list, with the country');
+  assert.equal(s.statsCityName('london-gb'), 'London, United Kingdom');
   assert.equal(s.statsCityName('Sydney', cities), 'Sydney', 'a name passes through');
 });
 
@@ -137,7 +138,7 @@ test('pairs group by city in the city list order, keeping the server order insid
     { city: 'sydney', a: 'english', b: 'mandarin', aSide: 2, bSide: 7, meetups: 2 },
   ];
   const groups = s.pairsByCity(pairs, cities);
-  same(groups.map(group => group.name), ['Melbourne', 'Sydney', 'Hobart']);
+  same(groups.map(group => group.name), ['Melbourne', 'Sydney', 'Hobart, Australia']);
   same(groups[1].pairs.map(pair => pair.b), ['japanese', 'mandarin']);
   same(s.pairsByCity([], cities), []);
 });

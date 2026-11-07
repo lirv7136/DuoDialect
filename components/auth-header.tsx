@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { APP_NAME, LAUNCH_CITY } from "../constants/brand";
+import { APP_NAME } from "../constants/brand";
 import { MAX_FONT_SCALE, colors, fonts, space, type } from "../constants/theme";
 import { Logo } from "./logo";
 
@@ -15,7 +15,7 @@ export function AuthHeader({ title }: { title?: string }) {
         {title ?? APP_NAME}
       </Text>
       <Text style={[type.body, { color: colors.onPrimary, textAlign: "center" }]}>
-        {title ? "Platonic language swaps for adults, in public places." : `Swap languages over coffee in ${LAUNCH_CITY}.`}
+        {title ? "Platonic language swaps for adults, in public places." : "Swap languages over coffee, wherever you are."}
       </Text>
     </View>
   );

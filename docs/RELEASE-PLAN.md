@@ -166,6 +166,15 @@ before anyone is signed in, so no password surface needs hiding for Apple accoun
   and wait for them to be enabled.
 - [ ] `firebase deploy --only functions,firestore:rules`.
 
+## World cities (branch `feat-world-cities`)
+
+Talkeven opens to any city: the picker in onboarding and Edit profile searches about 5,300
+cities worldwide (GeoNames, every city of 100,000 people and every capital), suggests the
+biggest cities in the device's time zone, and a new profile starts on the likeliest one.
+Cities show with their country. Plans are arranged in the city's time zone. The eleven
+1.1.2 ids are unchanged, so no data migration; deploy functions before or with the web app
+(`docs/BACKEND-HANDOFF.md`, "World cities").
+
 ## Google Play
 
 Unchanged, and blocked on Android device verification in Play Console. After that:

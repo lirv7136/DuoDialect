@@ -56,7 +56,7 @@ test("the first call builds a snapshot from the community as it is", async () =>
   assert.deepEqual(latest.plans, { total: 0, new7: 0, pending: 0, accepted: 0, declined: 0, cancelled: 0 });
   assert.deepEqual(latest.meetups, { confirmed: 0, confirmed30: 0 });
   assert.deepEqual(latest.cities, [
-    { id: "sydney", name: "Sydney", members: 4, active7: 4, new30: 4, unmatched: 1 },
+    { id: "sydney", name: "Sydney, Australia", members: 4, active7: 4, new30: 4, unmatched: 1 },
   ]);
   assert.deepEqual(latest.pairs[0], {
     city: "sydney", a: "english", b: "japanese", aSide: 1, bSide: 2, meetups: 0,

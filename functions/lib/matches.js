@@ -6,7 +6,7 @@ const { isUsableProfile, reciprocalExchange } = require("./eligibility");
 const { refs, shortHash } = require("./refs");
 const { deliver } = require("./notifier");
 const { matchNotice } = require("./notifications");
-const { LIMITS, CITY_IDS } = require("./constants");
+const { LIMITS, isCityId } = require("./constants");
 
 /**
  * "A match joined" notifications.
@@ -57,7 +57,7 @@ async function notifyNewMatches(db, { uid, before, after }) {
 
   const r = refs(db);
   const seeks = (after.seeks || []).slice(0, 10);
-  if (seeks.length === 0 || !CITY_IDS.includes(after.city)) return { candidates: 0, notified: 0, skipped: 0 };
+  if (seeks.length === 0 || !isCityId(after.city)) return { candidates: 0, notified: 0, skipped: 0 };
 
   // The same index discovery uses: people in the same city who offer something the
   // newcomer is learning.

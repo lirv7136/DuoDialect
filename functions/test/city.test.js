@@ -1,9 +1,10 @@
 "use strict";
 
 /**
- * Cities: a profile belongs to one, discovery never crosses one, and the apps from
- * before cities keep working. The backfill script is run against the emulator too, so
- * the deploy step that makes the new discovery query safe is exercised here.
+ * Cities: a profile belongs to one from the world list, discovery never crosses one, and
+ * the apps from before cities and before the world list keep working. The backfill script
+ * is run against the emulator too, so the deploy step that makes the discovery query safe
+ * is exercised here.
  */
 
 process.env.DUODIALECT_PUSH_TRANSPORT = "stub";
@@ -14,10 +15,12 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { FieldValue } = require("firebase-admin/firestore");
 const {
-  PROJECT_ID, clearEmulators, shutdown, makeActor, expectFailure, admin, serverTimestamp, waitFor,
+  PROJECT_ID, clearEmulators, shutdown, makeActor, expectFailure, admin, serverTimestamp, waitFor, futureMeeting,
 } = require("./helpers/env");
 const { CAST } = require("./helpers/actors");
-const { CITIES, CITY_IDS, DEFAULT_CITY } = require("../lib/constants");
+const { CITIES, CITY_IDS, LEGACY_CITY_IDS, DEFAULT_CITY, isCityId, cityLabel } = require("../lib/constants");
+const { reminderTimeFor } = require("../lib/reminders");
+const { checkInTimeFor } = require("../lib/checkins");
 
 let seq = 0;
 
@@ -45,14 +48,36 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 1200));
 test.before(async () => { await clearEmulators(); });
 test.after(async () => { await shutdown(); });
 
-test("the allow list is well formed and the default is on it", () => {
-  assert.ok(CITIES.length >= 11);
+test("the world list is well formed, keeps the original eleven ids, and the default is on it", () => {
+  assert.ok(CITIES.length > 5000, "every city of 100,000 people and every capital");
   assert.equal(new Set(CITY_IDS).size, CITY_IDS.length, "ids are unique");
   for (const city of CITIES) {
-    assert.match(city.id, /^[a-z]+(-[a-z]+)*$/, `${city.id} is lower case with hyphens only inside`);
-    assert.ok(city.name.trim().length > 0);
+    assert.match(city.id, /^[a-z0-9]+(-[a-z0-9]+)*$/, `${city.id} is lower case with hyphens only inside`);
+    assert.ok(city.name.trim().length > 0, city.id);
+    assert.match(city.country, /^[A-Z]{2}$/, city.id);
+    assert.ok(city.countryName, city.id);
+    assert.doesNotThrow(() => new Intl.DateTimeFormat("en", { timeZone: city.timeZone }), `${city.id} has a real time zone`);
   }
-  assert.ok(CITY_IDS.includes(DEFAULT_CITY));
+  // Production profiles store these, and the 1.1.2 app sends them.
+  const zones = {
+    sydney: "Australia/Sydney", melbourne: "Australia/Melbourne", brisbane: "Australia/Brisbane", perth: "Australia/Perth",
+    adelaide: "Australia/Adelaide", canberra: "Australia/Sydney", hobart: "Australia/Hobart", darwin: "Australia/Darwin",
+    "gold-coast": "Australia/Brisbane", auckland: "Pacific/Auckland", wellington: "Pacific/Auckland",
+  };
+  assert.deepEqual([...LEGACY_CITY_IDS].sort(), Object.keys(zones).sort());
+  for (const id of LEGACY_CITY_IDS) {
+    const city = CITIES.find((item) => item.id === id);
+    assert.ok(city, `${id} is still on the list`);
+    assert.equal(city.timeZone, zones[id], id);
+    assert.ok(["AU", "NZ"].includes(city.country), id);
+  }
+  assert.equal(cityLabel("sydney"), "Sydney, Australia");
+  assert.equal(cityLabel("gold-coast"), "Gold Coast, Australia");
+  assert.equal(cityLabel("london-gb"), "London, United Kingdom");
+  assert.equal(cityLabel("springfield-us-il"), "Springfield, Illinois, United States");
+  assert.equal(isCityId("atlantis"), false);
+  assert.equal(isCityId("London-GB"), false, "ids are matched lower case; upsertProfile lower cases first");
+  assert.ok(isCityId(DEFAULT_CITY));
   assert.equal(DEFAULT_CITY, "sydney");
 });
 
@@ -74,6 +99,42 @@ test("a new profile without a city is Sydney (older apps still sign up); a bogus
   const saved = await nobody.call("upsertProfile", { ...CAST.alex, city: " Melbourne " });
   assert.equal(saved.profile.city, "melbourne");
   assert.equal((await nobody.call("getMyAccount")).profile.city, "melbourne");
+
+  // Any city on the world list is accepted, not only the original eleven.
+  const london = await nobody.call("upsertProfile", { ...CAST.alex, city: " London-GB ", cityList: "world" });
+  assert.equal(london.profile.city, "london-gb");
+  assert.equal((await nobody.call("getMyAccount")).profile.city, "london-gb");
+  const springfield = await nobody.call("upsertProfile", { ...CAST.alex, city: "springfield-us-il", cityList: "world" });
+  assert.equal(springfield.profile.city, "springfield-us-il");
+
+  // A name is not an id, and nothing changes when one is refused.
+  const named = await expectFailure(nobody.call("upsertProfile", { ...CAST.alex, city: "London", cityList: "world" }), "invalid-argument");
+  assert.equal(named.details.reason, "profile/city-invalid");
+  assert.equal((await nobody.call("getMyAccount")).profile.city, "springfield-us-il");
+});
+
+test("the 1.1.2 app's Sydney fallback never moves someone out of a city it cannot show", async () => {
+  // 1.1.2 knows eleven cities and shows any other stored city as Sydney, so saving a
+  // profile from it sends "sydney" without `cityList`. That keeps the stored city.
+  const traveller = await member("city-old-app", null);
+  await traveller.call("upsertProfile", { ...CAST.alex, displayName: traveller.name, city: "london-gb", cityList: "world" });
+  const resaved = await traveller.call("upsertProfile", { ...CAST.alex, displayName: traveller.name, city: "sydney", bio: "Edited in 1.1.2" });
+  assert.equal(resaved.profile.city, "london-gb");
+  assert.equal(resaved.profile.bio, "Edited in 1.1.2", "the rest of the save goes through");
+  assert.equal((await admin().doc(`profiles/${traveller.uid}`).get()).get("city"), "london-gb");
+
+  // Any other city 1.1.2 offers is a deliberate move.
+  const moved = await traveller.call("upsertProfile", { ...CAST.alex, displayName: traveller.name, city: "melbourne" });
+  assert.equal(moved.profile.city, "melbourne");
+
+  // From a city 1.1.2 can show, "sydney" is a real choice too.
+  const toSydney = await traveller.call("upsertProfile", { ...CAST.alex, displayName: traveller.name, city: "sydney" });
+  assert.equal(toSydney.profile.city, "sydney");
+
+  // A client that knows the world list can always choose Sydney.
+  await traveller.call("upsertProfile", { ...CAST.alex, displayName: traveller.name, city: "paris-fr", cityList: "world" });
+  const chosen = await traveller.call("upsertProfile", { ...CAST.alex, displayName: traveller.name, city: "sydney", cityList: "world" });
+  assert.equal(chosen.profile.city, "sydney");
 });
 
 test("an app from before cities keeps working: omitted city means the stored one, or Sydney", async () => {
@@ -161,6 +222,41 @@ test("discovery shows partners in the caller's city only", async () => {
   const movedUids = moved.candidates.map((candidate) => candidate.uid);
   assert.equal(movedUids.includes(melAiko.uid), false);
   assert.deepEqual([...movedUids].sort(), [...sydUids].sort(), "the same Sydney partners as Alex in Sydney");
+});
+
+test("a world city is a boundary like any other: London members never see Paris or Sydney", async () => {
+  const lonAiko = await member("w-lon-aiko", { ...CAST.aiko, cityList: "world" }, "london-gb");
+  const parAiko = await member("w-par-aiko", { ...CAST.aiko, cityList: "world" }, "paris-fr");
+  const sydAiko = await member("w-syd-aiko", CAST.aiko, "sydney");
+  const lonAlex = await member("w-lon-alex", { ...CAST.alex, cityList: "world" }, "london-gb");
+
+  const london = await lonAlex.call("discoverCandidates", { mode: "platonic", limit: 20 });
+  const uids = london.candidates.map((candidate) => candidate.uid);
+  assert.ok(uids.includes(lonAiko.uid), "Aiko in London is a partner for Alex in London");
+  assert.equal(uids.includes(parAiko.uid), false, "Paris is another city");
+  assert.equal(uids.includes(sydAiko.uid), false, "and so is Sydney");
+  for (const candidate of london.candidates) assert.equal(candidate.city, "london-gb");
+});
+
+test("a plan in a world city is reminded and checked in on that city's clock", async () => {
+  const host = await member("tz-lon-alex", { ...CAST.alex, cityList: "world" }, "london-gb");
+  const guest = await member("tz-lon-aiko", { ...CAST.aiko, cityList: "world" }, "london-gb");
+  // The app states the city's zone, Europe/London, whatever the phone says.
+  const meeting = futureMeeting({ days: 8, localTime: "18:30", timeZone: "Europe/London", venue: "A cafe in Soho" });
+  const { invitation } = await host.call("createInvitation", {
+    toUid: guest.uid, intent: "platonic", requestKey: "tz-london", note: "Coffee?", meeting,
+  });
+  assert.equal(invitation.meeting.timeZone, "Europe/London");
+  await guest.call("respondToInvitation", { invitationId: invitation.id, action: "accept" });
+
+  const stored = (await admin().doc(`invitations/${invitation.id}`).get()).data();
+  const wall = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  assert.equal(wall.format(new Date(invitation.meeting.startAt)), "18:30", "the meetup starts at 18:30 London time");
+  assert.equal(wall.format(stored.meeting.startAt.toDate()), "18:30");
+  assert.equal(stored.nextReminderAt.toDate().toISOString(), reminderTimeFor(meeting.localDate, "Europe/London").toISOString());
+  assert.equal(stored.nextCheckInAt.toDate().toISOString(), checkInTimeFor(meeting.localDate, "Europe/London").toISOString());
+  assert.notEqual(stored.nextReminderAt.toDate().toISOString(), reminderTimeFor(meeting.localDate, "Australia/Sydney").toISOString(),
+    "not Sydney's evening");
 });
 
 test("a match notice reaches members in the newcomer's city only", async () => {
