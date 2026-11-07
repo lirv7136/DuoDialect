@@ -33,7 +33,7 @@ test("an empty Discover explains who almost matches, and counts who wants your l
   const miss = result.nearMisses.find((item) => item.uid === mei.uid);
   assert.ok(miss, "Mei wants English and has some Japanese");
   assert.equal(miss.reason, "language/insufficient-fluency");
-  assert.deepEqual(Object.keys(miss).sort(), ["area", "displayName", "offers", "photos", "reason", "seeks", "uid"]);
+  assert.deepEqual(Object.keys(miss).sort(), ["area", "displayName", "offers", "photos", "reason", "seeks", "uid", "verified"]);
   assert.equal(result.nearMisses.some((item) => item.uid === sam.uid), false, "Sam wants nothing Alex offers");
   assert.equal(result.nearMisses.some((item) => item.uid === alex.uid), false);
   assert.equal(result.learningYourLanguage, 1);
