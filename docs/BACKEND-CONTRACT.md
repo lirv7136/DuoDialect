@@ -657,19 +657,27 @@ Returns `{ latest, history, appStore }`. Counts only: no names, emails or messag
   withoutProfile is everyone who signed up but never finished onboarding), `members`
   (total, discoverable, new7, new30, active7, withMeetup, unmatched), `plans` (total, new7
   and by status), `meetups` (confirmed, confirmed30), `cities` and the top 30 language
-  `pairs` per city, plus `generatedAt` (ms), `day` and `truncated`. The first call builds
-  it if none exists. `refresh: true` rebuilds it unless it is under a minute old.
-- `active7` counts members who saved their profile, sent or answered a plan, or sent or
-  read a message in the last 7 days. `unmatched` counts discoverable members with nobody
+  `pairs` per city, plus `generatedAt` (ms), `day`, `truncated` (a profile, meetup or
+  activity scan hit its limit, so counts are partial) and `citiesTruncated`. The first call
+  builds it if none exists. `refresh: true` rebuilds it unless it is under a minute old.
+- `active7` counts members who, in the last 7 days, saved their own profile or photos
+  (`lastEditedAt`, falling back to `updatedAt` on profiles saved before it existed), sent a
+  plan, answered or cancelled one, sent the latest message in a chat (`lastMessageAt`) or
+  opened a chat (`readAt`). Only the person who acted counts: receiving a plan or a
+  message, or a moderator changing a profile, is not activity. `unmatched` counts discoverable members with nobody
   in their city who speaks what they learn and learns what they speak; it ignores blocks
   and age, so it is the generous count.
-- `cities` rows are `{ id, name, members, active7, new30, unmatched }`, most members first;
-  `name` carries the country, such as "Sydney, Australia".
+- `cities` rows are `{ id, name, members, active7, new30, unmatched }`, most members first,
+  at most 50; `citiesTruncated` is true when more cities have members. `name` carries the
+  country, such as "Sydney, Australia".
 - `pairs` rows are `{ city, a, b, aSide, bSide, meetups }` with `a < b`: aSide speaks `a`
   and learns `b`, bSide the reverse. Sorted by the scarce side.
 - `history` is up to 30 days, newest first: `{ day, accounts, members, active7, plans, meetups }`.
 - `appStore` is `{ lastSyncAt, lastError, days }`, days newest first with downloads,
-  redownloads and updates. `lastSyncAt` is null until `syncAppStoreDownloads` has run.
+  redownloads and updates. `lastSyncAt` is the last run of `syncAppStoreDownloads` that
+  succeeded, so it stays null (not connected, with `lastError` saying why) until one has.
+  A report day older than the two most recent with no report and no "no sales" answer is an
+  error, most likely a wrong vendor number.
 
 `snapshotStats` saves a snapshot every day at 05:00 Sydney time. `syncAppStoreDownloads`
 runs at 10:00 and reads the `APPSTORE_CONNECT` secret (`scripts/set-appstore-secret.sh`).

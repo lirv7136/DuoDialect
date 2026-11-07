@@ -3,8 +3,9 @@
  *
  * The server is authoritative (`createInvitation` revalidates everything against the
  * stated IANA time zone). These checks run first so a person sees a precise message
- * before anything is sent. They interpret the wall time in the device's own zone,
- * which is the zone the client sends.
+ * before anything is sent. A plan's date and time are wall time in the plan's zone (the
+ * city's, which may not be the phone's), so "now" is read on that zone's clock too:
+ * pass `wallClockIn(zone)` as `now`. A plain Date is read on the device's clock.
  */
 
 export const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
@@ -33,6 +34,61 @@ function pad(value: number) {
 
 export function toLocalDateString(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** What a clock on the wall reads in one time zone. Month and day count from 1. */
+export type WallClock = { year: number; month: number; day: number; hour: number; minute: number; second: number };
+
+function deviceClock(instant: Date): WallClock {
+  return {
+    year: instant.getFullYear(), month: instant.getMonth() + 1, day: instant.getDate(),
+    hour: instant.getHours(), minute: instant.getMinutes(), second: instant.getSeconds(),
+  };
+}
+
+/**
+ * What a clock in `timeZone` reads at `instant`: the plan's "now", as the server reads it
+ * (functions/lib/validation.js resolves the wall time in the same zone). The device's own
+ * clock when there is no zone, or the JS engine cannot use the one given.
+ */
+export function wallClockIn(timeZone: string | null | undefined, instant: Date = new Date()): WallClock {
+  if (timeZone) {
+    try {
+      const parts: Record<string, string> = {};
+      for (const part of new Intl.DateTimeFormat("en-US", {
+        timeZone, hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+      }).formatToParts(instant)) parts[part.type] = part.value;
+      // Some engines write midnight as 24, and one that ignores hour12 adds AM or PM.
+      let hour = Number(parts.hour) % 24;
+      if (/pm/i.test(parts.dayPeriod ?? "") && hour < 12) hour += 12;
+      if (/am/i.test(parts.dayPeriod ?? "") && hour === 12) hour = 0;
+      const clock = {
+        year: Number(parts.year), month: Number(parts.month), day: Number(parts.day),
+        hour, minute: Number(parts.minute), second: Number(parts.second),
+      };
+      if (Object.values(clock).every(Number.isFinite)) return clock;
+    } catch {
+      // An unknown zone, or an engine without formatToParts: the device clock below.
+    }
+  }
+  return deviceClock(instant);
+}
+
+/** A "now" given either as a wall clock or as an instant, which is read on the device's clock. */
+export function asWallClock(now: Date | WallClock): WallClock {
+  // Duck typed, not instanceof: a Date from another realm is still a Date.
+  return typeof (now as Date).getTime === "function" ? deviceClock(now as Date) : now as WallClock;
+}
+
+/** A wall time as milliseconds counted as if it were UTC, so wall times compare and add with no zone involved. */
+function wallMs(year: number, month: number, day: number, hour = 0, minute = 0, second = 0): number {
+  return Date.UTC(year, month - 1, day, hour, minute, second);
+}
+
+/** "YYYY-MM-DD" for a date made by wallMs. */
+function wallDateString(ms: number): string {
+  const date = new Date(ms);
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
 }
 
 /** Parses "YYYY-MM-DD" as a real calendar date, or null. Time zone independent. */
@@ -81,9 +137,10 @@ export type MeetingDraft = {
  */
 export function validateMeetingDraft(
   draft: MeetingDraft,
-  options: { now?: Date; sharedAvailability?: readonly string[] } = {},
+  options: { now?: Date | WallClock; sharedAvailability?: readonly string[] } = {},
 ): string | null {
-  const now = options.now ?? new Date();
+  const clock = asWallClock(options.now ?? new Date());
+  const now = wallMs(clock.year, clock.month, clock.day, clock.hour, clock.minute, clock.second);
   const venue = draft.venue.trim();
   if (!venue) return "Suggest a public place to meet, such as a café or library.";
   if (venue.length > MAX_VENUE) return `Keep the place to ${MAX_VENUE} characters or fewer.`;
@@ -92,9 +149,9 @@ export function validateMeetingDraft(
   const localTime = draft.localTime.trim();
   if (!isValidLocalTime(localTime)) return "Enter a time as HH:mm, for example 18:30.";
   if (draft.recurrence !== "once" && draft.recurrence !== "weekly") return "Choose one meetup or weekly practice.";
-  const start = new Date(date.year, date.month - 1, date.day, Number(localTime.slice(0, 2)), Number(localTime.slice(3)));
-  if (start.getTime() <= now.getTime()) return "Choose a time in the future.";
-  if (start.getTime() > now.getTime() + 366 * 24 * 60 * 60 * 1000) return "Choose a time within the next year.";
+  const start = wallMs(date.year, date.month, date.day, Number(localTime.slice(0, 2)), Number(localTime.slice(3)));
+  if (start <= now) return "Choose a time in the future.";
+  if (start > now + 366 * 24 * 60 * 60 * 1000) return "Choose a time within the next year.";
   if (draft.note.length > MAX_NOTE) return `Keep the note to ${MAX_NOTE} characters or fewer.`;
   const shared = options.sharedAvailability ?? [];
   const slot = slotFor(draft.localDate.trim(), localTime);
@@ -106,20 +163,22 @@ export function validateMeetingDraft(
 
 export type SuggestedTime = { localDate: string; localTime: string; slot: string };
 
-/** The next few concrete times that fall inside the given availability slots. */
-export function suggestMeetingTimes(slots: readonly string[], now: Date = new Date(), count = 3): SuggestedTime[] {
+/** The next few concrete times that fall inside the given availability slots, from `now` on the plan's clock. */
+export function suggestMeetingTimes(slots: readonly string[], now: Date | WallClock = new Date(), count = 3): SuggestedTime[] {
   const out: SuggestedTime[] = [];
   const wanted = new Set(slots);
+  const clock = asWallClock(now);
+  const nowMs = wallMs(clock.year, clock.month, clock.day, clock.hour, clock.minute, clock.second);
   for (let offset = 0; offset < 21 && out.length < count; offset++) {
-    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    const day = wallMs(clock.year, clock.month, clock.day + offset);
     for (const part of DAY_PARTS) {
-      const slot = `${WEEKDAYS[day.getDay()]} ${part}`;
+      const slot = `${WEEKDAYS[new Date(day).getUTCDay()]} ${part}`;
       if (!wanted.has(slot)) continue;
       const localTime = PART_START[part];
-      const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number(localTime.slice(0, 2)), 0);
+      const start = day + Number(localTime.slice(0, 2)) * 60 * 60 * 1000;
       // Leave at least two hours to read and answer the invitation.
-      if (start.getTime() - now.getTime() < 2 * 60 * 60 * 1000) continue;
-      out.push({ localDate: toLocalDateString(day), localTime, slot });
+      if (start - nowMs < 2 * 60 * 60 * 1000) continue;
+      out.push({ localDate: wallDateString(day), localTime, slot });
       if (out.length >= count) break;
     }
   }

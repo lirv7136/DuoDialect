@@ -3,8 +3,9 @@
 /**
  * Operator stats, end to end: only a moderator gets them, the first call builds a snapshot
  * from the real community, a refresh is honoured once the cooldown has passed, the stats
- * collections stay closed to every client, and App Store units land where getStats reads
- * them, with a broken secret or the placeholder reported rather than swallowed.
+ * collections stay closed to every client, App Store units land where getStats reads
+ * them, with a broken secret or the placeholder reported rather than swallowed and only a
+ * successful run counted as connected, and "active this week" counts only who acted.
  */
 
 process.env.DUODIALECT_PUSH_TRANSPORT = "stub";
@@ -16,10 +17,11 @@ const zlib = require("node:zlib");
 const { Buffer } = require("node:buffer");
 const { Timestamp, FieldValue } = require("firebase-admin/firestore");
 const {
-  clearEmulators, shutdown, makeActor, admin, adminAuth, expectFailure, expectDenied,
+  clearEmulators, shutdown, makeActor, admin, adminAuth, expectFailure, expectDenied, futureMeeting,
 } = require("./helpers/env");
 const { CAST } = require("./helpers/actors");
 const { syncAppStoreDownloads, runAppStoreSync, TALKEVEN_APPLE_ID } = require("../lib/appstore");
+const { activeUidsSince } = require("../lib/stats");
 
 const members = {};
 let moderator;
@@ -62,6 +64,7 @@ test("the first call builds a snapshot from the community as it is", async () =>
     city: "sydney", a: "english", b: "japanese", aSide: 1, bSide: 2, meetups: 0,
   });
   assert.equal(latest.truncated, false);
+  assert.equal(latest.citiesTruncated, false);
   assert.deepEqual(stats.history, [{
     day: latest.day, accounts: 6, members: 4, active7: 4, plans: 0, meetups: 0,
   }]);
@@ -129,6 +132,15 @@ test("App Store units land where getStats reads them, and a broken secret is rep
   // 20:00 UTC on 6 November is still the 6th in California, so the newest report is the 5th.
   const now = new Date("2026-11-06T20:00:00Z");
 
+  // A first run that fails, as with a key Apple refuses, is not connected: no sync time,
+  // and the error says why.
+  const refused = async () => ({ status: 401, ok: false, text: async () => "NOT_AUTHORIZED" });
+  const failedFirst = await syncAppStoreDownloads(admin(), config, { now, fetchImpl: refused });
+  assert.match(failedFirst.lastError, /answered 401/);
+  const notConnected = (await moderator.call("getStats", {})).appStore;
+  assert.equal(notConnected.lastSyncAt, null, "no run has succeeded yet");
+  assert.match(notConnected.lastError, /answered 401/);
+
   const first = await syncAppStoreDownloads(admin(), config, { now, fetchImpl });
   assert.deepEqual(first, { checked: 30, written: 30, lastError: null });
   assert.equal(requested[0], "2026-11-05");
@@ -140,7 +152,7 @@ test("App Store units land where getStats reads them, and a broken secret is rep
 
   const { appStore } = await moderator.call("getStats", {});
   assert.equal(typeof appStore.lastSyncAt, "number");
-  assert.equal(appStore.lastError, null);
+  assert.equal(appStore.lastError, null, "a successful run clears the error");
   assert.equal(appStore.days.length, 30);
   assert.deepEqual(appStore.days[0], { day: "2026-11-05", downloads: 2, redownloads: 0, updates: 5 });
   assert.deepEqual(appStore.days[1], { day: "2026-11-04", downloads: 0, redownloads: 0, updates: 0 });
@@ -153,4 +165,44 @@ test("App Store units land where getStats reads them, and a broken secret is rep
 
   const placeholder = await runAppStoreSync(admin(), "{}");
   assert.match(placeholder.lastError, /^Not connected yet/);
+
+  // A later run that fails keeps the last good time beside its error.
+  await syncAppStoreDownloads(admin(), config, { now, fetchImpl: refused });
+  const failedLater = (await moderator.call("getStats", {})).appStore;
+  assert.equal(failedLater.lastSyncAt, appStore.lastSyncAt);
+  assert.match(failedLater.lastError, /answered 401/);
+});
+
+test("active this week counts whoever acted, not the other side, and a full scan is reported", async () => {
+  const db = admin();
+  // Profiles saved by the person carry lastEditedAt, which the count reads.
+  const profile = await db.doc(`profiles/${members.alex.uid}`).get();
+  assert.equal(typeof profile.get("lastEditedAt")?.toMillis, "function", "upsertProfile stamps the person's own edit");
+
+  // Everyone's last edit is before this, so only what follows counts.
+  const since = new Date();
+  const active = async () => [...(await activeUidsSince(db, since)).uids].sort();
+
+  const { invitation } = await members.alex.call("createInvitation", {
+    toUid: members.ren.uid, intent: "platonic", requestKey: "stats-active-1", note: "Coffee?", meeting: futureMeeting(),
+  });
+  assert.deepEqual(await active(), [members.alex.uid], "sending counts; being sent a plan does not");
+
+  const { conversationId } = await members.ren.call("respondToInvitation", { invitationId: invitation.id, action: "accept" });
+  await members.ren.call("sendMessage", { conversationId, text: "See you there.", clientMessageId: "stats-m1" });
+  const conversation = await db.doc(`conversations/${conversationId}`).get();
+  assert.equal(typeof conversation.get("lastMessageAt")?.toMillis, "function", "sendMessage stamps when the latest message was sent");
+  assert.deepEqual(await active(), [members.alex.uid, members.ren.uid].sort());
+
+  // A moderator hiding a profile moves updatedAt, as suspension does, but it is not that
+  // person's activity.
+  for (const name of ["sam", "aiko"]) {
+    await db.doc(`profiles/${members[name].uid}`).set({ discoverable: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  }
+  assert.deepEqual(await active(), [members.alex.uid, members.ren.uid].sort());
+
+  const partial = await activeUidsSince(db, since, { limit: 1 });
+  assert.equal(partial.truncated, true, "two profiles changed, more than a limit of one");
+  assert.equal((await activeUidsSince(db, since)).truncated, false);
+  for (const name of ["sam", "aiko"]) await db.doc(`profiles/${members[name].uid}`).set({ discoverable: true }, { merge: true });
 });

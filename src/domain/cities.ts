@@ -102,10 +102,24 @@ const ZONE_ALIASES: Record<string, string> = {
   "Mexico/General": "America/Mexico_City",
 };
 
+/** A zone under the name the city list uses: "Asia/Calcutta" → "Asia/Kolkata". Anything else as given. */
+export function canonicalTimeZone(zone: string): string {
+  return ZONE_ALIASES[zone] ?? zone;
+}
+
+/**
+ * Whether two zone names are the same zone, allowing for the older names some devices and
+ * browsers report, so a phone on "Asia/Calcutta" is not told its own Kolkata plan is in
+ * another zone. Neither known is not the same.
+ */
+export function sameTimeZone(a: string | null | undefined, b: string | null | undefined): boolean {
+  return !!a && !!b && canonicalTimeZone(a) === canonicalTimeZone(b);
+}
+
 /** The biggest cities in a time zone, such as the device's: the likely home of a new member. */
 export function citiesInTimeZone(zone: string | null | undefined, limit = 3): City[] {
   if (!zone) return [];
-  const wanted = ZONE_ALIASES[zone] ?? zone;
+  const wanted = canonicalTimeZone(zone);
   const found: City[] = [];
   for (const city of CITIES) {
     if (city.timeZone !== wanted) continue;

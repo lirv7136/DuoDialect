@@ -69,6 +69,8 @@ async function sendMessage(db, uid, payload) {
 
     tx.update(convRef, {
       lastMessage: { text, fromUid: uid, messageId: id },
+      // When the latest message was sent; updatedAt also moves when either side reads.
+      lastMessageAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
 

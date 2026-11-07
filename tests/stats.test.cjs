@@ -80,10 +80,34 @@ test('App Store totals cover the days up to the newest report, not every row', (
   assert.equal(s.appStoreTotals([...days].reverse(), 7).through, '2026-11-04', 'order does not matter');
 });
 
-test('App Store is connected once a sync has run', () => {
+test('App Store is connected once a sync has succeeded', () => {
   assert.equal(s.appStoreConnected({ lastSyncAt: null }), false);
   assert.equal(s.appStoreConnected({ lastSyncAt: 0 }), true);
   assert.equal(s.appStoreConnected({ lastSyncAt: 1762400000000 }), true);
+  // A first run with a bad key: the server has no successful run to report, only the error.
+  const firstRunFailed = s.normaliseStats({ appStore: { lastSyncAt: null, lastError: 'App Store Connect answered 401 for 2026-11-05', days: [] } }).appStore;
+  assert.equal(s.appStoreConnected(firstRunFailed), false);
+  assert.equal(firstRunFailed.lastError, 'App Store Connect answered 401 for 2026-11-05');
+  // A later failure keeps the last good sync, so it is still connected, with the error beside it.
+  const laterFailed = s.normaliseStats({ appStore: { lastSyncAt: 1762400000000, lastError: 'Check the vendor number.', days: [] } }).appStore;
+  assert.equal(s.appStoreConnected(laterFailed), true);
+  assert.equal(laterFailed.lastError, 'Check the vendor number.');
+});
+
+test('the city list stops at the top 50 and says when some were left out', () => {
+  const city = i => ({ id: `c${i}`, name: `City ${i}`, members: 100 - i, active7: 0, new30: 0, unmatched: 0 });
+  const fifty = Array.from({ length: 50 }, (_, i) => city(i));
+  assert.equal(s.MAX_LISTED_CITIES, 50);
+  const capped = s.listedCities({ cities: fifty, citiesTruncated: true });
+  assert.equal(capped.cities.length, 50);
+  assert.equal(capped.more, true, 'the server left some out');
+  same(s.listedCities({ cities: fifty.slice(0, 3), citiesTruncated: false }), { cities: fifty.slice(0, 3), more: false });
+  // An older snapshot with every city and no flag is capped here too.
+  const old = s.listedCities({ cities: Array.from({ length: 70 }, (_, i) => city(i)) });
+  assert.equal(old.cities.length, 50);
+  assert.equal(old.cities[49].id, 'c49');
+  assert.equal(old.more, true);
+  same(s.listedCities({ cities: [] }), { cities: [], more: false });
 });
 
 test('the updated label counts minutes, hours, then days', () => {

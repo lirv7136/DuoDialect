@@ -12,7 +12,7 @@ import { stats, type StatsCity, type StatsPair, type StatsResponse, type StatsSn
 import { ApiError } from "../../src/lib/api";
 import { errorMessage } from "../../src/domain/errors";
 import {
-  appStoreConnected, appStoreTotals, formatCount, formatPercent, funnel, historySeries, newThisWeek, pairSides, pairSummary,
+  appStoreConnected, appStoreTotals, formatCount, formatPercent, funnel, historySeries, listedCities, newThisWeek, pairSides, pairSummary,
   pairTitle, pairsByCity, percentLabel, plural, seriesChange, shortDay, timeAgo, updatedLabel,
   type AppStoreStats, type FunnelStep, type HistorySeries,
 } from "../../src/domain/stats";
@@ -94,6 +94,7 @@ function Snapshot({ latest, data, now }: { latest: StatsSnapshot; data: StatsRes
   const connected = appStoreConnected(data.appStore);
   const week = appStoreTotals(data.appStore.days, 7);
   const groups = pairsByCity(latest.pairs, latest.cities);
+  const listed = listedCities(latest);
   return (
     <>
       <Notice tone="info" icon="information-circle-outline"
@@ -137,12 +138,13 @@ function Snapshot({ latest, data, now }: { latest: StatsSnapshot; data: StatsRes
       </Card>
 
       <Heading>Cities</Heading>
-      {latest.cities.length ? (
+      {listed.cities.length ? (
         <>
           <Card style={{ padding: space.md, gap: 0 }}>
             <CityHeader />
-            {latest.cities.map(city => <CityRow key={city.id} city={city} />)}
+            {listed.cities.map(city => <CityRow key={city.id} city={city} />)}
           </Card>
+          {listed.more ? <Caption>{`The ${listed.cities.length} cities with the most members.`}</Caption> : null}
           <Caption>Active: did something in the last 7 days. No match: discoverable, with nobody reciprocal in the city.</Caption>
         </>
       ) : <Caption>No members in any city yet.</Caption>}

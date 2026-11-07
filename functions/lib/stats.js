@@ -17,9 +17,12 @@ const { refs } = require("./refs");
  *   statsDaily/{YYYY-MM-DD}   server only; the last snapshot of each Sydney day, for trends
  *
  * Totals use aggregation queries. Cities, language pairs and the unmatched count need
- * every profile, so profiles are read once, bounded by PROFILE_SCAN_LIMIT; past it the
- * snapshot says it is truncated. Nothing here holds a name, an email or a message, only
- * counts. Built once a day by snapshotStats and on demand by getStats (moderators only).
+ * every profile, so profiles are read once, bounded by PROFILE_SCAN_LIMIT; past it, or past
+ * ACTIVITY_SCAN_LIMIT in any of the scans for who was active, the snapshot says it is
+ * truncated. Only the TOP_CITIES cities with the most members are kept, and
+ * `citiesTruncated` says when there were more. Nothing here holds a name, an email or a
+ * message, only counts. Built once a day by snapshotStats and on demand by getStats
+ * (moderators only).
  */
 
 const STATS_TIME_ZONE = "Australia/Sydney";
@@ -30,7 +33,11 @@ const ACTIVITY_SCAN_LIMIT = 5000;
 const MEETUP_SCAN_LIMIT = 5000;
 
 const TOP_PAIRS = 30;
+const TOP_CITIES = 50;
 const HISTORY_DAYS = 30;
+
+/** All historyEntry reads from a day's snapshot, so the trend never loads whole snapshots. */
+const HISTORY_FIELDS = ["day", "accounts.total", "members.total", "members.active7", "plans.total", "meetups.confirmed"];
 
 /** A refresh this soon after the last snapshot returns that snapshot instead. */
 const REFRESH_COOLDOWN_MS = 60 * 1000;
@@ -141,9 +148,11 @@ function summarisePeople(people, { activeUids = new Set(), since30 = 0, meetups 
   }
 
   const scarce = (pair) => Math.min(pair.aSide, pair.bSide);
+  const cityRows = [...cities.values()].sort((p, q) => q.members - p.members || p.id.localeCompare(q.id));
   return {
     unmatched,
-    cities: [...cities.values()].sort((p, q) => q.members - p.members || p.id.localeCompare(q.id)),
+    cities: cityRows.slice(0, TOP_CITIES),
+    citiesTruncated: cityRows.length > TOP_CITIES,
     pairs: [...pairs.values()]
       .sort((p, q) => scarce(q) - scarce(p)
         || (q.aSide + q.bSide) - (p.aSide + p.bSide)
@@ -172,22 +181,79 @@ async function countAccounts() {
 }
 
 /**
- * Who did something in the window: saved their profile, sent or answered a plan, or sent
- * or read a message. Each of those moves an updatedAt the server owns.
+ * Who did something in the window, from the records the activity scans return (times in
+ * milliseconds). Only the person who acted counts, never the other side of it:
+ *
+ *   profiles       saved their own profile or photos: lastEditedAt, which only
+ *                  upsertProfile and setProfilePhotos write. A profile saved before that
+ *                  field existed falls back to updatedAt.
+ *   invitations    sent a plan (fromUid, by createdAt), or answered or cancelled one
+ *                  (resolution.by, by respondedAt)
+ *   conversations  sent the latest message (lastMessage.fromUid, by lastMessageAt), or
+ *                  opened the chat (readAt[uid])
+ *
+ * So receiving a plan or a message, or a moderator suspending someone, is not activity.
  */
-async function activeUidsSince(db, since) {
-  const r = refs(db);
-  const cutoff = Timestamp.fromDate(since);
-  const [profiles, invitations, conversations] = await Promise.all([
-    r.profiles().where("updatedAt", ">=", cutoff).select().limit(ACTIVITY_SCAN_LIMIT).get(),
-    r.invitations().where("updatedAt", ">=", cutoff).select("participants").limit(ACTIVITY_SCAN_LIMIT).get(),
-    r.conversations().where("updatedAt", ">=", cutoff).select("participants").limit(ACTIVITY_SCAN_LIMIT).get(),
-  ]);
-  const uids = new Set(profiles.docs.map((doc) => doc.id));
-  for (const doc of [...invitations.docs, ...conversations.docs]) {
-    for (const uid of languagesOf(doc.get("participants"))) uids.add(uid);
+function activeMembers({ profiles = [], invitations = [], conversations = [] } = {}, since = 0) {
+  const uids = new Set();
+  const within = (ms) => typeof ms === "number" && ms >= since;
+  const add = (uid, ms) => { if (typeof uid === "string" && uid && within(ms)) uids.add(uid); };
+  for (const profile of profiles) {
+    add(profile.uid, profile.lastEditedAt === undefined ? profile.updatedAt : profile.lastEditedAt);
+  }
+  for (const invitation of invitations) {
+    add(invitation.fromUid, invitation.createdAt);
+    add(invitation.respondedBy, invitation.respondedAt);
+  }
+  for (const conversation of conversations) {
+    add(conversation.lastMessageFromUid, conversation.lastMessageAt);
+    for (const [uid, at] of Object.entries(conversation.readAt || {})) add(uid, at);
   }
   return uids;
+}
+
+/**
+ * Scans what changed in the window and returns who acted (see activeMembers), and whether
+ * any of the three scans had more than `limit` documents, in which case the count is partial.
+ * Every action above also moves the document's updatedAt, so that is what the scans filter on.
+ */
+async function activeUidsSince(db, since, { limit = ACTIVITY_SCAN_LIMIT } = {}) {
+  const r = refs(db);
+  const cutoff = Timestamp.fromDate(since);
+  const scan = (query) => query.where("updatedAt", ">=", cutoff).limit(limit + 1).get();
+  const [profiles, invitations, conversations] = await Promise.all([
+    scan(r.profiles().select("lastEditedAt", "updatedAt")),
+    scan(r.invitations().select("fromUid", "createdAt", "resolution.by", "respondedAt")),
+    // Only who sent the latest message, never its text.
+    scan(r.conversations().select("lastMessage.fromUid", "lastMessageAt", "readAt")),
+  ]);
+  const docs = (snap) => snap.docs.slice(0, limit);
+  const readTimes = (value) => Object.fromEntries(
+    Object.entries(value && typeof value === "object" ? value : {}).map(([uid, at]) => [uid, toMillis(at)]),
+  );
+  const uids = activeMembers({
+    profiles: docs(profiles).map((doc) => {
+      const edited = doc.get("lastEditedAt");
+      return {
+        uid: doc.id,
+        lastEditedAt: edited === undefined ? undefined : toMillis(edited),
+        updatedAt: toMillis(doc.get("updatedAt")),
+      };
+    }),
+    invitations: docs(invitations).map((doc) => ({
+      fromUid: doc.get("fromUid"),
+      createdAt: toMillis(doc.get("createdAt")),
+      respondedBy: doc.get("resolution.by"),
+      respondedAt: toMillis(doc.get("respondedAt")),
+    })),
+    conversations: docs(conversations).map((doc) => ({
+      lastMessageFromUid: doc.get("lastMessage.fromUid"),
+      lastMessageAt: toMillis(doc.get("lastMessageAt")),
+      readAt: readTimes(doc.get("readAt")),
+    })),
+  }, since.getTime());
+  const truncated = [profiles, invitations, conversations].some((snap) => snap.size > limit);
+  return { uids, truncated };
 }
 
 /** One snapshot of the whole community, as it is at `now`. */
@@ -223,7 +289,7 @@ async function buildSnapshot(db, now = new Date()) {
     activeUidsSince(db, since7),
   ]);
 
-  const truncated = profileSnap.size > PROFILE_SCAN_LIMIT || meetupSnap.size > MEETUP_SCAN_LIMIT;
+  const truncated = profileSnap.size > PROFILE_SCAN_LIMIT || meetupSnap.size > MEETUP_SCAN_LIMIT || active.truncated;
   const people = profileSnap.docs.slice(0, PROFILE_SCAN_LIMIT).map((doc) => ({
     uid: doc.id,
     city: doc.get("city") || DEFAULT_CITY,
@@ -234,7 +300,7 @@ async function buildSnapshot(db, now = new Date()) {
   }));
   // Activity on plans or chats of an account that has since been deleted is not a member.
   const onFile = new Set(people.map((person) => person.uid));
-  const activeUids = new Set([...active].filter((uid) => onFile.has(uid)));
+  const activeUids = new Set([...active.uids].filter((uid) => onFile.has(uid)));
   const meetups = meetupSnap.docs.slice(0, MEETUP_SCAN_LIMIT).map((doc) => {
     const participants = languagesOf(doc.get("participants"));
     const gave = doc.get("gave") || {};
@@ -253,6 +319,7 @@ async function buildSnapshot(db, now = new Date()) {
     plans: { total: plans, new7: plansNew7, pending, accepted, declined, cancelled },
     meetups: { confirmed, confirmed30 },
     cities: summary.cities,
+    citiesTruncated: summary.citiesTruncated,
     pairs: summary.pairs,
     truncated,
   };
@@ -300,7 +367,7 @@ async function getStats(db, _uid, payload = {}, now = new Date()) {
   }
 
   const [days, storeDays, sync] = await Promise.all([
-    r.statsDays().orderBy("day", "desc").limit(HISTORY_DAYS).get(),
+    r.statsDays().orderBy("day", "desc").select(...HISTORY_FIELDS).limit(HISTORY_DAYS).get(),
     r.appStoreDays().orderBy("day", "desc").limit(HISTORY_DAYS).get(),
     r.appStoreSync().get(),
   ]);
@@ -309,7 +376,9 @@ async function getStats(db, _uid, payload = {}, now = new Date()) {
     latest: serializeSnapshot(latest),
     history: days.docs.map((doc) => historyEntry(doc.data())),
     appStore: {
-      lastSyncAt: sync.exists ? toMillis(sync.get("lastRunAt")) : null,
+      // The last run that succeeded, so a first run with a bad key reads as not connected,
+      // with lastError saying why. A later failure keeps the last good time beside its error.
+      lastSyncAt: sync.exists ? toMillis(sync.get("lastSuccessAt")) : null,
       lastError: sync.exists ? sync.get("lastError") || null : null,
       days: storeDays.docs.map((doc) => ({
         day: doc.get("day"),
@@ -325,9 +394,12 @@ module.exports = {
   STATS_TIME_ZONE,
   PROFILE_SCAN_LIMIT,
   TOP_PAIRS,
+  TOP_CITIES,
   REFRESH_COOLDOWN_MS,
   localDay,
   summarisePeople,
+  activeMembers,
+  activeUidsSince,
   buildSnapshot,
   saveSnapshot,
   getStats,

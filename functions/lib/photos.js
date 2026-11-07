@@ -217,7 +217,9 @@ async function setProfilePhotos(db, uid, payload, now = new Date()) {
     if (!snap.exists) {
       throw reject("failed-precondition", REASON.profileIncomplete, "Complete your profile before adding photos.");
     }
-    tx.set(r.profile(uid), { photos, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(r.profile(uid), {
+      photos, updatedAt: FieldValue.serverTimestamp(), lastEditedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
     return publicPhotos(snap.get("photos"));
   });
 

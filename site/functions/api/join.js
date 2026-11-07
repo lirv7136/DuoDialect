@@ -55,7 +55,7 @@ export async function onRequestPost({ request, env }) {
     `INSERT INTO waitlist (email, first_name, speaks, learning, suburb, platform, source)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
      ON CONFLICT(email) DO UPDATE SET first_name = ?2, speaks = ?3, learning = ?4, suburb = ?5,
-       platform = ?6, updated_at = datetime('now')`,
+       platform = ?6, source = COALESCE(?7, source), updated_at = datetime('now')`,
   ).bind(email, firstName, speaks, learning, suburb || null, platform, source || null).run();
 
   return reply(request, 200, { ok: true });

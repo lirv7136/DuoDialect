@@ -2,7 +2,7 @@
  * Bounds and conversions for the native date and time pickers. Values stay in the
  * formats the backend already uses: dates as YYYY-MM-DD and times as HH:mm.
  */
-import { parseLocalDate, toLocalDateString } from "./schedule";
+import { asWallClock, parseLocalDate, toLocalDateString, type WallClock } from "./schedule";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -30,10 +30,15 @@ export function earliestBirthDate(now: Date = new Date()): Date {
   return yearsBefore(now.getUTCFullYear(), 0, 1, 110);
 }
 
-/** Meetups: from today to a year ahead, matching validateMeetingDraft. */
-export function meetingDateBounds(now: Date = new Date()): { minimumDate: Date; maximumDate: Date } {
-  const minimumDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const maximumDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 365);
+/**
+ * Meetups: from today to a year ahead, matching validateMeetingDraft. "Today" is the plan's:
+ * pass `wallClockIn(zone)` so it is the city's date, not the phone's. The bounds are the
+ * picker's local midnights on those dates.
+ */
+export function meetingDateBounds(now: Date | WallClock = new Date()): { minimumDate: Date; maximumDate: Date } {
+  const { year, month, day } = asWallClock(now);
+  const minimumDate = new Date(year, month - 1, day);
+  const maximumDate = new Date(year, month - 1, day + 365);
   return { minimumDate, maximumDate };
 }
 

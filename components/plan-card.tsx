@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { InvitationDoc } from "../src/lib/live";
+import { sameTimeZone } from "../src/domain/cities";
 import { dateBlock, isPastMeeting, nextOccurrence, planStatus } from "../src/domain/display";
 import type { ProfilePhoto } from "../src/domain/photos";
 import { MAX_FONT_SCALE, colors, fonts, radius, space, type } from "../constants/theme";
@@ -88,7 +89,7 @@ export function PlanCard({ item, uid, person, busy, error, myZone, onAccept, onD
         <InfoChip icon="location-outline" label={item.meeting.venue} tone="plain" accessibilityLabel={`At ${item.meeting.venue}`} />
         {weekly ? <InfoChip icon="repeat" label="Weekly" tone="plain" accessibilityLabel="Repeats weekly" /> : null}
       </ChipRow>
-      {item.meeting.timeZone !== myZone ? <Text style={type.caption}>{`Times are in ${item.meeting.timeZone}.`}</Text> : null}
+      {!sameTimeZone(item.meeting.timeZone, myZone) ? <Text style={type.caption}>{`Times are in ${item.meeting.timeZone}.`}</Text> : null}
 
       {item.note ? (
         <Pressable

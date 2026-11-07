@@ -67,3 +67,85 @@ test('shared slots and display formatting', () => {
   assert.equal(s.formatMeeting({ localDate: '2025-10-02', localTime: '18:00', recurrence: 'weekly' }), 'Thu 2 Oct · 18:00 · weekly from this date');
   assert.equal(s.formatMeeting({ localDate: '2025-10-02', localTime: '18:00', recurrence: 'once' }), 'Thu 2 Oct · 18:00 · one meetup');
 });
+
+// Plans are in the city's time zone, which need not be the phone's. Node applies a change to
+// TZ at once, so these run as if on a phone in another zone. The expected answers are what
+// the server's requireMeeting decides for the same wall time and zone at the same instant.
+const load = require('./load-typescript.cjs');
+const cities = load('src/domain/cities.ts');
+const bounds = load('src/domain/date-bounds.ts', { './schedule': s });
+
+function onPhoneIn(zone, run) {
+  const before = process.env.TZ;
+  process.env.TZ = zone;
+  try {
+    return run();
+  } finally {
+    if (before === undefined) delete process.env.TZ; else process.env.TZ = before;
+  }
+}
+const at = iso => new Date(iso);
+const times = list => list.map(item => `${item.localDate} ${item.localTime}`);
+const dayOf = date => bounds.toLocalDateString(date);
+
+test('a phone in Perth plans in Sydney time, three hours ahead', () => onPhoneIn('Australia/Perth', () => {
+  const zone = cities.meetingTimeZone('sydney', 'Australia/Perth');
+  assert.equal(zone, 'Australia/Sydney');
+
+  // 07:30 UTC, Friday 6 November 2026: 15:30 on the phone, 18:30 in Sydney (daylight time).
+  const instant = at('2026-11-06T07:30:00Z');
+  same(s.wallClockIn(null, instant), { year: 2026, month: 11, day: 6, hour: 15, minute: 30, second: 0 });
+  const sydney = s.wallClockIn(zone, instant);
+  same(sydney, { year: 2026, month: 11, day: 6, hour: 18, minute: 30, second: 0 });
+
+  // 18:00 on Friday has passed in Sydney, though the phone's clock says 15:30.
+  same(times(s.suggestMeetingTimes(['Friday evening'], sydney, 2)), ['2026-11-13 18:00', '2026-11-20 18:00']);
+  same(times(s.suggestMeetingTimes(['Friday evening'], instant, 1)), ['2026-11-06 18:00'], 'the phone clock would have offered it');
+  assert.match(s.validateMeetingDraft(draft({ localDate: '2026-11-06', localTime: '18:15' }), { now: sydney }), /future/,
+    'the server refuses it too: 07:15 UTC is before now');
+  assert.equal(s.validateMeetingDraft(draft({ localDate: '2026-11-06', localTime: '18:45' }), { now: sydney }), null);
+
+  // 14:00 UTC: 22:00 Friday on the phone, already 01:00 Saturday in Sydney.
+  const late = s.wallClockIn(zone, at('2026-11-06T14:00:00Z'));
+  same(late, { year: 2026, month: 11, day: 7, hour: 1, minute: 0, second: 0 });
+  const { minimumDate, maximumDate } = bounds.meetingDateBounds(late);
+  assert.equal(dayOf(minimumDate), '2026-11-07', 'Friday is over in Sydney');
+  assert.equal(dayOf(maximumDate), '2027-11-07');
+  assert.equal(dayOf(bounds.meetingDateBounds(at('2026-11-06T14:00:00Z')).minimumDate), '2026-11-06', 'the phone is still on Friday');
+  assert.match(s.validateMeetingDraft(draft({ localDate: '2026-11-06', localTime: '23:30' }), { now: late }), /future/);
+  same(times(s.suggestMeetingTimes(['Saturday morning'], late, 1)), ['2026-11-07 10:00']);
+}));
+
+test('a phone in Sydney in daylight time plans on the Gold Coast, an hour behind', () => onPhoneIn('Australia/Sydney', () => {
+  const zone = cities.meetingTimeZone('gold-coast', 'Australia/Sydney');
+  assert.equal(zone, 'Australia/Brisbane', 'Queensland keeps standard time all year');
+
+  // 05:30 UTC, Friday 6 November 2026: 16:30 on the phone, 15:30 on the Gold Coast.
+  const instant = at('2026-11-06T05:30:00Z');
+  const coast = s.wallClockIn(zone, instant);
+  same(coast, { year: 2026, month: 11, day: 6, hour: 15, minute: 30, second: 0 });
+  // 18:00 is two and a half hours away on the Gold Coast, only an hour and a half on the phone.
+  same(times(s.suggestMeetingTimes(['Friday evening'], coast, 1)), ['2026-11-06 18:00']);
+  same(times(s.suggestMeetingTimes(['Friday evening'], instant, 1)), ['2026-11-13 18:00'], 'the phone clock would have skipped it');
+
+  // 13:30 UTC: 00:30 Saturday on the phone, still 23:30 Friday on the Gold Coast.
+  const late = s.wallClockIn(zone, at('2026-11-06T13:30:00Z'));
+  same(late, { year: 2026, month: 11, day: 6, hour: 23, minute: 30, second: 0 });
+  assert.equal(dayOf(bounds.meetingDateBounds(late).minimumDate), '2026-11-06', 'Friday can still be picked');
+  assert.equal(dayOf(bounds.meetingDateBounds(at('2026-11-06T13:30:00Z')).minimumDate), '2026-11-07', 'the phone has moved on');
+  assert.equal(s.validateMeetingDraft(draft({ localDate: '2026-11-06', localTime: '23:45' }), { now: late }), null,
+    'the server accepts it too: 13:45 UTC is after now');
+  assert.match(s.validateMeetingDraft(draft({ localDate: '2026-11-06', localTime: '23:15' }), { now: late }), /future/);
+  assert.match(s.validateMeetingDraft(draft({ localDate: '2026-11-06', localTime: '23:45' }), { now: at('2026-11-06T13:30:00Z') }), /future/,
+    'the phone clock would have refused it');
+}));
+
+test('the wall clock reads midnight as 0 and falls back to the phone without a usable zone', () => onPhoneIn('Australia/Perth', () => {
+  const instant = at('2026-11-06T13:00:00Z');
+  same(s.wallClockIn('Australia/Sydney', instant), { year: 2026, month: 11, day: 7, hour: 0, minute: 0, second: 0 });
+  const phone = { year: 2026, month: 11, day: 6, hour: 21, minute: 0, second: 0 };
+  same(s.wallClockIn(undefined, instant), phone);
+  same(s.wallClockIn('Mars/Olympus_Mons', instant), phone);
+  same(s.asWallClock(instant), phone);
+  same(s.asWallClock(phone), phone);
+}));

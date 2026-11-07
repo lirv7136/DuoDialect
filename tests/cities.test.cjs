@@ -138,6 +138,25 @@ test('the device time zone suggests its biggest cities, old zone names included'
   }
 });
 
+test('old zone names a phone reports are the same zone as the city list\'s name for it', () => {
+  assert.equal(c.canonicalTimeZone('Asia/Calcutta'), 'Asia/Kolkata');
+  assert.equal(c.canonicalTimeZone('Europe/Kiev'), 'Europe/Kyiv');
+  assert.equal(c.canonicalTimeZone('Asia/Saigon'), 'Asia/Ho_Chi_Minh');
+  assert.equal(c.canonicalTimeZone('Europe/Paris'), 'Europe/Paris', 'a current name stays as it is');
+  // A plan in Kolkata, Kyiv or Ho Chi Minh City carries the list's zone; the phone may say the old one.
+  for (const [city, phone] of [['kolkata-in', 'Asia/Calcutta'], ['kyiv-ua', 'Europe/Kiev'], ['ho-chi-minh-city-vn', 'Asia/Saigon']]) {
+    const zone = c.cityTimeZone(city);
+    assert.ok(zone, city);
+    assert.equal(c.sameTimeZone(zone, phone), true, `${city} on a phone set to ${phone}`);
+    assert.equal(c.sameTimeZone(phone, zone), true, 'either way round');
+  }
+  assert.equal(c.sameTimeZone('Australia/Sydney', 'Australia/ACT'), true);
+  assert.equal(c.sameTimeZone('Australia/Sydney', 'Australia/Sydney'), true);
+  assert.equal(c.sameTimeZone('Australia/Sydney', 'Australia/Brisbane'), false, 'same offset in winter, still another zone');
+  assert.equal(c.sameTimeZone('Australia/Sydney', null), false, 'an unknown phone zone is not the same');
+  assert.equal(c.sameTimeZone(undefined, undefined), false);
+});
+
 test('folding for search drops case, accents and punctuation', () => {
   assert.equal(c.foldForSearch('São Paulo'), 'sao paulo');
   assert.equal(c.foldForSearch('  Kraków, Poland '), 'krakow poland');

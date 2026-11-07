@@ -110,10 +110,21 @@ function summariseSales(tsv, appleId = TALKEVEN_APPLE_ID) {
   return units;
 }
 
+/** gzip streams start with these two bytes. */
+function isGzip(body) {
+  return body.length >= 2 && body[0] === 0x1f && body[1] === 0x8b;
+}
+
 /**
  * One day's summary report. Returns { status: "ok", tsv }, { status: "empty" } when Apple
  * says there were no sales that day, or { status: "unavailable" } when the report is not
  * out yet. Anything else throws.
+ *
+ * Apple is a day or two late at most, so "not out yet" is believed only for the
+ * REFETCH_RECENT_DAYS most recent report days. An older day with no report and no "no
+ * sales" is an error (most likely the wrong vendor number), so it is reported rather than
+ * skipped on every run. The body is gunzipped only when it is still gzip: fetch may
+ * already have decoded it.
  */
 async function fetchDailySummary(config, day, { fetchImpl = fetch, now = new Date() } = {}) {
   const params = new URLSearchParams({
@@ -129,14 +140,18 @@ async function fetchDailySummary(config, day, { fetchImpl = fetch, now = new Dat
   });
   if (response.status === 404) {
     const text = await response.text();
-    return /no sales/i.test(text) ? { status: "empty" } : { status: "unavailable" };
+    if (/no sales/i.test(text)) return { status: "empty" };
+    const recent = day >= addDays(localDay(now, REPORT_TIME_ZONE), -REFETCH_RECENT_DAYS);
+    if (recent) return { status: "unavailable" };
+    throw new Error(`App Store Connect has no report for ${day}, which should be out by now. ` +
+      `Check the vendor number. (404: ${text.slice(0, 160)})`);
   }
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`App Store Connect answered ${response.status} for ${day}: ${text.slice(0, 200)}`);
   }
   const body = Buffer.from(await response.arrayBuffer());
-  return { status: "ok", tsv: zlib.gunzipSync(body).toString("utf8") };
+  return { status: "ok", tsv: (isGzip(body) ? zlib.gunzipSync(body) : body).toString("utf8") };
 }
 
 /**

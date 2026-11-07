@@ -44,6 +44,10 @@ if [ -z "$ASC_SECRET_KEY_ID" ] || [ -z "$ASC_SECRET_ISSUER_ID" ] || [ ! -f "$ASC
   echo "No App Store Connect key id, issuer id or key file found." >&2
   exit 1
 fi
+if [ -z "${ASC_KEY_ID:-}" ] || [ -z "${ASC_KEY_PATH:-}" ]; then
+  echo "Warning: using the release key (EXPO_ASC_*), which can do far more than read sales." >&2
+  echo "Set ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_PATH to a key with only the Sales role instead." >&2
+fi
 
 node -e '
   const fs = require("fs");

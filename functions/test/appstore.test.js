@@ -3,7 +3,8 @@
 /**
  * App Store downloads, without Apple: the secret is parsed, the token verifies with the
  * matching public key, the summary report is counted per product type for this app only,
- * and Apple's three kinds of answer (a report, "no sales", not out yet) are told apart.
+ * and Apple's three kinds of answer (a report, "no sales", not out yet) are told apart, with
+ * "not out yet" believed only for the most recent days.
  * The sync against Firestore is in stats.test.js, which runs with the emulators.
  */
 
@@ -89,10 +90,14 @@ function fakeFetch(status, body) {
   return { impl, calls };
 }
 
+// 20:00 UTC on 6 November is noon on the 6th in California, so the two most recent report
+// days are the 5th and the 4th.
+const NOW = new Date("2026-11-06T20:00:00Z");
+
 test("a report, a day with no sales and a report not out yet are told apart", async () => {
   const gz = zlib.gzipSync(Buffer.from(`${HEADER}\n${row({ type: "1", units: 1 })}\n`));
   const ok = fakeFetch(200, gz);
-  const report = await fetchDailySummary(CONFIG, "2026-11-05", { fetchImpl: ok.impl });
+  const report = await fetchDailySummary(CONFIG, "2026-11-05", { fetchImpl: ok.impl, now: NOW });
   assert.equal(report.status, "ok");
   assert.equal(summariseSales(report.tsv).downloads, 1);
 
@@ -104,11 +109,43 @@ test("a report, a day with no sales and a report not out yet are told apart", as
   assert.match(init.headers.Authorization, /^Bearer [\w-]+\.[\w-]+\.[\w-]+$/);
 
   const none = fakeFetch(404, JSON.stringify({ errors: [{ detail: "There were no sales for the date specified." }] }));
-  assert.deepEqual(await fetchDailySummary(CONFIG, "2026-11-05", { fetchImpl: none.impl }), { status: "empty" });
+  assert.deepEqual(await fetchDailySummary(CONFIG, "2026-11-05", { fetchImpl: none.impl, now: NOW }), { status: "empty" });
+  assert.deepEqual(await fetchDailySummary(CONFIG, "2026-10-08", { fetchImpl: none.impl, now: NOW }), { status: "empty" },
+    "no sales is an answer at any age");
 
   const notYet = fakeFetch(404, JSON.stringify({ errors: [{ detail: "Report is not available yet." }] }));
-  assert.deepEqual(await fetchDailySummary(CONFIG, "2026-11-05", { fetchImpl: notYet.impl }), { status: "unavailable" });
+  assert.deepEqual(await fetchDailySummary(CONFIG, "2026-11-05", { fetchImpl: notYet.impl, now: NOW }), { status: "unavailable" });
+  assert.deepEqual(await fetchDailySummary(CONFIG, "2026-11-04", { fetchImpl: notYet.impl, now: NOW }), { status: "unavailable" });
 
   const denied = fakeFetch(401, "NOT_AUTHORIZED");
-  await assert.rejects(fetchDailySummary(CONFIG, "2026-11-05", { fetchImpl: denied.impl }), /answered 401/);
+  await assert.rejects(fetchDailySummary(CONFIG, "2026-11-05", { fetchImpl: denied.impl, now: NOW }), /answered 401/);
+});
+
+test("a report fetch already decoded is read as it is, not gunzipped again", async () => {
+  const tsv = `${HEADER}\n${row({ type: "1", units: 4 })}\n${row({ type: "7", units: 2 })}\n`;
+  const decoded = fakeFetch(200, Buffer.from(tsv));
+  const report = await fetchDailySummary(CONFIG, "2026-11-05", { fetchImpl: decoded.impl, now: NOW });
+  assert.equal(report.status, "ok");
+  assert.equal(report.tsv, tsv);
+  assert.deepEqual(summariseSales(report.tsv), { downloads: 4, redownloads: 0, updates: 2, countries: { AU: 4 } });
+
+  // An ArrayBuffer, as a real fetch Response gives, works the same, gzipped or not.
+  const gz = zlib.gzipSync(Buffer.from(tsv));
+  const asArrayBuffer = (buf) => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length);
+  for (const body of [asArrayBuffer(gz), asArrayBuffer(Buffer.from(tsv))]) {
+    const result = await fetchDailySummary(CONFIG, "2026-11-05", { fetchImpl: fakeFetch(200, body).impl, now: NOW });
+    assert.equal(result.tsv, tsv);
+  }
+});
+
+test("an older day with no report is an error, not skipped forever", async () => {
+  const missing = fakeFetch(404, JSON.stringify({ errors: [{ detail: "The request is not valid for this vendor." }] }));
+  await assert.rejects(
+    fetchDailySummary(CONFIG, "2026-11-03", { fetchImpl: missing.impl, now: NOW }),
+    /no report for 2026-11-03.*vendor number/,
+    "three days old: Apple should have it by now",
+  );
+  await assert.rejects(fetchDailySummary(CONFIG, "2026-10-08", { fetchImpl: missing.impl, now: NOW }), /vendor number/);
+  assert.deepEqual(await fetchDailySummary(CONFIG, "2026-11-04", { fetchImpl: missing.impl, now: NOW }), { status: "unavailable" },
+    "the two most recent days may still be on their way");
 });

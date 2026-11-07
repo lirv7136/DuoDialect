@@ -13,6 +13,7 @@ import { planShareMessage } from "../../src/domain/share-plan";
 import { initialSegment, nextOccurrence, planSegments } from "../../src/domain/display";
 import { errorMessage } from "../../src/domain/errors";
 import { deviceTimeZone } from "../../src/lib/time-zone";
+import { sameTimeZone } from "../../src/domain/cities";
 import { Body, Caption, Display, ErrorNotice, Heading, Loading, Screen, Segmented, Button } from "../../components/ui";
 import { EmptyState } from "../../components/empty-state";
 import { Sheet } from "../../components/sheet";
@@ -164,7 +165,7 @@ export default function Plans() {
       localTime: item.meeting.localTime,
       recurrence: item.meeting.recurrence,
       venue: item.meeting.venue,
-      timeZone: zone && item.meeting.timeZone !== zone ? item.meeting.timeZone : undefined,
+      timeZone: zone && !sameTimeZone(item.meeting.timeZone, zone) ? item.meeting.timeZone : undefined,
     }, APP_NAME);
     void Share.share({ message }).catch(() => undefined);
   }

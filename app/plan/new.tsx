@@ -7,7 +7,7 @@ import { candidateCache } from "../../src/lib/candidate-cache";
 import { getPublicProfile } from "../../src/lib/live";
 import { askForNotificationsInContext } from "../../src/lib/notification-prompt";
 import { deviceTimeZone } from "../../src/lib/time-zone";
-import { cityById, meetingTimeZone } from "../../src/domain/cities";
+import { cityById, meetingTimeZone, sameTimeZone } from "../../src/domain/cities";
 import { exchangeLanguages } from "../../src/domain/language-exchange";
 import { displayLanguage } from "../../src/domain/languages";
 import { dateBlock } from "../../src/domain/display";
@@ -22,6 +22,7 @@ import {
   sharedSlots,
   suggestMeetingTimes,
   validateMeetingDraft,
+  wallClockIn,
   type Recurrence,
 } from "../../src/domain/schedule";
 import { meetingDateBounds } from "../../src/domain/date-bounds";
@@ -72,7 +73,9 @@ export default function NewPlan() {
   // One requestKey per intended invitation, reused for every retry of the same draft.
   const keys = useRef(createDraftKeys()).current;
   // Both people are in the sender's city, so the time is that city's wall time, wherever
-  // the phone is. The phone's own zone is only a fallback.
+  // the phone is. The phone's own zone is only a fallback. "Now" is read on the same clock
+  // (wallClockIn) for suggestions, the date picker and the check before sending, as the
+  // server does.
   const city = cityById(me?.city);
   const phoneZone = deviceTimeZone();
   const timeZone = meetingTimeZone(me?.city, phoneZone);
@@ -84,7 +87,7 @@ export default function NewPlan() {
       setTarget(value);
       setFromOffers(value.youOffer[0] ?? "");
       setToOffers(value.theyOffer[0] ?? "");
-      const first = suggestMeetingTimes(value.shared.length ? value.shared : (me?.availability ?? []))[0];
+      const first = suggestMeetingTimes(value.shared.length ? value.shared : (me?.availability ?? []), wallClockIn(timeZone))[0];
       if (first) { setLocalDate(first.localDate); setLocalTime(first.localTime); }
       const areas = areaChoices(value, me?.area ?? "");
       setPlace("cafe");
@@ -110,7 +113,7 @@ export default function NewPlan() {
       apply({ uid: profile.uid, name: profile.displayName, area: profile.area, theyOffer: exchange.theyCanHelpWith,
         youOffer: exchange.iCanHelpWith, shared: sharedSlots(me.availability, profile.availability), photos: sanitizePhotos(profile.photos) });
     }).catch(e => setLoadError(errorMessage(e)));
-  }, [toUid, date, time, venueParam, noteParam, me, meLoading, target]);
+  }, [toUid, date, time, venueParam, noteParam, me, meLoading, target, timeZone]);
 
   const areas = target ? areaChoices(target, me?.area ?? "") : [];
   const chosenArea = areas.find(choice => choice.key === areaKey) ?? areas[0];
@@ -121,7 +124,7 @@ export default function NewPlan() {
     setDuplicate(false);
     const issue = !timeZone
       ? "We couldn’t detect your time zone, so we can’t send a time safely."
-      : validateMeetingDraft({ venue, localDate, localTime, recurrence, note }, { sharedAvailability: target.shared });
+      : validateMeetingDraft({ venue, localDate, localTime, recurrence, note }, { now: wallClockIn(timeZone), sharedAvailability: target.shared });
     setProblem(issue);
     if (issue || !timeZone) return;
     const input = {
@@ -150,8 +153,9 @@ export default function NewPlan() {
   if (loadError) return <Screen edges={[]}><ErrorNotice message={loadError} /><Button label="Back" onPress={() => router.back()} /></Screen>;
   if (!target) return <Loading label="Preparing your invitation" />;
 
-  const suggestions = suggestMeetingTimes(target.shared.length ? target.shared : (me?.availability ?? []), new Date(), 4);
-  const { minimumDate, maximumDate } = meetingDateBounds();
+  const today = wallClockIn(timeZone);
+  const suggestions = suggestMeetingTimes(target.shared.length ? target.shared : (me?.availability ?? []), today, 4);
+  const { minimumDate, maximumDate } = meetingDateBounds(today);
   const tomorrowSix = new Date(minimumDate.getFullYear(), minimumDate.getMonth(), minimumDate.getDate() + 1, 18, 0);
   const onSuggested = suggestions.some(item => item.localDate === localDate && item.localTime === localTime);
   const showPickers = picking || !suggestions.length || (!!localDate && !onSuggested);
@@ -208,7 +212,7 @@ export default function NewPlan() {
         </View>
       ) : null}
       {!timeZone ? <Caption icon="globe-outline">Time zone unavailable</Caption>
-        : timeZone !== phoneZone ? <Caption icon="globe-outline">{city ? `${city.name} time (${timeZone})` : `Times in ${timeZone}`}</Caption> : null}
+        : !sameTimeZone(timeZone, phoneZone) ? <Caption icon="globe-outline">{city ? `${city.name} time (${timeZone})` : `Times in ${timeZone}`}</Caption> : null}
 
       <View style={[styles.row, { gap: space.sm, flexWrap: "nowrap" }]}>
         <View style={{ flex: 1 }}>

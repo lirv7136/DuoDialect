@@ -184,6 +184,8 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
     fluencyAssurance: FLUENCY_ASSURANCE,
     ...(isNew ? { createdAt: FieldValue.serverTimestamp() } : {}),
     updatedAt: FieldValue.serverTimestamp(),
+    // The person's own edit. updatedAt also moves for moderation; the stats count this one.
+    lastEditedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
   batch.set(r.privateProfile(uid), {

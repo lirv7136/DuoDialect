@@ -40,8 +40,10 @@ export type StatsSnapshot = {
   plans: { total: number; new7: number; pending: number; accepted: number; declined: number; cancelled: number };
   /** Both people checked in "yes, we met". */
   meetups: { confirmed: number; confirmed30: number };
-  /** Only cities with members, most members first. */
+  /** Only cities with members, most members first, at most MAX_LISTED_CITIES. */
   cities: StatsCity[];
+  /** True when there were more cities with members than the list holds. Absent from older snapshots. */
+  citiesTruncated?: boolean;
   /** Sorted by the smaller side, largest first. Up to 30. */
   pairs: StatsPair[];
   /** True when there were too many profiles to scan fully, so counts are partial. */
@@ -53,7 +55,7 @@ export type StatsDay = { day: string; accounts: number; members: number; active7
 export type AppStoreDay = { day: string; downloads: number; redownloads: number; updates: number };
 
 export type AppStoreStats = {
-  /** Milliseconds; null until App Store Connect is connected. */
+  /** Milliseconds, of the last sync that succeeded; null until one has. */
   lastSyncAt: number | null;
   lastError: string | null;
   /** Newest first, up to 30 days. */
@@ -182,9 +184,26 @@ export function appStoreTotals(days: readonly AppStoreDay[], span: number): AppS
   return { downloads: sum("downloads"), redownloads: sum("redownloads"), updates: sum("updates"), days: inside.length, through: newest.item.day };
 }
 
-/** Not connected until the first App Store Connect sync has run. */
+/**
+ * Not connected until an App Store Connect sync has succeeded. The server sends the time of
+ * the last successful run as `lastSyncAt`, so a first run with a bad key or vendor number
+ * reads as not connected, with `lastError` saying why.
+ */
 export function appStoreConnected(appStore: Pick<AppStoreStats, "lastSyncAt">): boolean {
   return typeof appStore.lastSyncAt === "number";
+}
+
+/** The most cities the screen lists, the same cap the server keeps in a snapshot. */
+export const MAX_LISTED_CITIES = 50;
+
+/**
+ * The cities the screen lists, most members first: at most MAX_LISTED_CITIES, capped here as
+ * well in case an older snapshot carries every city. `more` is true when any were left out,
+ * by the server or here.
+ */
+export function listedCities(snapshot: Pick<StatsSnapshot, "cities" | "citiesTruncated">): { cities: StatsCity[]; more: boolean } {
+  const all = Array.isArray(snapshot.cities) ? snapshot.cities : [];
+  return { cities: all.slice(0, MAX_LISTED_CITIES), more: snapshot.citiesTruncated === true || all.length > MAX_LISTED_CITIES };
 }
 
 /** "just now", "1 minute ago", "3 hours ago", "2 days ago". A time in the future reads as just now. */
