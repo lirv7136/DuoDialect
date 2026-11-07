@@ -108,6 +108,8 @@ export default function Profile() {
           <>
             <ListRow icon="shield-outline" label="Moderation" hint="Reports waiting for review" onPress={() => router.push("/account/moderation")} />
             <Divider />
+            <ListRow icon="stats-chart-outline" label="Stats" hint="Members, meetups and downloads" onPress={() => router.push("/account/stats")} />
+            <Divider />
           </>
         ) : null}
         <ListRow icon="log-out-outline" label="Log out" onPress={() => void onLogout()} />

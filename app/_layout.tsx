@@ -66,6 +66,7 @@ export default function RootLayout() {
           <Stack.Screen name="account/blocked" options={detail("Blocked")} />
           <Stack.Screen name="account/moderation/index" options={detail("Moderation")} />
           <Stack.Screen name="account/moderation/[reportId]" options={detail("Report")} />
+          <Stack.Screen name="account/stats" options={detail("Stats")} />
           <Stack.Screen name="account/delete" options={detail("Delete account")} />
           <Stack.Screen name="account/safety" options={detail("Meeting safely")} />
         </Stack>

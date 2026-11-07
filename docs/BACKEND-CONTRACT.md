@@ -49,6 +49,9 @@ Two rules are worth stating plainly, because the client must not try to work aro
 | `checkInMutes/{muteId}` | nobody | server only | one person asked to stop being checked in about one plan |
 | `confirmedMeetups/{meetupId}` | nobody | server only | both people said this meetup happened |
 | `matchNotices/{noticeId}` | nobody | server only | one "a match joined" notice per recipient and newcomer, so nobody is told twice |
+| `stats/latest`, `stats/appStoreSync` | nobody | server only | the newest operator stats snapshot; when the App Store sync last ran and its last error |
+| `statsDaily/{YYYY-MM-DD}` | nobody | server only | the last stats snapshot of each Sydney day, for the trend |
+| `appStoreDaily/{YYYY-MM-DD}` | nobody | server only | App Store downloads, redownloads and updates for one report day (Pacific time) |
 
 Storage holds one kind of object, `profilePhotos/{uid}/{photoId}.jpg`; see
 [Profile photos](#profile-photos).
@@ -621,9 +624,39 @@ action, with the count removed. The member can upload again; repeat problems are
 revokes its refresh tokens. A suspended account is refused by every callable except
 `requestAccountDeletion`. `reinstate` undoes all of it. Every action is audited.
 
+### `getStats` · moderators only
+
+```ts
+{ refresh?: boolean }
+```
+
+Returns `{ latest, history, appStore }`. Counts only: no names, emails or messages.
+
+- `latest` is the newest snapshot: `accounts` (total, withProfile, withoutProfile, where
+  withoutProfile is everyone who signed up but never finished onboarding), `members`
+  (total, discoverable, new7, new30, active7, withMeetup, unmatched), `plans` (total, new7
+  and by status), `meetups` (confirmed, confirmed30), `cities` and the top 30 language
+  `pairs` per city, plus `generatedAt` (ms), `day` and `truncated`. The first call builds
+  it if none exists. `refresh: true` rebuilds it unless it is under a minute old.
+- `active7` counts members who saved their profile, sent or answered a plan, or sent or
+  read a message in the last 7 days. `unmatched` counts discoverable members with nobody
+  in their city who speaks what they learn and learns what they speak; it ignores blocks
+  and age, so it is the generous count.
+- `pairs` rows are `{ city, a, b, aSide, bSide, meetups }` with `a < b`: aSide speaks `a`
+  and learns `b`, bSide the reverse. Sorted by the scarce side.
+- `history` is up to 30 days, newest first: `{ day, accounts, members, active7, plans, meetups }`.
+- `appStore` is `{ lastSyncAt, lastError, days }`, days newest first with downloads,
+  redownloads and updates. `lastSyncAt` is null until `syncAppStoreDownloads` has run.
+
+`snapshotStats` saves a snapshot every day at 05:00 Sydney time. `syncAppStoreDownloads`
+runs at 10:00 and reads the `APPSTORE_CONNECT` secret (`scripts/set-appstore-secret.sh`).
+The Firebase CLI refuses to deploy any function while a secret the codebase references is
+missing, so every project needs it: `scripts/set-appstore-secret.sh placeholder <project>`
+stores `{}`, which the sync reports as "not connected yet" (lastError, with lastSyncAt null).
+
 ### Moderator identity
 
-The three moderation callables require the custom auth claim `moderator` on the verified
+The moderation and stats callables require the custom auth claim `moderator` on the verified
 token. No callable can grant it; it is set out of band by `functions/scripts/set-moderator.js`,
 which needs project credentials. Firestore rules still deny direct access to `reports`,
 `moderationActions` and `accountStatus` for everyone, including moderators, so the claim

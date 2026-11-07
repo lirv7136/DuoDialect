@@ -15,6 +15,7 @@ const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("fir
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2/options");
+const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
@@ -35,6 +36,8 @@ const { sweepReminders } = require("./lib/reminders");
 const { notifyNewMatches } = require("./lib/matches");
 const { releasePushToken } = require("./lib/push-devices");
 const { sweepPushReceipts } = require("./lib/push-receipts");
+const { getStats, buildSnapshot, saveSnapshot } = require("./lib/stats");
+const { runAppStoreSync } = require("./lib/appstore");
 
 setGlobalOptions({ region: "australia-southeast1", maxInstances: 10 });
 
@@ -133,6 +136,10 @@ exports.getReportContext = authenticated("getReportContext", (database, uid, dat
 
 exports.actOnReport = authenticated("actOnReport", (database, uid, data) =>
   actOnReport(database, uid, data), { moderatorOnly: true });
+
+/** Operator stats: counts only, no names or messages. See lib/stats.js. */
+exports.getStats = authenticated("getStats", (database, uid, data, now) =>
+  getStats(database, uid, data, now), { moderatorOnly: true, callOptions: { timeoutSeconds: 120 } });
 
 /**
  * Message notification.
@@ -292,5 +299,33 @@ exports.sweepPushReceipts = onSchedule(
   async () => {
     const result = await sweepPushReceipts(db, new Date());
     logger.info("Push receipt sweep finished", result);
+  },
+);
+
+/**
+ * Stats snapshot. Once a day, early in the Sydney morning, so the trend on the stats
+ * screen has one point per day even when nobody opens it. See lib/stats.js.
+ */
+exports.snapshotStats = onSchedule(
+  { schedule: "every day 05:00", timeZone: "Australia/Sydney", timeoutSeconds: 300 },
+  async () => {
+    const snapshot = await saveSnapshot(db, await buildSnapshot(db, new Date()));
+    logger.info("Stats snapshot saved", { day: snapshot.day, members: snapshot.members.total });
+  },
+);
+
+/**
+ * App Store downloads. Once a day, after Apple has published the previous Pacific day's
+ * sales report. Needs the APPSTORE_CONNECT secret (scripts/set-appstore-secret.sh), so it
+ * is deployed on its own once that exists. See lib/appstore.js.
+ */
+const APPSTORE_CONNECT = defineSecret("APPSTORE_CONNECT");
+
+exports.syncAppStoreDownloads = onSchedule(
+  { schedule: "every day 10:00", timeZone: "Australia/Sydney", timeoutSeconds: 300, secrets: [APPSTORE_CONNECT] },
+  async () => {
+    const result = await runAppStoreSync(db, APPSTORE_CONNECT.value());
+    if (result.lastError) logger.error("App Store sync failed", result);
+    else logger.info("App Store sync finished", result);
   },
 );
