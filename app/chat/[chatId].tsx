@@ -1,204 +1,250 @@
-import { useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, FlatList, KeyboardAvoidingView, Platform, Alert } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  runTransaction,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
-import { auth, db } from "../../src/lib/firebase";
-import { blockUser, reportUser } from "../../src/lib/safety";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { Stack, router, useLocalSearchParams } from "expo-router";
+import { useHeaderHeight } from "@react-navigation/elements";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { api } from "../../src/lib/api";
+import { auth } from "../../src/lib/firebase";
+import { getPublicProfile, subscribeConversation, subscribeMessages, type ConversationDoc, type Message } from "../../src/lib/live";
+import { rememberBlockedName } from "../../src/lib/blocked-names";
+import { createDraftKeys } from "../../src/domain/idempotency";
+import { groupMessages, type MessageRow } from "../../src/domain/display";
+import { haptic } from "../../src/lib/feel";
+import { errorMessage } from "../../src/domain/errors";
+import { Body, Button, ErrorNotice, Loading, styles } from "../../components/ui";
+import { EmptyState } from "../../components/empty-state";
+import { Avatar } from "../../components/avatar";
+import { MonogramPair } from "../../components/exchange-strip";
+import { confirmBlock, useSafetyMenu } from "../../components/safety-menu";
+import { sanitizePhotos, type ProfilePhoto } from "../../src/domain/photos";
+import { SafetyCard } from "../../components/safety-card";
+import { colors, fonts, radius, space, type } from "../../constants/theme";
 
-type Msg = { id: string; from: string; text: string; createdAt?: any };
-type UserProfile = { uid: string; name?: string };
+const MAX_MESSAGE = 2000;
+
+function clock(date: Date | null) {
+  if (!date) return "Sending…";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
 
 export default function ChatScreen() {
-  const { chatId, otherUid } = useLocalSearchParams<{ chatId: string; otherUid?: string }>();
-  const [text, setText] = useState("");
-  const [msgs, setMsgs] = useState<Msg[]>([]);
-  const [otherName, setOtherName] = useState<string>("");
+  const params = useLocalSearchParams<{ chatId: string; otherUid?: string }>();
+  const chatId = String(params.chatId);
+  const me = auth.currentUser?.uid ?? "";
+  const headerHeight = useHeaderHeight();
 
-  const me = auth.currentUser?.uid;
+  const [conversation, setConversation] = useState<ConversationDoc | null | undefined>(undefined);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [otherName, setOtherName] = useState("");
+  const [otherPhotos, setOtherPhotos] = useState<ProfilePhoto[]>([]);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [gone, setGone] = useState(false);
+  const inFlight = useRef(false);
+  const lastMarked = useRef<string | null>(null);
+  const list = useRef<FlatList<MessageRow<Message>>>(null);
+  // One clientMessageId per typed message, reused if that same message is retried.
+  const keys = useRef(createDraftKeys()).current;
+  // Messages that arrive after the chat opens spring in; the history is simply there.
+  const openedAt = useRef(Date.now()).current;
+
+  const otherUid = useMemo(() => {
+    if (params.otherUid) return String(params.otherUid);
+    return conversation?.participants.find(uid => uid !== me) ?? "";
+  }, [params.otherUid, conversation, me]);
+
+  useEffect(() => subscribeConversation(chatId, value => {
+    setConversation(value);
+    if (value === null) setGone(true);
+  }, e => {
+    // A conversation deleted with an account, or a block, both surface as a refused read.
+    if ((e as { code?: string }).code === "permission-denied") setGone(true);
+    else setError(errorMessage(e));
+  }), [chatId]);
+
+  useEffect(() => subscribeMessages(chatId, setMessages, e => {
+    if ((e as { code?: string }).code !== "permission-denied") setError(errorMessage(e));
+  }), [chatId]);
 
   useEffect(() => {
-    async function loadOther() {
-      if (!otherUid) return;
-      const snap = await getDoc(doc(db, "users", String(otherUid)));
-      if (snap.exists()) {
-        const p = snap.data() as UserProfile;
-        setOtherName(p?.name?.trim() || "");
-      }
-    }
-    loadOther();
+    if (!otherUid) return;
+    getPublicProfile(otherUid).then(profile => {
+      setOtherName(profile?.displayName || "A member");
+      setOtherPhotos(sanitizePhotos(profile?.photos));
+    }).catch(() => setOtherName("A member"));
   }, [otherUid]);
 
-  // Reset unread when opening chat
+  // Clear my unread count when I open the chat and whenever a new message arrives.
   useEffect(() => {
-    async function resetUnread() {
-      if (!me || !otherUid) return;
-      await setDoc(
-        doc(db, "matches", me, "with", String(otherUid)),
-        { unread: 0, lastReadAt: serverTimestamp() },
-        { merge: true }
-      );
-    }
-    resetUnread();
-  }, [me, otherUid]);
-
-  useEffect(() => {
-    if (!chatId) return;
-
-    const q = query(collection(db, "chats", String(chatId), "messages"), orderBy("createdAt", "asc"));
-    const unsub = onSnapshot(q, (snap) => {
-      const list: Msg[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      setMsgs(list);
-    });
-
-    return () => unsub();
-  }, [chatId]);
+    if (gone) return;
+    const last = messages[messages.length - 1];
+    const marker = last && last.fromUid !== me ? last.id : (lastMarked.current ?? "open");
+    if (marker === lastMarked.current) return;
+    lastMarked.current = marker;
+    api.markConversationRead(chatId).catch(() => undefined);
+  }, [messages, chatId, me, gone]);
 
   async function send() {
-    if (!chatId || !me) return;
     const clean = text.trim();
-    if (!clean) return;
-
+    if (!clean || inFlight.current) return;
+    if (clean.length > MAX_MESSAGE) { setError(`Messages can be up to ${MAX_MESSAGE} characters.`); return; }
+    const clientMessageId = keys.keyFor(clean);
+    haptic.light();
+    inFlight.current = true;
+    setSending(true);
+    setError(null);
     setText("");
-
-    await addDoc(collection(db, "chats", String(chatId), "messages"), {
-      from: me,
-      text: clean,
-      createdAt: serverTimestamp(),
-    });
-
-    // Update chat meta
-    await setDoc(
-      doc(db, "chats", String(chatId)),
-      { updatedAt: serverTimestamp(), lastText: clean, lastFrom: me, lastAt: serverTimestamp() },
-      { merge: true }
-    );
-
-    if (!otherUid) return;
-
-    // My side: unread stays 0
-    await setDoc(
-      doc(db, "matches", me, "with", String(otherUid)),
-      { lastText: clean, lastAt: serverTimestamp(), unread: 0, chatId: String(chatId), with: String(otherUid) },
-      { merge: true }
-    );
-
-    // Their side: unread = existing + 1 (transaction so rules can verify)
-    await runTransaction(db, async (tx) => {
-      const ref = doc(db, "matches", String(otherUid), "with", me);
-      const snap = await tx.get(ref);
-      const cur = snap.exists() ? Number((snap.data() as any)?.unread || 0) : 0;
-
-      tx.set(
-        ref,
-        {
-          with: me,
-          chatId: String(chatId),
-          lastText: clean,
-          lastAt: serverTimestamp(),
-          unread: cur + 1,
-        },
-        { merge: true }
-      );
-    });
-  }
-
-  async function onBlock() {
-    if (!me || !otherUid) return;
-    Alert.alert(
-      "Block user?",
-      "They will disappear from your matches and you won't see them again.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Block",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await blockUser(me, String(otherUid));
-              router.replace("/(tabs)/matches");
-            } catch (e: any) {
-              Alert.alert("Block failed", e?.message ?? String(e));
-            }
-          },
-        },
-      ]
-    );
-  }
-
-  async function onReport() {
-    if (!me || !otherUid || !chatId) return;
-    Alert.alert("Report user", "Pick a reason:", [
-      { text: "Spam", onPress: () => doReport("spam") },
-      { text: "Harassment", onPress: () => doReport("harassment") },
-      { text: "Other", onPress: () => doReport("other") },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  }
-
-  async function doReport(reason: string) {
     try {
-      await reportUser(me!, String(otherUid), String(chatId), reason);
-      Alert.alert("Reported", "Thanks — we recorded that report.");
-    } catch (e: any) {
-      Alert.alert("Report failed", e?.message ?? String(e));
+      await api.sendMessage(chatId, clean, clientMessageId);
+      keys.settle();
+    } catch (e) {
+      // Restoring the same text keeps the same clientMessageId, so a retry cannot duplicate.
+      setText(current => current || clean);
+      setError(errorMessage(e));
+    } finally {
+      inFlight.current = false;
+      setSending(false);
     }
   }
 
-  const title = useMemo(() => (otherName ? `Chat with ${otherName}` : "Chat"), [otherName]);
+  function onBlock() {
+    if (!otherUid) return;
+    // The same words as blocking from a profile, including that open invitations are cancelled.
+    confirmBlock(otherName || "this member", async () => {
+      try {
+        await api.setBlock(otherUid, true);
+        if (me) await rememberBlockedName(me, otherUid, otherName || "A member");
+        router.replace("/(tabs)/chats");
+      } catch (e) {
+        setError(errorMessage(e));
+      }
+    });
+  }
+
+  const title = otherName || "Chat";
+
+  function onReport() {
+    if (!otherUid) return;
+    router.push({ pathname: "/report/[uid]", params: { uid: otherUid, name: otherName, conversationId: chatId } });
+  }
+
+  // Report and Block live in the header menu: always reachable, never in the way.
+  const menu = useSafetyMenu({ name: otherName, onReport, onBlock });
+  const rows = useMemo(() => groupMessages(messages, me), [messages, me]);
+  const languages = conversation?.languages;
+
+  if (gone) {
+    return (
+      <SafeAreaView edges={["bottom"]} style={[styles.screen, { padding: space.lg }]}>
+        <Stack.Screen options={{ title: "Chat" }} />
+        <EmptyState art="chat" title="This chat is closed." body="They may have left or been blocked.">
+          <Button label="Back" accessibilityLabel="Back to chats" onPress={() => router.replace("/(tabs)/chats")} />
+        </EmptyState>
+      </SafeAreaView>
+    );
+  }
+  if (conversation === undefined) return <Loading label="Opening conversation" />;
+
+  const canSend = !!text.trim() || sending;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={80}>
-      <View style={{ padding: 16, borderBottomWidth: 1, borderColor: "#eee", flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <Pressable onPress={() => router.back()} style={{ paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: "#ddd", borderRadius: 10 }}>
-          <Text style={{ fontWeight: "900" }}>Back</Text>
-        </Pressable>
-
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 18, fontWeight: "900" }}>{title}</Text>
-        </View>
-
-        <Pressable onPress={onReport} style={{ paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: "#ddd", borderRadius: 10 }}>
-          <Text style={{ fontWeight: "900" }}>Report</Text>
-        </Pressable>
-
-        <Pressable onPress={onBlock} style={{ paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: "#ddd", borderRadius: 10 }}>
-          <Text style={{ fontWeight: "900" }}>Block</Text>
-        </Pressable>
-      </View>
-
-      <FlatList
-        contentContainerStyle={{ padding: 16, gap: 10 }}
-        data={msgs}
-        keyExtractor={(m) => m.id}
-        renderItem={({ item }) => {
-          const mine = item.from === me;
-          return (
-            <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "80%" }}>
-              <View style={{ padding: 12, borderRadius: 14, borderWidth: 1, borderColor: "#eee", backgroundColor: mine ? "#111" : "#fff" }}>
-                <Text style={{ color: mine ? "white" : "black" }}>{item.text}</Text>
-              </View>
+    <SafeAreaView edges={["bottom"]} style={styles.screen}>
+      <Stack.Screen options={{
+        title,
+        headerRight: menu.button,
+        headerTitle: () => (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, flexShrink: 1 }}>
+            <Avatar name={otherName} photos={otherPhotos} size={34} />
+            <View style={{ flexShrink: 1 }}>
+              <Text accessibilityRole="header" numberOfLines={1} style={[styles.label, { fontFamily: fonts.bold, fontSize: 17 }]}>{title}</Text>
+              {languages ? <MonogramPair left={languages.fromOffers} right={languages.toOffers} /> : null}
             </View>
-          );
-        }}
-      />
+          </View>
+        ),
+      }} />
+      {menu.menu}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={headerHeight}>
+        <FlatList
+          ref={list}
+          data={rows}
+          keyExtractor={row => row.message.id}
+          contentContainerStyle={{ padding: space.lg, gap: 2 }}
+          onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
+          ListEmptyComponent={
+            <View style={{ gap: space.md }}>
+              <SafetyCard />
+              <Body muted>Say hello and confirm where you’ll meet.</Body>
+            </View>
+          }
+          renderItem={({ item: row }) => {
+            const { message, mine, first, last, divider } = row;
+            const fresh = !message.createdAt || message.createdAt.getTime() > openedAt;
+            return (
+              <View>
+                {divider ? (
+                  <View style={{ alignSelf: "center", backgroundColor: colors.surfaceNavySoft, borderRadius: radius.chip, paddingHorizontal: space.md, paddingVertical: 2, marginVertical: space.sm }}>
+                    <Text style={[type.caption, { color: colors.primary }]}>{divider}</Text>
+                  </View>
+                ) : null}
+                <Animated.View
+                  entering={fresh ? FadeInDown.springify().damping(16) : undefined}
+                  accessible
+                  accessibilityLabel={`${mine ? "You" : title}, ${clock(message.createdAt)}: ${message.text}`}
+                  style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "82%", marginTop: first ? space.sm : 0 }}
+                >
+                  <View style={{
+                    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20,
+                    borderBottomRightRadius: mine && last ? 6 : 20, borderBottomLeftRadius: !mine && last ? 6 : 20,
+                    backgroundColor: mine ? colors.primary : colors.surface, borderWidth: mine ? 0 : 1, borderColor: colors.line,
+                  }}>
+                    <Text style={[type.body, { color: mine ? colors.onPrimary : colors.text }]}>{message.text}</Text>
+                  </View>
+                  {last ? (
+                    <Text style={[type.caption, { alignSelf: mine ? "flex-end" : "flex-start", fontSize: 12, marginTop: 2 }]}>{clock(message.createdAt)}</Text>
+                  ) : null}
+                </Animated.View>
+              </View>
+            );
+          }}
+        />
 
-      <View style={{ padding: 12, borderTopWidth: 1, borderColor: "#eee", flexDirection: "row", gap: 10 }}>
-        <TextInput value={text} onChangeText={setText} placeholder="Message…" style={{ flex: 1, borderWidth: 1, borderColor: "#ddd", borderRadius: 12, padding: 12 }} />
-        <Pressable onPress={send} style={{ backgroundColor: "#111", paddingHorizontal: 16, borderRadius: 12, justifyContent: "center" }}>
-          <Text style={{ color: "white", fontWeight: "900" }}>Send</Text>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+        <View style={{ paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: space.sm, gap: space.sm, borderTopWidth: 1, borderColor: colors.line }}>
+          <ErrorNotice message={error} />
+          <View style={{ flexDirection: "row", gap: space.sm, alignItems: "flex-end" }}>
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              placeholder={otherName ? `Message ${otherName}` : "Message…"}
+              placeholderTextColor={colors.muted}
+              accessibilityLabel={`Message ${title}`}
+              maxLength={MAX_MESSAGE}
+              multiline
+              style={[styles.input, { flex: 1, maxHeight: 140, borderRadius: 22 }]}
+            />
+            {canSend ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Send"
+                accessibilityState={{ disabled: sending, busy: sending }}
+                disabled={sending || !text.trim()}
+                onPress={() => void send()}
+                hitSlop={2}
+                style={({ pressed }) => [{
+                  // 44pt visible, 48pt to touch with the hit slop.
+                width: 44, height: 44, borderRadius: 22, marginBottom: 2, backgroundColor: colors.primary,
+                  alignItems: "center", justifyContent: "center", opacity: sending ? 0.6 : 1,
+                  transform: [{ scale: pressed ? 0.94 : 1 }],
+                }]}
+              >
+                <Ionicons name="arrow-up" size={22} color={colors.onPrimary} />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

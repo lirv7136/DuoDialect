@@ -1,58 +1,85 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { KeyboardAvoidingView, Platform, Text } from "react-native";
 import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import { APP_NAME } from "../../constants/brand";
 import { signUp } from "../../src/lib/auth";
+import { authErrorMessage } from "../../src/domain/errors";
+import { Button, ErrorNotice, Field, Screen } from "../../components/ui";
+import { AuthHeader } from "../../components/auth-header";
+import { AppleSignInButton } from "../../components/apple-sign-in-button";
+import { PasswordField } from "../../components/password-field";
+import { colors, fonts, type } from "../../constants/theme";
+
+const GUIDELINES_URL = "https://talkeven.com/guidelines/";
+const PRIVACY_URL = "https://talkeven.com/privacy/";
 
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onSignup() {
+    if (busy) return;
+    setError(null);
+    if (!email.trim() || !password) { setError("Enter your email and a password."); return; }
+    setBusy(true);
     try {
-      setBusy(true);
       await signUp(email, password);
-      router.replace("/(tabs)");
-    } catch (e: any) {
-      Alert.alert("Signup failed", e?.message ?? "Unknown error");
+      router.replace("/");
+    } catch (e) {
+      setError(authErrorMessage(e));
     } finally {
       setBusy(false);
     }
   }
 
+  const open = (url: string) => { void WebBrowser.openBrowserAsync(url); };
+  const link = { color: colors.onPrimary, fontFamily: fonts.bold, textDecorationLine: "underline" as const };
+
   return (
-    <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 12 }}>
-      <Text style={{ fontSize: 28, fontWeight: "700" }}>Create account</Text>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.primary }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <Screen edges={["top", "bottom"]} navy>
+        <AuthHeader title={`Join ${APP_NAME}`} />
 
-      <TextInput
-        autoCapitalize="none"
-        keyboardType="email-address"
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        style={{ borderWidth: 1, borderColor: "#ddd", padding: 12, borderRadius: 12 }}
-      />
-      <TextInput
-        placeholder="Password (6+ chars)"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        style={{ borderWidth: 1, borderColor: "#ddd", padding: 12, borderRadius: 12 }}
-      />
+        <Field
+          label="Email"
+          onDark
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          autoComplete="email"
+          returnKeyType="next"
+        />
+        <PasswordField
+          label="Password"
+          onDark
+          hint="At least 6 characters."
+          value={password}
+          onChangeText={setPassword}
+          textContentType="newPassword"
+          autoComplete="new-password"
+          passwordRules="minlength: 6;"
+          returnKeyType="go"
+          onSubmitEditing={() => void onSignup()}
+        />
 
-      <Pressable
-        disabled={busy}
-        onPress={onSignup}
-        style={{ backgroundColor: "#111", padding: 14, borderRadius: 12, opacity: busy ? 0.6 : 1 }}
-      >
-        <Text style={{ color: "white", textAlign: "center", fontWeight: "600" }}>
-          {busy ? "Creating..." : "Sign up"}
+        <ErrorNotice message={error} />
+        <Button variant="primary" onDark label="Create account" busy={busy} busyLabel="Creating…" onPress={() => void onSignup()} />
+        <AppleSignInButton mode="signUp" onError={setError} />
+        <Text style={[type.caption, { color: colors.onPrimary }]}>
+          {"By joining, you confirm you’re 18+ and agree to our "}
+          <Text accessibilityRole="link" style={link} onPress={() => open(GUIDELINES_URL)}>Community guidelines</Text>
+          {" and "}
+          <Text accessibilityRole="link" style={link} onPress={() => open(PRIVACY_URL)}>Privacy policy</Text>
+          {"."}
         </Text>
-      </Pressable>
-
-      <Pressable onPress={() => router.back()}>
-        <Text style={{ textAlign: "center", opacity: 0.7 }}>Back to login</Text>
-      </Pressable>
-    </View>
+        <Button variant="ghost" onDark label="Log in" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(auth)/login"))} />
+      </Screen>
+    </KeyboardAvoidingView>
   );
 }

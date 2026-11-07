@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "963377043625",
+    "project_id": "duodialect-staging",
+    "storage_bucket": "duodialect-staging.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:963377043625:android:1fe47ee6e63cf97b1d31b8",
+        "android_client_info": {
+          "package_name": "com.lachlanirving.duodialect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBez2zekMtjrys3luHtfcp0Lfj2EEoO8ZE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

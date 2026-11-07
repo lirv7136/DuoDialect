@@ -1,0 +1,60 @@
+{
+  "cli": {
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "image": "sdk-54"
+      }
+    },
+    "simulator": {
+      "extends": "preview",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "production": {
+      "environment": "production",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "image": "latest"
+      }
+    },
+    "testflight": {
+      "extends": "production",
+      "environment": "preview",
+      "ios": {
+        "image": "latest"
+      }
+    }
+  },
+  "submit": {
+    "testflight": {
+      "ios": {
+        "ascAppId": "6816316060",
+        "appleTeamId": "MAYKX6UAZK",
+        "ascApiKeyPath": "/home/lachlan-irving/.config/talkeven/AuthKey_C54M9F98C7.p8",
+        "ascApiKeyIssuerId": "622c5687-e4d0-4ff1-be4c-f1d4daad52f0",
+        "ascApiKeyId": "C54M9F98C7"
+      }
+    },
+    "production": {
+      "ios": {
+        "ascAppId": "6816316060",
+        "appleTeamId": "MAYKX6UAZK",
+        "ascApiKeyPath": "/home/lachlan-irving/.config/talkeven/AuthKey_C54M9F98C7.p8",
+        "ascApiKeyIssuerId": "622c5687-e4d0-4ff1-be4c-f1d4daad52f0",
+        "ascApiKeyId": "C54M9F98C7"
+      }
+    }
+  }
+}

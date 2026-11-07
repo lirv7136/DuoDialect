@@ -1,0 +1,10 @@
+# Cloudflare Pages project for talkeven.com. Deployed by deploy.sh.
+name = "talkeven"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "talkeven-waitlist"
+database_id = "3a6a7df8-c4d2-4b51-ab1e-e323bbeca93b"
+migrations_dir = "migrations"
