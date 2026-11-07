@@ -264,8 +264,8 @@ One profile field change worth noting: the public profile uses `displayName`, no
 - **No typing indicators, no read receipts between participants.** `markConversationRead`
   writes a `readAt` entry on the conversation, which the other participant can read, but
   nothing surfaces it and typing state is not implemented.
-- **No rate limiting and no abuse throttles.** A signed in account can call the callables
-  as fast as it likes. This matters most for `createInvitation` and `sendMessage`.
+- **Daily limits only on invitations, messages and reports** (trust phase 1; 20, 300 and 10
+  a UTC day). Every other callable can be called as fast as an account likes.
 - **App Check is not enforced.** The callables verify the user but not the app instance.
 - **No message editing or deletion, and no conversation archiving or deletion.**
 - **Deletion runs in one request.** It processes up to 500 documents per collection and
@@ -483,6 +483,64 @@ be dropped from `firestore.indexes.json` and redeployed. The emulator enforces n
 so the suite cannot catch a missing one; the index JSON is checked for validity by the
 deploy itself.
 
+## Trust phase 1 (7 November)
+
+Branch `feat-trust`. Everything for stopping fake accounts that does not depend on the
+selfie provider, which is phase 2. Details are under [Trust](BACKEND-CONTRACT.md#trust) in
+the contract. Every flag in `config/trust` defaults off, so with nothing configured the
+1.1.2 and 1.2.0 apps behave exactly as before.
+
+Added: `lib/trust-policy.js` (the pure rules), `lib/trust.js` (flags, visibility, rate
+limits), `lib/verification.js` (the one writer, and `applyVerificationResult`, where phase 2
+plugs in), `lib/contact-details.js`, `lib/dhash.js`, the callables `setVerification`
+(moderators) and `setDiscoveryPreferences`, `scripts/set-trust-flags.js`, and the emulator
+tests `trust.test.js`, `photo-trust.test.js` and `limits.test.js` (183 tests in the suite).
+The pure helpers also have unit tests at the repository root (`tests/trust-policy`,
+`tests/contact-details`, `tests/dhash`), which `npm test` runs without the emulator.
+
+Always on, because the older apps can meet them and show the server's message:
+
+- The main photo needs exactly one clear face (Cloud Vision FACE_DETECTION, in the same
+  request as SafeSearch). Photos screened before this have no face result and still lead.
+- A photo matching one on another account (dHash within 6 of 64 bits) is held for a
+  moderator, who approves or rejects it from the report screen.
+- No links, emails or phone numbers in a changed name, bio or area, or in an invitation
+  note. Chat allows them but returns `contactWarning` until a confirmed meetup.
+- Daily limits on invitations, messages and reports.
+
+Behind flags, all off: `requireVerification` (verify before the first meetup),
+`requireEmailVerification` (unconfirmed password accounts hidden from discovery),
+`requireProfilePhoto` (every new profile needs a photo; the new app already asks).
+
+**Deploy steps (none done; staging first):**
+
+1. `cd functions && npm ci` picks up the one new dependency, `jpeg-js` (plain JavaScript,
+   no native code), used to fingerprint photos.
+2. `firebase deploy --only functions,firestore:rules --project <id>`. No new indexes: the
+   duplicate lookup (`dhashBands` array-contains-any) and the confirmed meetup lookup
+   (`participants` array-contains, as deletion already does) use automatic single field
+   indexes. The rules only add explicit
+   denies for `verifications`, `config` and `rateLimits`, which were already denied.
+3. Deploy the functions before shipping the app that calls `setDiscoveryPreferences` and
+   sends photos with the first save. The app falls back to `setProfilePhotos` if an older
+   backend ignores the photos.
+4. Nothing to backfill. `config/trust` need not exist.
+
+**Console steps:**
+
+- Firebase Authentication, Templates, Email address verification: set the sender name to
+  Talkeven and check the wording; optionally point the action URL at talkeven.com. The app
+  sends this email on email sign up from now on.
+- Cloud Vision now bills face detection as well as SafeSearch for each upload (two units per
+  photo).
+- To verify someone by hand: Profile, Moderation, "Verify a member" (by email), or the
+  Verification buttons on a report. To turn a flag on:
+  `node scripts/set-trust-flags.js --project <id> --require-verification on`.
+
+**Not in phase 1:** the selfie check itself (liveness, face match, age estimate), the app's
+selfie flow, and a face match when a profile is created with a verification made earlier.
+`requireVerification` should stay off until phase 2 ships and the older builds are retired.
+
 ## Remaining work
 
 Done since the original handoff: the native screens against the contract, client side
@@ -493,12 +551,10 @@ talkeven.com, notifications for invitations and acceptances, the staging project
 deploys to staging and production. Groups were removed from the app in 1.0.1 and dating is
 out of scope, so neither is backend work now.
 
-**App Check and rate limits**
+**App Check**
 
-App Check is not enforced: the callables verify the user but not the app instance. There is
-no rate limiting or abuse throttling; this matters most for `createInvitation`,
-`sendMessage` and `reportUser`, where a signed in account can call as fast as it likes and
-the report queue itself can be spammed.
+App Check is not enforced: the callables verify the user but not the app instance. Daily
+limits on `createInvitation`, `sendMessage` and `reportUser` arrived with trust phase 1.
 
 **Moderation operator tools**
 

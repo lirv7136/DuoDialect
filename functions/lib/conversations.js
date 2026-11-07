@@ -4,7 +4,7 @@ const { FieldValue } = require("firebase-admin/firestore");
 const { requireObject, requireString } = require("./validation");
 const { LIMITS } = require("./constants");
 const { REASON, reject } = require("./eligibility");
-const { refs, messageId, participantsOf } = require("./refs");
+const { refs, messageId } = require("./refs");
 const { assertQuota, chargeQuota } = require("./trust");
 const { hasContactDetails } = require("./contact-details");
 
@@ -109,13 +109,17 @@ async function sendMessage(db, uid, payload, now = new Date()) {
   return { messageId: sent.messageId, conversationId, created: sent.created, contactWarning };
 }
 
-/** Whether the two have at least one meetup both of them said happened (lib/checkins.js). */
+/**
+ * Whether the two have at least one meetup both of them said happened (lib/checkins.js).
+ * The same array-contains query account deletion uses, so it needs no extra index; a
+ * member has few confirmed meetups, and past the bound the warning simply shows.
+ */
 async function haveConfirmedMeetup(db, uidA, uidB) {
   const snap = await refs(db).confirmedMeetups()
-    .where("participants", "==", participantsOf(uidA, uidB))
-    .limit(1)
+    .where("participants", "array-contains", uidA)
+    .limit(200)
     .get();
-  return !snap.empty;
+  return snap.docs.some((doc) => (doc.get("participants") || []).includes(uidB));
 }
 
 /** Clear the caller's own unread count. Never touches the other participant's state. */

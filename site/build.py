@@ -11,7 +11,7 @@ DRAFT = False
 CONTACT = "hello@talkeven.com"  # forwards to the operator through Cloudflare Email Routing
 OPERATOR = "Lachlan Irving, an individual developer based in Australia"
 UPDATED = "26 September 2026"
-PRIVACY_UPDATED = "6 November 2026"
+PRIVACY_UPDATED = "7 November 2026"
 GUIDELINES_UPDATED = "5 October 2026"
 APP_STORE = "https://apps.apple.com/au/app/talkeven-language-exchange/id6816316060"
 WEB_APP = "https://app.talkeven.com/signup"  # a direct link to sign up, which the web app keeps
@@ -84,9 +84,10 @@ run by {OPERATOR} ("we"). Contact: <a href="mailto:{CONTACT}">{CONTACT}</a>.</p>
 <h2>What we collect</h2>
 <table>
 <tr><th>Data</th><th>Why</th><th>Who can see it</th></tr>
-<tr><td>Email address and password (the password is handled by our sign-in provider; we never see it)</td><td>To create and secure your account</td><td>Only you</td></tr>
+<tr><td>Email address and password (the password is handled by our sign in provider; we never see it)</td><td>To create and secure your account, and to email you a link that confirms the address is yours</td><td>Only you</td></tr>
 <tr><td>First name, neighbourhood, bio, interests, languages and levels, times you can meet</td><td>To show your profile to people whose exchange works with yours</td><td>Members you match with</td></tr>
-<tr><td>Profile photos, if you add any (up to 3)</td><td>So language partners can recognise you when you meet. Each photo is checked automatically for explicit or violent content before anyone else can see it</td><td>Signed-in members, except anyone you have blocked or who has blocked you. Our moderation team if a photo is reported</td></tr>
+<tr><td>Profile photos (up to 3; a new profile needs at least one)</td><td>So language partners can recognise you when you meet. Each photo is checked automatically for explicit or violent content before anyone else can see it. The check also counts faces, because your main photo needs to show just you, with your face clearly visible. We keep a short fingerprint of each photo so the same picture used on more than one account can be spotted; a photo like that stays hidden until our moderation team has looked at it</td><td>Signed in members, except anyone you have blocked or who has blocked you. Our moderation team if a photo is reported or held for a check</td></tr>
+<tr><td>Whether Talkeven has verified you, how and when</td><td>To show a Verified badge, so members can see who has been checked</td><td>The badge: signed in members. The details: our moderation team</td></tr>
 <tr><td>Date of birth</td><td>Only to confirm you're 18 or over</td><td>Only you. It is never shown to other members</td></tr>
 <tr><td>Meetup invitations (place, date, time, note) and chat messages</td><td>So you and your partner can plan and talk</td><td>You and that partner</td></tr>
 <tr><td>Meetup check-ins: the morning after an accepted meetup we privately ask whether it happened (yes or no) and, if you like, whether you would meet again (yes or no)</td><td>To know whether meetups are really happening, and later to show you and your partner how evenly your exchange time is balanced</td><td>Only you. Your answers are never shown to your partner</td></tr>
@@ -108,19 +109,21 @@ when Talkeven is ready for you. We don't share the list. Email
 <a href="mailto:{CONTACT}">{CONTACT}</a> to be removed at any time.</p>
 
 <h2>Service providers</h2>
-<p>We use Google Firebase to run the app: Firebase Authentication for sign in, and a
-database, photo storage and server functions hosted in Sydney, Australia. Profile photos
-are screened automatically by Google Cloud Vision, which checks each new photo for
-explicit, violent or racy content (this check may be processed outside Australia); a
-photo that fails is deleted straight away and never shown. Nobody on our team looks at
-your photos unless someone reports them. Push notifications are delivered through Expo's
+<p>We use Google Firebase to run the app: Firebase Authentication for sign in and for the
+email that confirms your address, and a database, photo storage and server functions
+hosted in Sydney, Australia. Profile photos are screened automatically by Google Cloud
+Vision, which checks each new photo for explicit, violent or racy content and counts the
+faces in it (this check may be processed outside Australia); a photo that fails is deleted
+straight away and never shown. Counting faces is all it does: it does not recognise who
+anyone is. Nobody on our team looks at your photos unless someone reports them, or our
+automatic check holds one because the same picture is on another account. Push notifications are delivered through Expo's
 push service, Apple and Google. They process data on our
 behalf under their own security and privacy terms, and only to provide these services.</p>
 
 <h2>How long we keep it</h2>
 <p>We keep your data while your account exists. You can change a check-in answer for 7 days
 after it arrives. When you delete your account we delete your profile, profile photos and
-their screening records, date of birth, invitations, conversations and messages (for both
+their screening records (including their fingerprints), your verification record, date of birth, invitations, conversations and messages (for both
 people in a conversation), meetup check-ins (yours, and your partners' check-ins about
 meetups with you), confirmed meetup records, blocks and notification tokens. Removing a
 photo from your profile deletes it too. <strong>Exception:</strong> safety reports

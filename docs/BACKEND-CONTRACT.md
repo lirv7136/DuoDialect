@@ -6,6 +6,10 @@ Deployed to staging (`duodialect-staging`) on 30 Sep and to production (`duodial
 dating fields and errors below are unused by the app. This document is the integration surface for the native
 client; `docs/BACKEND-HANDOFF.md` records what changed and what is still missing.
 
+Trust phase 1 (November 2026, branch `feat-trust`, not deployed yet) adds verification,
+face checked main photos, duplicate photo holds, early contact detail rules, email
+confirmation and daily limits. See [Trust](#trust) for the flags; every one defaults off.
+
 ## The shape of the system
 
 Every write that carries an invariant goes through a Cloud Function callable. Clients
@@ -28,8 +32,11 @@ Two rules are worth stating plainly, because the client must not try to work aro
 
 | Path | Who may read | Who may write | Holds |
 | --- | --- | --- | --- |
-| `profiles/{uid}` | any signed in member, one document at a time, unless blocked | server only | public profile: display name, bio, `city`, area, languages, availability, interests, derived `offers` and `seeks`, `photos`, `meetupsConfirmed` |
-| `privateProfiles/{uid}` | the owner only | server only | birth date, gender, dating preferences |
+| `profiles/{uid}` | any signed in member, one document at a time, unless blocked | server only | public profile: display name, bio, `city`, area, languages, availability, interests, derived `offers` and `seeks`, `photos`, `meetupsConfirmed`, `verified` |
+| `privateProfiles/{uid}` | the owner only | server only | birth date, gender, dating preferences, `discovery.verifiedOnly` |
+| `verifications/{uid}` | nobody | server only | verification status, method, `verifiedAt`, `ageReview`, `attempts`, `photoId`, `photoChangedAt`; see [Trust](#trust) |
+| `config/trust` | nobody | server only | the trust flags; absent means every flag is off |
+| `rateLimits/{uid}` | nobody | server only | today's (UTC) counts of invitations, messages and reports |
 | `blocks/{uid}/users/{otherUid}` | the owner only | server only | blocks the owner has made |
 | `invitations/{invitationId}` | its two participants | server only | one two person invitation and its state |
 | `invitationLocks/{lockId}` | nobody | server only | one open invitation per pair per intent |
@@ -44,7 +51,7 @@ Two rules are worth stating plainly, because the client must not try to work aro
 | `accountStatus/{uid}` | nobody | server only | suspension state, checked on every authenticated call |
 | `deletionRequests/{uid}` | nobody | server only | deletion audit trail, kept after the account is gone |
 | `moderationActions/{id}` | nobody | server only | what a moderator looked at and did |
-| `photoScreening/{uid}_{photoId}` | the owner only (`get`, including before it exists) | server only | the screening verdict for one uploaded photo |
+| `photoScreening/{uid}_{photoId}` | the owner only (`get`, including before it exists) | server only | the screening verdict for one uploaded photo, with its face check and fingerprint |
 | `checkIns/{checkInId}` | the owner only | server only | one post meetup check-in, for one person, for one occurrence of a plan |
 | `checkInMutes/{muteId}` | nobody | server only | one person asked to stop being checked in about one plan |
 | `confirmedMeetups/{meetupId}` | nobody | server only | both people said this meetup happened |
@@ -165,6 +172,8 @@ batch, so they cannot drift apart.
   availability?: string[],             // up to 14 entries, 32 chars each
   interests?: string[],                // up to 8 entries, 24 chars each
   birthDate: string,                   // "YYYY-MM-DD"; required on first save
+  photoIds?: string[],                 // first save only: screened photo ids to attach, main first
+  photoPolicy?: "required",            // first save only: this app asks for a photo, so require one
   gender?: "woman"|"man"|"nonbinary",  // optional; only dating uses it, and dating needs it
   dating?: {
     enabled: boolean,
@@ -175,12 +184,30 @@ batch, so they cannot drift apart.
 ```
 
 Returns `{ profile, account }`. `profile` is the public document plus the derived `offers`
-and `seeks` arrays, and the current `photos`. `upsertProfile` never writes `photos` and
-ignores any `photos` field in the request: saving a profile cannot add, reorder or wipe
-photos. Only `setProfilePhotos` changes them. The same goes for `meetupsConfirmed`: the
-request may not set it, the save never touches it, and the returned `profile` carries the
-stored value. `account` is the caller's own private data, including `age` and
+and `seeks` arrays, the current `photos` and `verified`. Apart from the first save (below),
+`upsertProfile` never writes `photos` and ignores any `photos` or `photoIds` in the
+request: saving a profile cannot add, reorder or wipe photos. Only `setProfilePhotos`
+changes them. The same goes for `meetupsConfirmed` and `verified`: the request may not set
+them, a save never touches them, and the returned `profile` carries the stored values (a
+new profile copies `verified` from `verifications/{uid}`, since a check can happen before
+the profile exists). `account` is the caller's own private data, including `age` and
 `isAdultSelfDeclared`.
+
+**Photos on the first save (trust phase 1).** A profile does not exist until its first
+save, and `setProfilePhotos` needs one, so the first save may carry `photoIds`: they are
+checked exactly as `setProfilePhotos` checks them (own folder, approved, a main photo with
+one clear face) and stored with the profile. A first save **must** carry at least one when
+the request says `photoPolicy: "required"` (apps from trust phase 1 on) or when the server
+flag `requireProfilePhoto` is on; otherwise `invalid-argument` / `profile/photo-required`
+and nothing is written. The 1.1.2 and 1.2.0 apps send neither, so they still create a
+profile with no photo while the flag is off. Both fields are ignored on later saves.
+
+**No contact details (trust phase 1).** `displayName`, `bio` and `area` may not contain a
+link, an email address or a phone number (`functions/lib/contact-details.js`):
+`invalid-argument` / `profile/contact-details`, with `details.field` naming the field and a
+message the older apps show as is. Only a value that changes is checked, so a bio saved
+before the rule keeps working until its owner edits it, and a save from an older app that
+only moves city is never refused for text it did not touch.
 
 Language names are lower cased and trimmed. At least one entry in `speaks` must be
 `native` or `fluent`, because that is what makes a person able to offer a language. The
@@ -224,6 +251,39 @@ account: null }` if they have not completed onboarding. `profile.photos` is alwa
 array, empty when there are none, and `profile.meetupsConfirmed` is always an integer,
 0 until a meetup has been confirmed. `profile.city` is always a city id from the world
 list: `sydney` for a profile saved before 1.1.2 that the backfill has not reached yet.
+`profile.verified` is always a boolean.
+
+Since trust phase 1, `account` also carries:
+
+```ts
+discovery: { verifiedOnly: boolean },        // setDiscoveryPreferences
+trust: {
+  verified: boolean,
+  verification: {
+    status: "none"|"pending"|"verified"|"failed"|"review",
+    method: string | null,                   // "moderator" in phase 1, "selfie" from phase 2
+    verifiedAt: string | null,               // ISO
+    photoChangedAt: string | null,           // set while pending because the main photo changed
+  },
+  emailConfirmed: boolean,                   // a confirmed email, or Sign in with Apple
+  requirements: { verificationToMeet: boolean, emailConfirmation: boolean },  // the flags
+  restrictions: string[],                    // reason codes holding the caller back right now
+}
+```
+
+`restrictions` holds `verification/required-to-meet` while `requireVerification` is on and
+the caller is not verified, and `trust/email-unconfirmed` while `requireEmailVerification` is
+on and their email is not confirmed. It is empty with every flag off.
+
+### `setDiscoveryPreferences`
+
+```ts
+{ verifiedOnly: boolean }
+```
+
+Returns `{ discovery: { verifiedOnly } }`. Stored on the caller's private profile; with it on,
+`discoverCandidates` (and its near misses) only returns verified members. Needs a profile
+first (`failed-precondition` / `profile/incomplete`).
 
 ### `setDatingConsent`
 
@@ -253,6 +313,7 @@ Returns:
     photos: { id: string, path: string }[],   // up to 3, main first; [] when none
     fluencyAssurance: "self-declared",
     meetupsConfirmed: number,                 // meetups both people said happened; 0 when none (1.1.1)
+    verified: boolean,                        // Talkeven verified this member (trust phase 1)
     exchange: { theyOffer: string[], youOffer: string[] },
     sharedAvailability: string[]
   }[],
@@ -262,6 +323,7 @@ Returns:
   nearMisses?: {
     uid, displayName, area, offers: string[], seeks: string[],
     photos: { id: string, path: string }[],
+    verified: boolean,
     reason: "language/not-reciprocal" | "language/insufficient-fluency"
   }[],
   learningYourLanguage?: number
@@ -272,6 +334,12 @@ Filtering happens entirely on the server: the caller's city, reciprocal language
 in both directions and, in dating mode, both people's private preferences. Candidates carry
 no private field. `cursor` is the `uid` to page after. `nextCursor` is null when the scan
 is exhausted.
+
+Trust (phase 1): with "only show verified members" on, only verified members come back.
+While `requireEmailVerification` is on, password accounts with an unconfirmed email are left
+out (read from Firebase Auth, so confirming takes effect at once; Apple accounts count as
+confirmed). Verification itself never hides anyone: unverified members stay discoverable,
+and an unverified caller can browse.
 
 **City is a hard boundary (1.1.2).** Discovery only ever scans profiles whose `city`
 equals the caller's, so a Melbourne member never sees Sydney people. `nearMisses` and
@@ -308,8 +376,21 @@ counts the objects removed by this call.
 
 Refusals: more than three ids, a duplicate or a malformed id are `invalid-argument`; a
 missing object is `not-found` / `photo/not-found`; a photo still being screened, rejected
-or failed is `failed-precondition` / `photo/not-screened`; no profile yet is
-`failed-precondition` / `profile/incomplete`.
+or failed is `failed-precondition` / `photo/not-screened`; a photo held for a moderator is
+`failed-precondition` / `photo/in-review`; no profile yet is `failed-precondition` /
+`profile/incomplete`.
+
+**The main photo needs one clear face (trust phase 1).** The first id's screening record
+must not say otherwise: a photo screened with no face, more than one, or one too unclear to
+count is `invalid-argument` / `photo/main-needs-face`, with `details.problem` one of
+`no-face`, `many-faces`, `unclear-face` and a message that says which. Such a photo is fine
+anywhere after the first. A photo screened before face checks existed has no face result
+and may still lead, so nobody is locked out of the photos they have.
+
+While `requireVerification` is on, a verified member whose main photo changes (a different
+first id, or none) goes back to `pending`, loses `verified`, and gets `photoChangedAt`, until
+the check runs again (phase 2) or a moderator verifies them again. Reordering the others
+changes nothing.
 
 ## Profile photos
 
@@ -337,22 +418,42 @@ the app shows its local copy while it waits.
 **Screening.** The `onProfilePhotoUploaded` function (Storage `onObjectFinalized`,
 `australia-southeast1`) runs on every new object:
 
-- It sends the object to Google Cloud Vision SafeSearch. If `adult`, `violence` or `racy`
-  is `LIKELY` or `VERY_LIKELY`, the object is deleted and the verdict is `rejected`.
+- It sends the object to Google Cloud Vision with SafeSearch and face detection in one
+  request. If `adult`, `violence` or `racy` is `LIKELY` or `VERY_LIKELY`, the object is
+  deleted and the verdict is `rejected`. Faces never reject a photo; they are recorded as
+  `face: { ok, count, confidence, problem }` (exactly one face at confidence 0.5 or more
+  is `ok`), which decides whether it may be the main photo.
+- It fingerprints the photo (a 64 bit dHash of the JPEG, `functions/lib/dhash.js`) and
+  looks for an approved photo on **another** account within 6 bits. If there is one, the
+  photo is **held**: metadata `talkevenScreening: "review"`, verdict `review`, and a report
+  `reports/photo_{uid}_{photoId}` with `source: "photo-screening"`, `reason:
+  "duplicate_photo"`, `reporterUid: null`, `photo` and `matches` goes into the moderation
+  queue. Which account it matched is only on the report, never on the uploader's verdict.
+  Plain pictures (almost no detail) and bytes that are not a readable JPEG are not
+  matched. Held photos are not matched against, so a copy someone else uploaded never
+  holds up the real owner.
 - Otherwise it sets the custom metadata `talkevenScreening: "approved"` on the object
   (which is what the read rule checks) and the verdict is `approved`.
-- If Vision fails, the object is deleted and the verdict is `failed` (fail closed; the
-  person can simply add it again).
+- If Vision fails, or reports an error for the image, the object is deleted and the verdict
+  is `failed` (fail closed; the person can simply add it again).
 - If the owner has requested account deletion, the upload is deleted without screening.
 - The verdict is written to `photoScreening/{uid}_{photoId}` as `{ uid, photoId, path,
-  status: "approved" | "rejected" | "failed", flagged, scores, transport, screenedAt }`.
+  status: "approved" | "rejected" | "failed" | "review", flagged, scores, face, dhash,
+  dhashBands, transport, screenedAt }`.
   Photo ids never contain an underscore, so the id is unambiguous. The owner may `get` it,
   including before it exists, so the app can listen with `onSnapshot` and show
   "Checking photo…" until it arrives. Nobody else can read it.
 
 `TALKEVEN_PHOTO_SCREENING` selects `stub` or `vision`. When unset it is `stub` whenever the
 Functions emulator is running and `vision` otherwise. The stub approves everything and
-calls nothing, so emulator runs never reach Cloud Vision.
+calls nothing, so emulator runs never reach Cloud Vision. It reports one clear face unless
+the upload's custom metadata `talkevenStubFaces` says `"N"` faces or `"N@C"` (N faces at
+confidence C), which is how the tests simulate a photo with no face, a group or a blurry
+one; the Vision transport ignores that metadata. The stub still fingerprints the real
+bytes, so duplicate holds are tested for real.
+
+A photo held for review stays in the owner's folder (the orphan sweep in `setProfilePhotos`
+leaves it alone) until a moderator approves or rejects it with `actOnReport`.
 
 **No tokenised URLs are stored.** The profile holds `{ id, path }` only. Clients call
 `getDownloadURL` themselves, which the read rule gates, and keep the result in memory.
@@ -396,6 +497,14 @@ tracked separately, so the same pair may have one of each.
 or fluent in and which the other side is practising; otherwise the server picks the first
 valid pair itself.
 
+Trust (phase 1): while `requireVerification` is on, an unverified caller is refused with
+`failed-precondition` / `verification/required-to-meet`; the recipient is not checked here
+(they are asked when they accept). The `note` may not contain a link, an email address or a
+phone number: `invalid-argument` / `invitation/contact-details`, which the older apps show
+as the server's message. Each member may create 20 invitations a UTC day; the next is
+`resource-exhausted` / `rate-limit/invitations` with `details.limit` and `details.resetsAt`.
+A retry with the same `requestKey` is never refused or counted.
+
 The meeting must be in the future and within a year. `startAt` is returned as an ISO
 instant derived from the wall time in the stated zone; the local fields remain the
 authoritative human description. The app states the zone of the sender's city (from the
@@ -415,7 +524,9 @@ Only the recipient may respond. Acceptance revalidates everything inside a trans
 both profiles, both private profiles and both block documents are re-read, so consent
 withdrawn or a block added after the invitation was sent stops the acceptance. Repeating
 an accept or a decline is harmless and returns `changed: false`. Two simultaneous accepts
-resolve to a single conversation.
+resolve to a single conversation. While `requireVerification` is on, an unverified caller
+cannot accept (`failed-precondition` / `verification/required-to-meet`); declining is always
+allowed, and plans already accepted carry on.
 
 On acceptance the server creates, if it does not already exist, one conversation for the
 pair and intent, and an inbox entry for each participant.
@@ -454,13 +565,18 @@ cannot be cancelled.
 { conversationId: string, text: string /* 1..2000 */, clientMessageId: string /* up to 64 */ }
 ```
 
-Returns `{ messageId, conversationId, created }`.
+Returns `{ messageId, conversationId, created, contactWarning }`.
 
 The message id is derived from the conversation, the caller and `clientMessageId`, so a
 retry writes the same document instead of a duplicate and the unread counter is
 incremented exactly once. **Generate one `clientMessageId` per message the person typed
 and reuse it for every retry.** The message, the conversation summary and both inbox
 entries are written in one transaction. A block in either direction refuses the send.
+
+`contactWarning` (trust phase 1) is true when the text contains a link, an email address or
+a phone number and the two have no confirmed meetup yet. The message is sent either way;
+the app tells the sender to be careful. Each member may send 300 messages a UTC day; the
+next is `resource-exhausted` / `rate-limit/messages`. A retry is never refused or counted.
 
 ### `markConversationRead`
 
@@ -493,7 +609,8 @@ visibility but does not revive cancelled invitations.
 ```
 
 Returns `{ reportId, status: "received" }`. Reports are not readable by any client,
-including the reporter. There is no triage tooling yet.
+including the reporter. Each member may file 10 reports a UTC day; the next is
+`resource-exhausted` / `rate-limit/reports`.
 
 ### `answerCheckIn`
 
@@ -610,7 +727,9 @@ it; there is no separate endpoint.
 
 Returns `{ status, reports }`, newest first. Each report carries both parties' uid and
 display name, whether either account has since been deleted, the reason, the detail, the
-conversation id and the created time.
+conversation id and the created time, and `source`: `"member"`, or `"photo-screening"` for a
+photo held as a duplicate, whose `reporterUid` and `reporterName` are null and whose reason
+is `duplicate_photo`.
 
 ### `getReportContext` · moderators only
 
@@ -622,7 +741,8 @@ Returns `{ report, conversation, messages }` with the thread in chronological or
 `conversation` is null and `messages` empty when the conversation no longer exists.
 `report.reportedPhotos` lists the reported member's current profile photos as
 `{ id, path }`, so a moderator can open them in the Firebase console; no download URL is
-minted. The audit entry records `photosListed`.
+minted. The audit entry records `photosListed`. A held photo's report also has `source`,
+`photo: { photoId, path }` and `matches: { uid, photoId, path, distance }[]`.
 
 **Every call is written to the audit trail.** Reading a private conversation is recorded
 as a `viewed-context` action with the moderator's uid and the number of messages read.
@@ -630,11 +750,17 @@ as a `viewed-context` action with the moderator's uid and the number of messages
 ### `actOnReport` · moderators only
 
 ```ts
-{ reportId: string, action: "claim"|"dismiss"|"warn"|"suspend"|"reinstate"|"remove-photos", note?: string }
+{ reportId: string, action: "claim"|"dismiss"|"warn"|"suspend"|"reinstate"|"remove-photos"|"approve-photo"|"reject-photo", note?: string }
 ```
 
 Returns `{ reportId, action, reportStatus, subjectUid }`, plus `photosRemoved` for
-`remove-photos`.
+`remove-photos` and `photoAttached` for `approve-photo`.
+
+`approve-photo` and `reject-photo` only work on a report screening filed about a held photo
+(otherwise `failed-precondition` / `moderation/not-a-photo-report`). Approving makes the
+photo readable and usable, and adds it to the end of the member's photos when there is room
+and the main photo rule still holds (`photoAttached`), since adding it is what they were
+doing. Rejecting deletes it and its screening record. Both are audited.
 
 `remove-photos` deletes every object in the reported member's photo folder and their
 screening records, and sets `photos: []` on their profile. It is audited like every other
@@ -644,6 +770,20 @@ action, with the count removed. The member can upload again; repeat problems are
 `suspend` marks the account, sets `discoverable: false` so it leaves discovery, and
 revokes its refresh tokens. A suspended account is refused by every callable except
 `requestAccountDeletion`. `reinstate` undoes all of it. Every action is audited.
+
+### `setVerification` · moderators only
+
+```ts
+{ uid?: string, email?: string, status: "verified"|"review"|"failed", note?: string, ageReview?: boolean, reportId?: string }
+```
+
+Returns `{ uid, status, previousStatus, verified, ageReview }`. Sets a member's verification
+by hand, named by uid or by email; phase 1 has no automated check, so this is the only way
+anyone becomes verified. Writes `verifications/{uid}` (method `moderator`, `reviewedBy`,
+`photoId`: the main photo at the time) and `profiles/{uid}.verified` together; a member with
+no profile yet gets it when the profile is created. `ageReview` sets or clears the flag that
+asks someone to look at the birth date. Audited as `set-verification` with the status it
+replaced. An unknown member is `not-found` / `verification/member-not-found`.
 
 ### `getStats` · moderators only
 
@@ -685,6 +825,52 @@ which needs project credentials. Firestore rules still deny direct access to `re
 `moderationActions` and `accountStatus` for everyone, including moderators, so the claim
 only confers power through the callables, where it is audited.
 
+## Trust
+
+Phase 1 is everything that does not depend on the selfie provider. The flags live in
+`config/trust`, which no client can read or write; set them with
+`functions/scripts/set-trust-flags.js` (or by hand in the console). **Every flag defaults
+off**, an absent document means all off, and only a literal `true` turns one on.
+
+| Flag | Default | With it on |
+| --- | --- | --- |
+| `requireVerification` | off | Verification comes before the first meetup: an unverified member signs up, stays discoverable, browses and chats, but `createInvitation` and accepting with `respondToInvitation` are refused with `verification/required-to-meet`. No grace period; plans already accepted carry on. A verified member's new main photo sends them back to `pending`. |
+| `requireEmailVerification` | off | Password accounts with an unconfirmed email are left out of discovery, near misses and match notices. Sign in with Apple counts as confirmed. |
+| `requireProfilePhoto` | off | Every new profile needs a main photo with one clear face, from any app. Apps from phase 1 on already ask with `photoPolicy: "required"`. |
+
+The 1.1.2 and 1.2.0 apps cannot verify anyone, have no email confirmation screen and do not
+send photos with the first save, so leave the flags off until those builds are retired.
+Rules that are always on are ones the older apps can meet and explain: the main photo face
+check and the contact detail refusals come back as `invalid-argument` with a readable
+message, which those apps show as is, and the daily limits as `resource-exhausted`.
+
+**Verification model.** `profiles/{uid}.verified` is the public badge; `verifications/{uid}`
+holds `{ status: none|pending|verified|failed|review, method, verifiedAt, ageReview,
+attempts, lastResult, photoId, pendingReason, photoChangedAt, reviewedBy, note }` and is
+server only. `functions/lib/verification.js` `setVerificationStatus` is the one writer.
+
+**Where phase 2 plugs in.** `applyVerificationResult(db, uid, result)` in
+`functions/lib/verification.js`. Call it with the provider's result for one selfie check
+(`{ outcome: "pending"|"pass"|"fail"|"inconclusive", liveness?, faceMatch?, ageEstimate?,
+provider?, providerRef?, method? }`) from a callable or the provider's webhook. It decides
+the status (`trust-policy.js` `decideVerification`: under 18 by estimate is never verified
+automatically and goes to `review` with `ageReview`; more than 8 years from the declared age
+is verified with `ageReview` set), counts the attempt, keeps only the result fields (never a
+selfie), and updates the badge. The app's selfie flow opens on
+`verification/required-to-meet` and on `trust.verification.photoChangedAt`. Phase 2 should
+also match the selfie against the main photo when a profile is created with one, since the
+first save copies a verification made earlier.
+
+**Daily limits** (`RATE_LIMITS` in `functions/lib/constants.js`): 20 invitations, 300
+messages, 10 reports per member per UTC day, counted in `rateLimits/{uid}` inside the same
+transaction as the write, so a retry never counts and a refused call writes nothing.
+
+**Contact details** (`functions/lib/contact-details.js`): links (with a scheme, `www.`, or a
+bare domain on a known ending such as `.com`, `.me`, `wa.me`, `bit.ly`), email addresses, and
+phone numbers of 8 to 15 digits (dates, year ranges and decimals excluded). Refused in a
+profile's name, bio and area and in an invitation note; in chat, `contactWarning` until the
+pair has a confirmed meetup.
+
 ## Errors
 
 Callable errors carry a Firebase error code and, for every rejection the backend makes
@@ -722,6 +908,17 @@ no reason code.
 | `moderation/report-not-found` | `not-found` | No such report. |
 | `photo/not-found` | `not-found` | No such photo in the caller's own folder. |
 | `photo/not-screened` | `failed-precondition` | The photo has not passed screening: still pending, rejected or failed. |
+| `photo/in-review` | `failed-precondition` | The photo matched one on another account and is held for a moderator. |
+| `photo/main-needs-face` | `invalid-argument` | The main photo has no face, more than one, or one too unclear; `details.problem` says which. |
+| `profile/photo-required` | `invalid-argument` | A new profile needs a main photo (`photoPolicy: "required"`, or `requireProfilePhoto`). |
+| `profile/contact-details` | `invalid-argument` | A changed name, bio or area contains a link, email address or phone number; `details.field` names it. |
+| `invitation/contact-details` | `invalid-argument` | The invitation note contains a link, email address or phone number. |
+| `verification/required-to-meet` | `failed-precondition` | `requireVerification` is on and the caller is not verified, so they cannot create or accept a plan. |
+| `verification/member-not-found` | `not-found` | `setVerification` named nobody. |
+| `moderation/not-a-photo-report` | `failed-precondition` | `approve-photo` or `reject-photo` on a report that is not about a held photo. |
+| `rate-limit/invitations` | `resource-exhausted` | Today's 20 invitations are used; `details.limit`, `details.resetsAt`. |
+| `rate-limit/messages` | `resource-exhausted` | Today's 300 messages are used. |
+| `rate-limit/reports` | `resource-exhausted` | Today's 10 reports are used. |
 
 `unauthenticated` is returned by every callable when there is no signed in user.
 `internal` means an unexpected server fault; the message is deliberately generic.
@@ -729,8 +926,15 @@ no reason code.
 ## What this contract does not claim
 
 - **Age is self declared.** `ageAssurance` is the literal string `"self-declared"`. There
-  is no identity check, document check or third party age assurance anywhere in this
-  backend. Do not present age as verified in the UI.
+  is no identity check, document check or third party age assurance in phase 1. Do not
+  present age as verified in the UI.
+- **"Verified" in phase 1 is a moderator's judgement.** It means a moderator set it with
+  `setVerification`, after whatever check they made (a video call, say). There is no
+  liveness, face match or age estimate until phase 2.
+- **The face check counts faces; it does not recognise anyone.** It does not check that
+  the face is the account holder's; that is phase 2's face match. The duplicate check finds
+  the same picture reused, not the same person in different pictures, and not a picture
+  taken from elsewhere on the web.
 - **Fluency is self declared.** `fluencyAssurance` is `"self-declared"`. The backend
   enforces that a person claims native or fluent level before they may offer a language.
   It does not test whether that claim is true.
@@ -756,14 +960,14 @@ no reason code.
   account are retained and flagged, so deleting an account cannot erase a complaint about
   it. This is a retention exception and must appear in the privacy policy and the store
   data declarations.
-- **Photo screening is automated, not reviewed by a person.** SafeSearch catches explicit,
-  violent and racy images; it does not check that a photo shows the account holder, and
-  it will sometimes be wrong in both directions. Reports and `remove-photos` are the
-  backstop.
+- **Photo screening is automated, and a person sees a photo only when it is reported or
+  held as a duplicate.** SafeSearch catches explicit, violent and racy images; it does not
+  check that a photo shows the account holder, and it will sometimes be wrong in both
+  directions. Reports and `remove-photos` are the backstop.
 - **A download URL, once issued, outlives a later block.** The read rule is checked when
   `getDownloadURL` is called. A URL already held by a device keeps working until the photo
   is deleted or replaced. The app only keeps URLs in memory for the session.
 - **Moderation is a queue and a stop button, not a workflow.** There is no appeals
-  process, no notification to either party, no automated detection beyond photo screening
-  and no operator UI;
-  the callables are the whole surface.
+  process, no notification to either party, and no automated detection beyond photo
+  screening (including duplicate holds) and the contact detail rules. The operator
+  screen in the app (Profile, Moderation) sits on the callables above.
