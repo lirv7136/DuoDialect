@@ -7,6 +7,7 @@ const { refs, shortHash } = require("./refs");
 const { deliver } = require("./notifier");
 const { matchNotice } = require("./notifications");
 const { LIMITS, isCityId } = require("./constants");
+const { readTrustConfig, discoverableUnderTrust } = require("./trust");
 
 /**
  * "A match joined" notifications.
@@ -51,9 +52,14 @@ function shouldNotify(before, after) {
 /**
  * Finds the members the newcomer now matches and notifies each of them once.
  * Returns counts so the caller can log them. Never throws for a single bad recipient.
+ *
+ * Nobody is told about a member the trust flags hide from discovery (an unconfirmed email
+ * while requireEmailVerification is on; lib/trust.js), since they could not find them.
  */
 async function notifyNewMatches(db, { uid, before, after }) {
   if (!shouldNotify(before, after)) return { candidates: 0, notified: 0, skipped: 0 };
+  const config = await readTrustConfig(db);
+  if (!(await discoverableUnderTrust(config, { ...after, uid }))) return { candidates: 0, notified: 0, skipped: 0 };
 
   const r = refs(db);
   const seeks = (after.seeks || []).slice(0, 10);

@@ -20,13 +20,15 @@ const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 
-const { upsertProfile, setDatingConsent, getMyAccount } = require("./lib/profiles");
+const { upsertProfile, setDatingConsent, getMyAccount, setDiscoveryPreferences } = require("./lib/profiles");
 const { discoverCandidates } = require("./lib/discovery");
 const { createInvitation, respondToInvitation, cancelInvitation } = require("./lib/invitations");
 const { sendMessage, markConversationRead } = require("./lib/conversations");
 const { setBlock, reportUser } = require("./lib/safety");
 const { requestAccountDeletion, assertNotSuspended } = require("./lib/accounts");
-const { assertModerator, listReports, getReportContext, actOnReport } = require("./lib/moderation");
+const {
+  assertModerator, listReports, getReportContext, actOnReport, setVerification,
+} = require("./lib/moderation");
 const { deliver } = require("./lib/notifier");
 const { invitationNotice, acceptedNotice, cancelledNotice } = require("./lib/notifications");
 const { refs } = require("./lib/refs");
@@ -51,7 +53,8 @@ const db = getFirestore();
  *
  * `allowSuspended` exists for one operation only: a suspended account keeps the right
  * to delete itself. `moderatorOnly` checks the verified token claim, which no callable
- * can grant; see scripts/set-moderator.js.
+ * can grant; see scripts/set-moderator.js. Handlers also get the verified request auth,
+ * for the few that read the token itself (whether the email is confirmed).
  */
 function authenticated(name, handler, options = {}) {
   return onCall(options.callOptions || {}, async (request) => {
@@ -62,7 +65,7 @@ function authenticated(name, handler, options = {}) {
     try {
       if (options.moderatorOnly) assertModerator(request.auth.token);
       if (!options.allowSuspended) await assertNotSuspended(db, uid);
-      return await handler(db, uid, request.data || {}, new Date());
+      return await handler(db, uid, request.data || {}, new Date(), request.auth);
     } catch (error) {
       if (error instanceof HttpsError) throw error;
       logger.error(`${name} failed`, { uid, error: String(error && error.stack ? error.stack : error) });
@@ -74,14 +77,18 @@ function authenticated(name, handler, options = {}) {
 exports.upsertProfile = authenticated("upsertProfile", (database, uid, data, now) =>
   upsertProfile(database, uid, data, now));
 
-exports.getMyAccount = authenticated("getMyAccount", (database, uid, data, now) =>
-  getMyAccount(database, uid, now));
+exports.getMyAccount = authenticated("getMyAccount", (database, uid, data, now, auth) =>
+  getMyAccount(database, uid, now, auth));
 
 exports.setDatingConsent = authenticated("setDatingConsent", (database, uid, data, now) =>
   setDatingConsent(database, uid, data, now));
 
 exports.setProfilePhotos = authenticated("setProfilePhotos", (database, uid, data, now) =>
   setProfilePhotos(database, uid, data, now));
+
+/** "Only show verified members", applied by discoverCandidates. */
+exports.setDiscoveryPreferences = authenticated("setDiscoveryPreferences", (database, uid, data) =>
+  setDiscoveryPreferences(database, uid, data));
 
 exports.discoverCandidates = authenticated("discoverCandidates", (database, uid, data, now) =>
   discoverCandidates(database, uid, data, now));
@@ -95,8 +102,8 @@ exports.respondToInvitation = authenticated("respondToInvitation", (database, ui
 exports.cancelInvitation = authenticated("cancelInvitation", (database, uid, data) =>
   cancelInvitation(database, uid, data));
 
-exports.sendMessage = authenticated("sendMessage", (database, uid, data) =>
-  sendMessage(database, uid, data));
+exports.sendMessage = authenticated("sendMessage", (database, uid, data, now) =>
+  sendMessage(database, uid, data, now));
 
 exports.markConversationRead = authenticated("markConversationRead", (database, uid, data) =>
   markConversationRead(database, uid, data));
@@ -104,8 +111,8 @@ exports.markConversationRead = authenticated("markConversationRead", (database, 
 exports.setBlock = authenticated("setBlock", (database, uid, data) =>
   setBlock(database, uid, data));
 
-exports.reportUser = authenticated("reportUser", (database, uid, data) =>
-  reportUser(database, uid, data));
+exports.reportUser = authenticated("reportUser", (database, uid, data, now) =>
+  reportUser(database, uid, data, now));
 
 exports.answerCheckIn = authenticated("answerCheckIn", (database, uid, data, now) =>
   answerCheckIn(database, uid, data, now));
@@ -136,6 +143,13 @@ exports.getReportContext = authenticated("getReportContext", (database, uid, dat
 
 exports.actOnReport = authenticated("actOnReport", (database, uid, data) =>
   actOnReport(database, uid, data), { moderatorOnly: true });
+
+/**
+ * Sets a member's verification by hand (verified, failed or review), audited. Phase 2's
+ * automated check writes through lib/verification.js applyVerificationResult instead.
+ */
+exports.setVerification = authenticated("setVerification", (database, uid, data) =>
+  setVerification(database, uid, data), { moderatorOnly: true });
 
 /** Operator stats: counts only, no names or messages. See lib/stats.js. */
 exports.getStats = authenticated("getStats", (database, uid, data, now) =>

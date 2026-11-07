@@ -4,7 +4,9 @@ const { FieldValue } = require("firebase-admin/firestore");
 const { requireObject, requireString } = require("./validation");
 const { LIMITS } = require("./constants");
 const { REASON, reject } = require("./eligibility");
-const { refs, messageId } = require("./refs");
+const { refs, messageId, participantsOf } = require("./refs");
+const { assertQuota, chargeQuota } = require("./trust");
+const { hasContactDetails } = require("./contact-details");
 
 function otherParticipant(participants, uid) {
   return participants.find((value) => value !== uid) || null;
@@ -19,8 +21,14 @@ function otherParticipant(participants, uid) {
  * The message id is derived from the caller's clientMessageId, so a retry after a
  * timeout writes the same document instead of a duplicate, and the unread counter is
  * incremented in the same transaction as the message itself.
+ *
+ * A message carrying a link, an email address or a phone number is sent, but until the
+ * pair has a confirmed meetup the response says `contactWarning: true`, so the app can
+ * tell the sender to be careful sharing contact details before meeting (see
+ * lib/contact-details.js). Older apps ignore the field. Each member may send
+ * RATE_LIMITS.sendMessage messages a day; a retry does not count.
  */
-async function sendMessage(db, uid, payload) {
+async function sendMessage(db, uid, payload, now = new Date()) {
   const body = requireObject(payload, "request");
   const conversationId = requireString(body.conversationId, "conversationId", 128);
   const text = requireString(body.text, "text", LIMITS.messageText);
@@ -29,7 +37,7 @@ async function sendMessage(db, uid, payload) {
   const r = refs(db);
   const id = messageId(conversationId, uid, clientMessageId);
 
-  return db.runTransaction(async (tx) => {
+  const sent = await db.runTransaction(async (tx) => {
     const convRef = r.conversation(conversationId);
     const convSnap = await tx.get(convRef);
     if (!convSnap.exists) {
@@ -44,16 +52,17 @@ async function sendMessage(db, uid, payload) {
       throw reject("failed-precondition", "conversation/membership-invalid", "This conversation is not usable.");
     }
 
-    const [blockOut, blockIn, existing] = await tx.getAll(
-      r.block(uid, toUid), r.block(toUid, uid), r.message(conversationId, id),
+    const [blockOut, blockIn, existing, quotaSnap] = await tx.getAll(
+      r.block(uid, toUid), r.block(toUid, uid), r.message(conversationId, id), r.rateLimit(uid),
     );
     if (blockOut.exists || blockIn.exists) {
       throw reject("permission-denied", REASON.unavailable, "This person is not available.");
     }
     if (existing.exists) {
       // Retry of a message that already landed.
-      return { messageId: id, conversationId, created: false };
+      return { messageId: id, conversationId, created: false, toUid };
     }
+    const quota = assertQuota(quotaSnap, "sendMessage", now);
 
     tx.set(r.message(conversationId, id), {
       id,
@@ -92,8 +101,21 @@ async function sendMessage(db, uid, payload) {
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    return { messageId: id, conversationId, created: true };
+    chargeQuota(tx, db, uid, quota, "sendMessage");
+    return { messageId: id, conversationId, created: true, toUid };
   });
+
+  const contactWarning = hasContactDetails(text) && !(await haveConfirmedMeetup(db, uid, sent.toUid));
+  return { messageId: sent.messageId, conversationId, created: sent.created, contactWarning };
+}
+
+/** Whether the two have at least one meetup both of them said happened (lib/checkins.js). */
+async function haveConfirmedMeetup(db, uidA, uidB) {
+  const snap = await refs(db).confirmedMeetups()
+    .where("participants", "==", participantsOf(uidA, uidB))
+    .limit(1)
+    .get();
+  return !snap.empty;
 }
 
 /** Clear the caller's own unread count. Never touches the other participant's state. */

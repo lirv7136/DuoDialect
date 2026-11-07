@@ -7,6 +7,7 @@ const {
 } = require("./eligibility");
 const { refs } = require("./refs");
 const { publicPhotos } = require("./photos");
+const { readTrustConfig, visibleUnderTrust } = require("./trust");
 
 /** A profile from before cities counts as Sydney until the backfill stamps it. */
 function cityOf(profile) {
@@ -30,6 +31,8 @@ function publicCandidate(profile, exchange, myAvailability) {
     fluencyAssurance: profile.fluencyAssurance || "self-declared",
     // Meetups both people said happened. Honest evidence, not verification.
     meetupsConfirmed: Number(profile.meetupsConfirmed || 0),
+    // Talkeven verified this member (lib/verification.js). The badge reads this.
+    verified: profile.verified === true,
     exchange: { theyOffer: exchange.bOffers, youOffer: exchange.aOffers },
     sharedAvailability: intersect(profile.availability || [], myAvailability || []),
   };
@@ -45,6 +48,12 @@ function publicCandidate(profile, exchange, myAvailability) {
  * preferences are read here but never returned: the caller learns only that somebody is
  * eligible, never why or what they prefer.
  *
+ * Trust (lib/trust.js) hides members whose email is unconfirmed while
+ * requireEmailVerification is on, and a caller who turned on "only show verified members"
+ * sees only verified ones. With every flag off and the switch off, nobody is hidden.
+ * Verification itself hides nobody: an unverified member is discoverable and may browse;
+ * creating or accepting an invitation is what needs it (lib/invitations.js).
+ *
  * Paging is by document id. Scanning is bounded per call; this is not a ranked feed
  * and it does not scale to a large member base without a dedicated index.
  */
@@ -57,12 +66,19 @@ async function discoverCandidates(db, uid, payload = {}, now = new Date()) {
     : requireString(body.cursor, "cursor", 128);
 
   const r = refs(db);
-  const [meSnap, myPrivateSnap] = await db.getAll(r.profile(uid), r.privateProfile(uid));
+  const [[meSnap, myPrivateSnap], config] = await Promise.all([
+    db.getAll(r.profile(uid), r.privateProfile(uid)),
+    readTrustConfig(db),
+  ]);
   const me = meSnap.exists ? meSnap.data() : null;
   if (!isUsableProfile(me)) {
     throw reject("failed-precondition", REASON.profileIncomplete, "Complete your profile before discovering partners.");
   }
   const myPrivate = myPrivateSnap.exists ? myPrivateSnap.data() : null;
+  const trust = {
+    config,
+    verifiedOnly: !!myPrivate && !!myPrivate.discovery && myPrivate.discovery.verifiedOnly === true,
+  };
 
   if (mode === "dating") {
     const selfCheck = datingEligibility(myPrivate, myPrivate, now);
@@ -111,10 +127,12 @@ async function discoverCandidates(db, uid, payload = {}, now = new Date()) {
     if (exchange.reciprocal) reciprocal.push({ profile, exchange });
   }
 
-  let eligible = reciprocal;
-  if (mode === "dating" && reciprocal.length > 0) {
-    const privates = await db.getAll(...reciprocal.map((row) => r.privateProfile(row.profile.uid)));
-    eligible = reciprocal.filter((_, index) => {
+  let eligible = await visibleUnderTrust(config, reciprocal, {
+    profileOf: (row) => row.profile, verifiedOnly: trust.verifiedOnly,
+  });
+  if (mode === "dating" && eligible.length > 0) {
+    const privates = await db.getAll(...eligible.map((row) => r.privateProfile(row.profile.uid)));
+    eligible = eligible.filter((_, index) => {
       const theirPrivate = privates[index].exists ? privates[index].data() : null;
       return datingEligibility(myPrivate, theirPrivate, now).eligible;
     });
@@ -139,7 +157,7 @@ async function discoverCandidates(db, uid, payload = {}, now = new Date()) {
   // want what the caller offers. Only for platonic discovery, and only when the whole
   // scan came up empty, so the extra reads happen when there is nothing else to show.
   if (mode === "platonic" && !cursor && page.length === 0 && nextCursor === null) {
-    Object.assign(result, await nearMisses(db, uid, me, visible));
+    Object.assign(result, await nearMisses(db, uid, me, visible, trust));
   }
   return result;
 }
@@ -153,6 +171,7 @@ function publicNearMiss(profile, reason) {
     offers: profile.offers || [],
     seeks: profile.seeks || [],
     photos: publicPhotos(profile.photos),
+    verified: profile.verified === true,
     reason,
   };
 }
@@ -160,10 +179,10 @@ function publicNearMiss(profile, reason) {
 /**
  * The people on either side of a one way match, with the reason it is one way, plus a
  * count of members in the caller's city learning a language the caller offers. Blocks
- * are respected in both directions, as for candidates. Bounded to one extra scan and
- * one count.
+ * are respected in both directions, and trust hides the same people, as for candidates.
+ * Bounded to one extra scan and one count.
  */
-async function nearMisses(db, uid, me, alreadyVisible) {
+async function nearMisses(db, uid, me, alreadyVisible, trust) {
   const r = refs(db);
   const offers = (me.offers || []).slice(0, 10);
   if (offers.length === 0) return { nearMisses: [], learningYourLanguage: 0 };
@@ -178,9 +197,10 @@ async function nearMisses(db, uid, me, alreadyVisible) {
     .orderBy("uid")
     .limit(LIMITS.nearMissScan)
     .get();
-  const learningYourLanguage = wantMine.docs
+  const wantMineVisible = await visibleUnderTrust(trust.config, wantMine.docs
     .map((doc) => doc.data())
-    .filter((profile) => profile.uid && profile.uid !== uid && !myBlocks.has(profile.uid)).length;
+    .filter((profile) => profile.uid && profile.uid !== uid && !myBlocks.has(profile.uid)), trust);
+  const learningYourLanguage = wantMineVisible.length;
 
   const seen = new Set();
   const pool = [];
@@ -191,7 +211,7 @@ async function nearMisses(db, uid, me, alreadyVisible) {
     if (!reciprocalExchange(me, profile).reciprocal) pool.push(profile);
   }
 
-  let rows = pool.slice(0, LIMITS.nearMissLimit * 2);
+  let rows = (await visibleUnderTrust(trust.config, pool, trust)).slice(0, LIMITS.nearMissLimit * 2);
   if (rows.length > 0) {
     const inbound = await db.getAll(...rows.map((profile) => r.block(profile.uid, uid)));
     rows = rows.filter((_, index) => !inbound[index].exists);

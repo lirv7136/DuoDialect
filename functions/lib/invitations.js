@@ -14,6 +14,8 @@ const {
 } = require("./refs");
 const { initialSchedule } = require("./checkins");
 const { firstReminder } = require("./reminders");
+const { readTrustConfig, assertMayMakePlans, assertQuota, chargeQuota } = require("./trust");
+const { hasContactDetails, CONTACT_DETAILS_MESSAGE } = require("./contact-details");
 
 /** Accepts a Firestore Timestamp, a Date, or null. */
 function toIso(value) {
@@ -96,6 +98,14 @@ async function readPairSnapshots(tx, db, fromUid, toUid) {
  * Idempotent on requestKey: a retry with the same key returns the invitation already
  * created rather than a second one. At most one pending invitation may exist per pair
  * per intent, enforced by a lock document written in the same transaction.
+ *
+ * Trust: while requireVerification is on, the caller must be verified (verification comes
+ * before the first meetup; the recipient is asked when they go to accept).
+ * The note is the one thing a stranger can send before anyone has agreed to meet, so it
+ * may not carry a link, an email address or a phone number (invalid-argument, so the
+ * 1.1.2 and 1.2.0 apps show the reason). Each member may create
+ * RATE_LIMITS.createInvitation invitations a day; a retry of one already created does
+ * not count.
  */
 async function createInvitation(db, callerUid, payload, now = new Date()) {
   const body = requireObject(payload, "request");
@@ -110,13 +120,18 @@ async function createInvitation(db, callerUid, payload, now = new Date()) {
   }
 
   // First pass outside the transaction so the caller gets a precise reason.
-  const pair = await loadPair(db, callerUid, toUid);
+  const [pair, config] = await Promise.all([loadPair(db, callerUid, toUid), readTrustConfig(db)]);
   const exchange = assertPairEligible({ uidA: callerUid, uidB: toUid, intent, pair, now });
+  assertMayMakePlans(config, pair.profileA);
   const languages = resolveLanguages(body.languages, exchange);
 
   const id = invitationId(callerUid, toUid, intent, requestKey);
   const lockId = invitationLockId(callerUid, toUid, intent);
   const r = refs(db);
+
+  if (note && hasContactDetails(note)) {
+    throw reject("invalid-argument", REASON.invitationContactDetails, CONTACT_DETAILS_MESSAGE);
+  }
 
   return db.runTransaction(async (tx) => {
     const inviteRef = r.invitation(id);
@@ -153,6 +168,8 @@ async function createInvitation(db, callerUid, payload, now = new Date()) {
         "The chosen languages are no longer part of your exchange.",
       );
     }
+    // Today's count, read last so every read comes before the first write.
+    const quota = assertQuota(await tx.get(r.rateLimit(callerUid)), "createInvitation", now);
 
     const doc = {
       id,
@@ -187,6 +204,7 @@ async function createInvitation(db, callerUid, payload, now = new Date()) {
       intent,
       updatedAt: FieldValue.serverTimestamp(),
     });
+    chargeQuota(tx, db, callerUid, quota, "createInvitation");
 
     return { invitation: serializeInvitation(id, doc), created: true };
   });
@@ -198,12 +216,15 @@ async function createInvitation(db, callerUid, payload, now = new Date()) {
  * Acceptance re-reads both profiles, both private profiles and both block documents
  * inside the transaction, so consent withdrawn or a block added after the invitation
  * was sent stops the acceptance. Two concurrent accepts resolve to one conversation.
+ * While requireVerification is on, the caller must be verified to accept; declining is
+ * always allowed.
  */
 async function respondToInvitation(db, callerUid, payload, now = new Date()) {
   const body = requireObject(payload, "request");
   const id = requireString(body.invitationId, "invitationId", 128);
   const action = requireEnum(body.action, "action", ["accept", "decline"]);
   const r = refs(db);
+  const config = action === "accept" ? await readTrustConfig(db) : null;
 
   return db.runTransaction(async (tx) => {
     const inviteRef = r.invitation(id);
@@ -263,6 +284,8 @@ async function respondToInvitation(db, callerUid, payload, now = new Date()) {
         "The agreed languages are no longer part of this exchange.",
       );
     }
+    // The caller is the recipient.
+    assertMayMakePlans(config, snapshots.profileTo.data());
 
     const conv = await tx.get(convRef);
     const lock = await tx.get(lockRef);

@@ -99,4 +99,16 @@ async function castOf(...names) {
   return out;
 }
 
-module.exports = { CAST, castOf };
+/**
+ * One fresh member from the cast, with overrides: a city of its own keeps one test's
+ * discovery apart from another's in the same file. `label` names the account.
+ */
+async function memberOf(name, label = name, overrides = {}) {
+  const spec = CAST[name];
+  if (!spec) throw new Error(`Unknown cast member: ${name}`);
+  const actor = await makeActor(label);
+  const result = await actor.call("upsertProfile", { ...spec, ...overrides });
+  return Object.assign(actor, { profile: result.profile, account: result.account, spec: { ...spec, ...overrides } });
+}
+
+module.exports = { CAST, castOf, memberOf };

@@ -33,6 +33,11 @@ const REASON = {
   conversationNotFound: "conversation/not-found",
   photoNotFound: "photo/not-found",
   photoNotScreened: "photo/not-screened",
+  photoInReview: "photo/in-review",
+  photoMainNeedsFace: "photo/main-needs-face",
+  profilePhotoRequired: "profile/photo-required",
+  profileContactDetails: "profile/contact-details",
+  invitationContactDetails: "invitation/contact-details",
 };
 
 function reject(code, reason, message) {

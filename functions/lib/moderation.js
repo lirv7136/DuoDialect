@@ -3,10 +3,13 @@
 const { FieldValue } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const logger = require("firebase-functions/logger");
-const { requireObject, requireString, requireEnum, requireInteger, optionalString } = require("./validation");
+const {
+  requireObject, requireString, requireEnum, requireInteger, optionalString, requireUid, requireBoolean, invalid,
+} = require("./validation");
 const { reject } = require("./eligibility");
 const { refs } = require("./refs");
-const { publicPhotos, deleteAllPhotosFor } = require("./photos");
+const { publicPhotos, deleteAllPhotosFor, approveHeldPhoto, rejectHeldPhoto } = require("./photos");
+const { setVerificationStatus } = require("./verification");
 
 /**
  * Minimum moderation.
@@ -24,7 +27,11 @@ const { publicPhotos, deleteAllPhotosFor } = require("./photos");
  */
 
 const REPORT_STATUSES = ["received", "reviewing", "actioned", "dismissed"];
-const ACTIONS = ["claim", "dismiss", "warn", "suspend", "reinstate", "remove-photos"];
+const ACTIONS = ["claim", "dismiss", "warn", "suspend", "reinstate", "remove-photos", "approve-photo", "reject-photo"];
+/** Only these two need a photo held by screening; see lib/photos.js. */
+const PHOTO_ACTIONS = ["approve-photo", "reject-photo"];
+/** What a moderator may set by hand. "pending" and "none" belong to the automated check. */
+const MANUAL_VERIFICATION_STATUSES = ["verified", "failed", "review"];
 
 /** Throws unless the verified token carries the moderator claim. */
 function assertModerator(token) {
@@ -72,7 +79,9 @@ async function listReports(db, moderatorUid, payload = {}) {
     status,
     reports: rows.map((row) => ({
       id: row.id,
-      reporterUid: row.reporterUid,
+      // "member" for a report a person filed; "photo-screening" for a photo held as a duplicate.
+      source: row.source || "member",
+      reporterUid: row.reporterUid || null,
       reporterName: names[row.reporterUid] || null,
       reporterDeleted: row.reporterDeleted === true,
       reportedUid: row.reportedUid,
@@ -144,7 +153,8 @@ async function getReportContext(db, moderatorUid, payload) {
   return {
     report: {
       id: reportId,
-      reporterUid: report.reporterUid,
+      source: report.source || "member",
+      reporterUid: report.reporterUid || null,
       reporterName: names[report.reporterUid] || null,
       reportedUid: report.reportedUid,
       reportedName: names[report.reportedUid] || null,
@@ -152,6 +162,9 @@ async function getReportContext(db, moderatorUid, payload) {
       detail: report.detail || "",
       status: report.status,
       reportedPhotos,
+      // A held photo and the photos on other accounts it matched, as Storage paths.
+      photo: report.photo || null,
+      matches: Array.isArray(report.matches) ? report.matches : [],
     },
     conversation,
     messages,
@@ -186,7 +199,21 @@ async function actOnReport(db, moderatorUid, payload) {
     suspend: "actioned",
     reinstate: "actioned",
     "remove-photos": "actioned",
+    "approve-photo": "actioned",
+    "reject-photo": "actioned",
   };
+
+  // A photo held by screening: release it (and add it to their profile if it fits), or
+  // delete it. Only meaningful on a report screening filed about that photo.
+  let photoAttached = null;
+  if (PHOTO_ACTIONS.includes(action)) {
+    const photoId = report.photo && report.photo.photoId;
+    if (!photoId) {
+      throw reject("failed-precondition", "moderation/not-a-photo-report", "This report is not about a held photo.");
+    }
+    if (action === "approve-photo") photoAttached = await approveHeldPhoto(db, subjectUid, photoId, moderatorUid);
+    else await rejectHeldPhoto(db, subjectUid, photoId);
+  }
 
   // Removes every photo the reported person has, from Storage and from their profile, along
   // with the screening records. They may upload again; repeat offences are for `suspend`.
@@ -239,14 +266,63 @@ async function actOnReport(db, moderatorUid, payload) {
     subjectUid,
     note,
     ...(photosRemoved === null ? {} : { photosRemoved }),
+    ...(photoAttached === null ? {} : { photoAttached }),
   });
 
   return {
     reportId, action, reportStatus: statusForAction[action], subjectUid,
     ...(photosRemoved === null ? {} : { photosRemoved }),
+    ...(photoAttached === null ? {} : { photoAttached }),
+  };
+}
+
+/**
+ * Sets a member's verification by hand: verified, failed, or review. Phase 1 has no
+ * automated check, so this is the only way anyone becomes verified (for example after a
+ * moderator has seen them on a video call). Name the member by `uid` or by `email`.
+ * `ageReview` sets or clears the flag that asks someone to look at their birth date.
+ * Audited as `set-verification`, with the status it replaced.
+ */
+async function setVerification(db, moderatorUid, payload) {
+  const body = requireObject(payload, "request");
+  const status = requireEnum(body.status, "status", MANUAL_VERIFICATION_STATUSES);
+  const note = optionalString(body.note, "note", 1000);
+  const ageReview = body.ageReview === undefined ? undefined : requireBoolean(body.ageReview, "ageReview");
+  const reportId = body.reportId === undefined || body.reportId === null ? null : requireString(body.reportId, "reportId", 128);
+
+  let uid;
+  const notFound = () => reject("not-found", "verification/member-not-found", "No member matches that.");
+  try {
+    if (body.uid !== undefined && body.uid !== null) {
+      uid = (await getAuth().getUser(requireUid(body.uid, "uid"))).uid;
+    } else if (body.email !== undefined && body.email !== null) {
+      uid = (await getAuth().getUserByEmail(requireString(body.email, "email", 254))).uid;
+    } else {
+      throw invalid("Send the member's uid or email.");
+    }
+  } catch (error) {
+    if (error && error.code === "auth/user-not-found") throw notFound();
+    throw error;
+  }
+
+  const outcome = await setVerificationStatus(db, uid, {
+    status, method: "moderator", by: moderatorUid, note, ageReview,
+  });
+  await recordAction(db, moderatorUid, {
+    action: "set-verification",
+    subjectUid: uid,
+    status,
+    previousStatus: outcome.previousStatus,
+    reportId,
+    note,
+    ...(ageReview === undefined ? {} : { ageReview }),
+  });
+  return {
+    uid, status: outcome.status, previousStatus: outcome.previousStatus, verified: outcome.verified,
+    ageReview: outcome.ageReview,
   };
 }
 
 module.exports = {
-  assertModerator, listReports, getReportContext, actOnReport, REPORT_STATUSES, ACTIONS,
+  assertModerator, listReports, getReportContext, actOnReport, setVerification, REPORT_STATUSES, ACTIONS,
 };

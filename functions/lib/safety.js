@@ -6,6 +6,7 @@ const { REPORT_REASONS, LIMITS } = require("./constants");
 const { REASON, reject } = require("./eligibility");
 const { refs } = require("./refs");
 const { cancelPendingInvitationsFor } = require("./invitations");
+const { assertQuota, chargeQuota } = require("./trust");
 
 /**
  * Block or unblock another member.
@@ -44,9 +45,10 @@ async function setBlock(db, uid, payload) {
 
 /**
  * File a report. Reports are written by the server and are not readable by any client,
- * including the reporter. There is no triage tooling yet; see BACKEND-HANDOFF.md.
+ * including the reporter; moderators work the queue through lib/moderation.js. Each member
+ * may file RATE_LIMITS.reportUser reports a day, so the queue cannot be flooded.
  */
-async function reportUser(db, uid, payload) {
+async function reportUser(db, uid, payload, now = new Date()) {
   const body = requireObject(payload, "request");
   const reportedUid = requireUid(body.reportedUid, "reportedUid");
   const reason = requireEnum(body.reason, "reason", REPORT_REASONS);
@@ -68,17 +70,22 @@ async function reportUser(db, uid, payload) {
     }
   }
 
-  const doc = await r.reports().add({
-    reporterUid: uid,
-    reportedUid,
-    conversationId,
-    reason,
-    detail,
-    status: "received",
-    createdAt: FieldValue.serverTimestamp(),
+  const reportRef = r.reports().doc();
+  await db.runTransaction(async (tx) => {
+    const quota = assertQuota(await tx.get(r.rateLimit(uid)), "reportUser", now);
+    tx.set(reportRef, {
+      reporterUid: uid,
+      reportedUid,
+      conversationId,
+      reason,
+      detail,
+      status: "received",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    chargeQuota(tx, db, uid, quota, "reportUser");
   });
 
-  return { reportId: doc.id, status: "received" };
+  return { reportId: reportRef.id, status: "received" };
 }
 
 module.exports = { setBlock, reportUser };

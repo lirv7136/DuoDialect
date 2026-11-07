@@ -197,6 +197,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Trust, phase 1. Verification records (status, method, attempts, the age review flag)
+    // are server only: the owner reads their own status through getMyAccount, and the
+    // public badge is profiles/{uid}.verified, which the server writes. The trust flags in
+    // config/trust and the per member daily counters behind the rate limits are server
+    // only too; no client may read or change either.
+    match /verifications/{uid} {
+      allow read, write: if false;
+    }
+    match /config/{docId} {
+      allow read, write: if false;
+    }
+    match /rateLimits/{uid} {
+      allow read, write: if false;
+    }
+
     // Collections the earlier Expo client wrote to directly. They are closed rather than
     // migrated, so stale client code fails loudly instead of reading half migrated state.
     // See docs/BACKEND-HANDOFF.md for the replacement for each one.

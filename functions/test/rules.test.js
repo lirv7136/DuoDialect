@@ -186,6 +186,7 @@ test("the callables reject unauthenticated callers", async () => {
     "upsertProfile", "getMyAccount", "setDatingConsent", "discoverCandidates",
     "createInvitation", "respondToInvitation", "cancelInvitation",
     "sendMessage", "markConversationRead", "setBlock", "reportUser",
+    "setProfilePhotos", "setDiscoveryPreferences", "setVerification",
   ]) {
     await expectFailure(stranger.call(name, {}), "unauthenticated", `${name} must require sign in`);
   }

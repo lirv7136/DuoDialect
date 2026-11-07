@@ -20,7 +20,8 @@ const { adjustMeetupsConfirmed } = require("./checkins");
  * partial failure resumes rather than corrupting anything.
  *
  * What is removed:
- *   profile, private profile, push tokens (legacy document and every device), account status
+ *   profile, private profile, push tokens (legacy document and every device), account status,
+ *   the verification record and the rate limit counter
  *   every profile photo in Storage, and every photo screening record
  *   blocks the person made, and blocks other people made against them
  *   every invitation they are part of, and its duplicate lock
@@ -178,7 +179,7 @@ async function requestAccountDeletion(db, uid, payload) {
     );
   }
 
-  await r.accountStatus(uid).delete();
+  await Promise.all([r.accountStatus(uid).delete(), r.verification(uid).delete(), r.rateLimit(uid).delete()]);
 
   // 7. The Auth user goes last. Until this succeeds the caller can retry the whole
   //    operation, because every step above is a delete.

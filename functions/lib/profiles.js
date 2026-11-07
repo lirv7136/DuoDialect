@@ -1,6 +1,7 @@
 "use strict";
 
 const { FieldValue } = require("firebase-admin/firestore");
+const { HttpsError } = require("firebase-functions/v2/https");
 const {
   requireObject, requireString, optionalString, requireEnum, requireBoolean, requireInteger,
   requireLanguageList, requireShortTextList, requireBirthDate, ageFromBirthDate,
@@ -12,7 +13,9 @@ const {
 const { REASON, reject } = require("./eligibility");
 const { refs } = require("./refs");
 const { cancelPendingInvitationsFor } = require("./invitations");
-const { publicPhotos } = require("./photos");
+const { publicPhotos, requirePhotoIds, assertPhotosUsable } = require("./photos");
+const { readTrustConfig, trustSummary } = require("./trust");
+const { hasContactDetails, PROFILE_FIELD_MESSAGES } = require("./contact-details");
 
 /**
  * Validates a dating preferences block. Callers who are not adults, by their own
@@ -74,6 +77,48 @@ function requireGenderForDating(dating, gender) {
 }
 
 /**
+ * A stranger's first impression of a member is their name, bio and neighbourhood, so none
+ * may carry a link, an email address or a phone number. Only a value that changes is
+ * checked: a bio saved before this rule keeps working until its owner edits it, so a save
+ * from an older app that only moves city is never refused for text it did not touch.
+ * invalid-argument, so the 1.1.2 and 1.2.0 apps show the server's message.
+ */
+function assertNoContactDetails(fields, stored) {
+  for (const [field, value] of Object.entries(fields)) {
+    const before = stored ? stored[field] : undefined;
+    if (value && value !== before && hasContactDetails(value)) {
+      throw new HttpsError("invalid-argument", PROFILE_FIELD_MESSAGES[field], {
+        reason: REASON.profileContactDetails, field,
+      });
+    }
+  }
+}
+
+/**
+ * Photos for a brand new profile. A profile cannot exist without its first save, and
+ * setProfilePhotos needs a profile, so the first save may carry `photoIds` and they are
+ * checked exactly as setProfilePhotos checks them (own, approved, main photo with one clear
+ * face) and stored with it. Later saves never touch photos.
+ *
+ * A photo is required on that first save when the client says it asks for one
+ * (`photoPolicy: "required"`, sent by apps that have the photo step), or when the server
+ * flag requireProfilePhoto is on for everyone. Without either, which is how the 1.1.2 and
+ * 1.2.0 apps call this, a new profile may still be saved with no photo, as before; the
+ * same marker approach as `cityList: "world"`.
+ */
+async function photosForNewProfile(db, uid, body) {
+  const ids = body.photoIds === undefined || body.photoIds === null ? [] : requirePhotoIds(body.photoIds);
+  const required = body.photoPolicy === "required" || (await readTrustConfig(db)).requireProfilePhoto;
+  if (ids.length === 0) {
+    if (required) {
+      throw reject("invalid-argument", REASON.profilePhotoRequired, "Add a clear photo of your face to finish your profile.");
+    }
+    return null;
+  }
+  return assertPhotosUsable(db, uid, ids);
+}
+
+/**
  * Creates or replaces the caller's profile.
  *
  * The public document holds only what other members may see. Birth date, gender and
@@ -81,13 +126,17 @@ function requireGenderForDating(dating, gender) {
  * documents are written in one batch so they cannot drift apart.
  *
  * `offers` and `seeks` are derived here, never accepted from the client, because the
- * discovery query trusts them.
+ * discovery query trusts them. So is `verified`: a new profile copies it from
+ * verifications/{uid}, since the check can happen before the profile exists, and a save
+ * never changes it after that.
  */
 async function upsertProfile(db, uid, payload, now = new Date()) {
   const body = requireObject(payload, "request");
   const r = refs(db);
 
-  const [publicSnap, privateSnap] = await db.getAll(r.profile(uid), r.privateProfile(uid));
+  const [publicSnap, privateSnap, verificationSnap] = await db.getAll(
+    r.profile(uid), r.privateProfile(uid), r.verification(uid),
+  );
   const existingPrivate = privateSnap.exists ? privateSnap.data() : null;
   const isNew = !publicSnap.exists;
 
@@ -107,6 +156,8 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
   const interests = body.interests === undefined ? [] : requireShortTextList(
     body.interests, "interests", { maxItems: LIMITS.interests, maxLength: LIMITS.interest },
   );
+
+  assertNoContactDetails({ displayName, bio, area }, publicSnap.exists ? publicSnap.data() : null);
 
   const offers = offeredLanguages(speaks);
   const seeks = soughtLanguages(learns);
@@ -160,11 +211,16 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
   }
   requireGenderForDating(dating, gender);
 
-  // `photos` is managed only by setProfilePhotos, and `meetupsConfirmed` only by
-  // answerCheckIn. Neither is written here, and the merge below leaves both untouched,
-  // so saving the profile cannot wipe a person's photos or their count of meetups.
-  const photos = publicPhotos(publicSnap.exists ? publicSnap.get("photos") : null);
+  // `photos` is managed only by setProfilePhotos, except on the very first save (see
+  // photosForNewProfile), and `meetupsConfirmed` only by answerCheckIn. Otherwise neither
+  // is written here, and the merge below leaves both untouched, so saving the profile
+  // cannot wipe a person's photos or their count of meetups.
+  const newPhotos = isNew ? await photosForNewProfile(db, uid, body) : null;
+  const photos = newPhotos || publicPhotos(publicSnap.exists ? publicSnap.get("photos") : null);
   const meetupsConfirmed = Number((publicSnap.exists && publicSnap.get("meetupsConfirmed")) || 0);
+  const verified = isNew
+    ? verificationSnap.exists && verificationSnap.get("status") === "verified"
+    : publicSnap.get("verified") === true;
 
   const batch = db.batch();
   batch.set(r.profile(uid), {
@@ -182,7 +238,8 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
     discoverable: true,
     // Self declared. No fluency test exists in this system.
     fluencyAssurance: FLUENCY_ASSURANCE,
-    ...(isNew ? { createdAt: FieldValue.serverTimestamp() } : {}),
+    ...(isNew ? { createdAt: FieldValue.serverTimestamp(), verified } : {}),
+    ...(newPhotos ? { photos: newPhotos } : {}),
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
@@ -210,7 +267,7 @@ async function upsertProfile(db, uid, payload, now = new Date()) {
   return {
     profile: {
       uid, displayName, bio, area, city, speaks, learns, offers, seeks, availability, interests, photos,
-      discoverable: true, fluencyAssurance: FLUENCY_ASSURANCE, meetupsConfirmed,
+      discoverable: true, fluencyAssurance: FLUENCY_ASSURANCE, meetupsConfirmed, verified,
     },
     account: {
       birthDate, age, ageAssurance: AGE_ASSURANCE, gender, dating,
@@ -252,21 +309,27 @@ async function setDatingConsent(db, uid, payload, now = new Date()) {
   return { dating, cancelledInvitations: cancelled };
 }
 
-/** The caller's own private account record. No other user can obtain this. */
-async function getMyAccount(db, uid, now = new Date()) {
+/**
+ * The caller's own private account record. No other user can obtain this. `auth` is the
+ * verified request auth, whose token says whether the email is confirmed.
+ */
+async function getMyAccount(db, uid, now = new Date(), auth = null) {
   const r = refs(db);
   const [publicSnap, privateSnap] = await db.getAll(r.profile(uid), r.privateProfile(uid));
   if (!privateSnap.exists) return { profile: null, account: null };
   const account = privateSnap.data();
   const age = ageFromBirthDate(account.birthDate, now);
+  const profile = publicSnap.exists ? publicSnap.data() : null;
+  const trust = await trustSummary(db, await readTrustConfig(db), { uid, profile, token: auth && auth.token });
   return {
-    profile: publicSnap.exists
+    profile: profile
       ? {
-        ...publicSnap.data(),
+        ...profile,
         // Profiles from before 1.1.2 have no city until the backfill runs; they are Sydney.
-        city: isCityId(publicSnap.get("city")) ? publicSnap.get("city") : DEFAULT_CITY,
-        photos: publicPhotos(publicSnap.get("photos")),
-        meetupsConfirmed: Number(publicSnap.get("meetupsConfirmed") || 0),
+        city: isCityId(profile.city) ? profile.city : DEFAULT_CITY,
+        photos: publicPhotos(profile.photos),
+        meetupsConfirmed: Number(profile.meetupsConfirmed || 0),
+        verified: profile.verified === true,
       }
       : null,
     account: {
@@ -276,8 +339,29 @@ async function getMyAccount(db, uid, now = new Date()) {
       gender: account.gender,
       dating: account.dating || { enabled: false, genders: [], ageMin: LIMITS.minAge, ageMax: LIMITS.maxAge },
       isAdultSelfDeclared: typeof age === "number" && age >= LIMITS.minAge,
+      discovery: { verifiedOnly: !!account.discovery && account.discovery.verifiedOnly === true },
+      trust,
     },
   };
 }
 
-module.exports = { upsertProfile, setDatingConsent, getMyAccount, requireDatingPreferences };
+/**
+ * The caller's own discovery settings, kept on the private profile. For now one switch:
+ * show only verified members. discoverCandidates applies it.
+ */
+async function setDiscoveryPreferences(db, uid, payload) {
+  const body = requireObject(payload, "request");
+  const verifiedOnly = requireBoolean(body.verifiedOnly, "verifiedOnly");
+  const r = refs(db);
+  const snap = await r.privateProfile(uid).get();
+  if (!snap.exists) {
+    throw reject("failed-precondition", REASON.profileIncomplete, "Complete your profile first.");
+  }
+  await r.privateProfile(uid).set({
+    discovery: { verifiedOnly },
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { discovery: { verifiedOnly } };
+}
+
+module.exports = { upsertProfile, setDatingConsent, getMyAccount, setDiscoveryPreferences, requireDatingPreferences };

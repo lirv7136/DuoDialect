@@ -104,7 +104,62 @@ const LIMITS = {
   photos: 3,
 };
 
-/** Self declared age assurance. There is no identity or document verification. */
+/**
+ * Per member daily limits, counted per UTC day in rateLimits/{uid}. Generous for a person
+ * planning meetups; they exist to stop one account flooding invitations, messages or the
+ * report queue. Only operations that create something count: an idempotent retry does not.
+ */
+const RATE_LIMITS = {
+  createInvitation: 20,
+  sendMessage: 300,
+  reportUser: 10,
+};
+
+/**
+ * Server flags in config/trust, which no client can read or write. Every flag defaults
+ * off, so an absent document changes nothing, and the 1.1.2 and 1.2.0 apps keep working
+ * until the owner turns one on. scripts/set-trust-flags.js writes them.
+ *
+ *   requireVerification       verification is needed before the first meetup: an
+ *                             unverified member stays discoverable, browses and chats, but
+ *                             cannot create or accept an invitation; and a verified
+ *                             member's new main photo sends them back to pending
+ *   requireEmailVerification  a password account whose email is unconfirmed is hidden from
+ *                             discovery (Sign in with Apple counts as confirmed)
+ *   requireProfilePhoto       a new profile needs a main photo with one clear face, from
+ *                             every client; newer clients opt in with
+ *                             `photoPolicy: "required"` regardless
+ */
+const TRUST_DEFAULTS = {
+  requireVerification: false,
+  requireEmailVerification: false,
+  requireProfilePhoto: false,
+};
+
+/** A member's verification state, in verifications/{uid}. Only "verified" shows the badge. */
+const VERIFICATION_STATUSES = ["none", "pending", "verified", "failed", "review"];
+
+/**
+ * A verification whose age estimate differs from the declared age by more than this many
+ * years is still verified, but flagged for a moderator to look at the birth date.
+ */
+const AGE_REVIEW_GAP_YEARS = 8;
+
+/**
+ * The main photo must show exactly one face. Cloud Vision reports a detection confidence
+ * from 0 to 1 for each face; below this the face is too unclear to count.
+ */
+const MIN_FACE_CONFIDENCE = 0.5;
+
+/**
+ * Two photo fingerprints (64 bit dHash) this close or closer are the same picture, give
+ * or take resizing and compression. The hash is stored as 8 bands of 8 bits, so by the
+ * pigeonhole principle any pair within 7 bits shares at least one band exactly, which is
+ * what the duplicate query looks up.
+ */
+const DUPLICATE_PHOTO_DISTANCE = 6;
+
+/** Self declared age assurance. Optional verification is recorded separately. */
 const AGE_ASSURANCE = "self-declared";
 
 /** Self declared proficiency. There is no fluency test. */
@@ -128,4 +183,10 @@ module.exports = {
   LIMITS,
   AGE_ASSURANCE,
   FLUENCY_ASSURANCE,
+  RATE_LIMITS,
+  TRUST_DEFAULTS,
+  VERIFICATION_STATUSES,
+  AGE_REVIEW_GAP_YEARS,
+  MIN_FACE_CONFIDENCE,
+  DUPLICATE_PHOTO_DISTANCE,
 };

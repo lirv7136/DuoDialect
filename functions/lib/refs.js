@@ -29,6 +29,9 @@ const crypto = require("crypto");
  * stats/latest, stats/appStoreSync            server only; operator stats, see lib/stats.js
  * statsDaily/{YYYY-MM-DD}                     server only; one stats snapshot per Sydney day
  * appStoreDaily/{YYYY-MM-DD}                  server only; App Store units per report day
+ * verifications/{uid}                         server only; verification status, method, attempts
+ * config/trust                                server only; trust flags, see lib/trust.js
+ * rateLimits/{uid}                            server only; today's counts of rate limited actions
  */
 const COLLECTIONS = {
   profiles: "profiles",
@@ -54,6 +57,9 @@ const COLLECTIONS = {
   stats: "stats",
   statsDaily: "statsDaily",
   appStoreDaily: "appStoreDaily",
+  verifications: "verifications",
+  config: "config",
+  rateLimits: "rateLimits",
 };
 
 function shortHash(...parts) {
@@ -155,6 +161,9 @@ function refs(db) {
     statsDays: () => db.collection(COLLECTIONS.statsDaily),
     appStoreDay: (day) => db.collection(COLLECTIONS.appStoreDaily).doc(day),
     appStoreDays: () => db.collection(COLLECTIONS.appStoreDaily),
+    verification: (uid) => db.collection(COLLECTIONS.verifications).doc(uid),
+    trustConfig: () => db.collection(COLLECTIONS.config).doc("trust"),
+    rateLimit: (uid) => db.collection(COLLECTIONS.rateLimits).doc(uid),
   };
 }
 
